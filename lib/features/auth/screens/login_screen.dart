@@ -70,21 +70,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       borderRadius: BorderRadius.circular(24),
                     ),
                     child: isWide
-                        ? Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(child: _Hero()),
-                              Expanded(
-                                child: _Form(
-                                  userCtrl: _userCtrl,
-                                  passCtrl: _passCtrl,
-                                  loading: auth.loading,
-                                  error: auth.error,
-                                  onSubmit: _submit,
-                                  onQuickSignIn: _quickSignIn,
+                        ? IntrinsicHeight(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(child: _Hero()),
+                                Expanded(
+                                  child: _Form(
+                                    userCtrl: _userCtrl,
+                                    passCtrl: _passCtrl,
+                                    loading: auth.loading,
+                                    error: auth.error,
+                                    onSubmit: _submit,
+                                    onQuickSignIn: _quickSignIn,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           )
                         : Column(
                             mainAxisSize: MainAxisSize.min,

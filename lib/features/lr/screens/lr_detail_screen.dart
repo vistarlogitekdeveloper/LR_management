@@ -183,6 +183,61 @@ class _LeftColumn extends StatelessWidget {
             ],
           ),
         ),
+        if (lr.attachments.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SectionTitle(
+                  icon: Icons.attach_file_rounded,
+                  title: 'Invoice Attachments (${lr.attachments.length})',
+                ),
+                for (final a in lr.attachments)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.line),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.insert_drive_file_outlined,
+                            size: 18, color: AppColors.plum),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                a.name,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppColors.ink,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              Text(
+                                '${a.sizeLabel} · ${formatDate(a.uploadedAt)} · by ${a.uploadedBy}',
+                                style: const TextStyle(
+                                  color: AppColors.slate,
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 20),
         AppCard(
           child: Column(

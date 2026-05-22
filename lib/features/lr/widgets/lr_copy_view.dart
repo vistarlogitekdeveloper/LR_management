@@ -5,11 +5,43 @@ import '../../../core/utils/formatters.dart';
 import '../../../shared/models/lr_models.dart';
 import '../../../shared/widgets/brand_logo.dart';
 
+class LrCopyFormat {
+  final String companyName;
+  final String tagline;
+  final String terms;
+  final String footer;
+  final bool showEwb;
+  final bool showInsurance;
+  final bool showMathadi;
+  final bool showVistarMargin;
+
+  const LrCopyFormat({
+    required this.companyName,
+    required this.tagline,
+    required this.terms,
+    required this.footer,
+    required this.showEwb,
+    required this.showInsurance,
+    required this.showMathadi,
+    required this.showVistarMargin,
+  });
+}
+
 class LrCopyView extends StatelessWidget {
   final LorryReceipt lr;
   final String copyName;
+  final LrCopyFormat format;
 
-  const LrCopyView({super.key, required this.lr, required this.copyName});
+  const LrCopyView({
+    super.key,
+    required this.lr,
+    required this.copyName,
+    required this.format,
+  });
+
+  bool get _isInternalCopy =>
+      copyName.toLowerCase().contains('office') ||
+      copyName.toLowerCase().contains('lorry');
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +75,23 @@ class LrCopyView extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Expanded(child: BrandLogo(height: 38)),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const BrandLogo(height: 38),
+              const SizedBox(height: 4),
+              Text(
+                format.tagline,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.slate,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -236,14 +284,16 @@ class LrCopyView extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _label('E-Way Bill'),
-                  Text(lr.ewb?.number ?? '—',
-                      style:
-                          const TextStyle(fontWeight: FontWeight.w800)),
-                  if (lr.ewb?.expiry != null)
-                    Text('Expiry: ${formatDate(lr.ewb!.expiry!)}',
-                        style: const TextStyle(fontSize: 11.5)),
-                  const SizedBox(height: 10),
+                  if (format.showEwb) ...[
+                    _label('E-Way Bill'),
+                    Text(lr.ewb?.number ?? '—',
+                        style:
+                            const TextStyle(fontWeight: FontWeight.w800)),
+                    if (lr.ewb?.expiry != null)
+                      Text('Expiry: ${formatDate(lr.ewb!.expiry!)}',
+                          style: const TextStyle(fontSize: 11.5)),
+                    const SizedBox(height: 10),
+                  ],
                   _label('Pay Type'),
                   Text(lr.payType.label,
                       style:
@@ -262,13 +312,25 @@ class LrCopyView extends StatelessWidget {
                   _moneyRow('Freight', lr.freight.freight),
                   _moneyRow('Door Delivery', lr.freight.doorDelivery),
                   _moneyRow('Handling', lr.freight.handling),
-                  _moneyRow('Insurance', lr.freight.insurance),
+                  if (format.showInsurance)
+                    _moneyRow('Insurance', lr.freight.insurance),
+                  if (format.showMathadi)
+                    _moneyRow('Mathadi', lr.freight.mathadi),
                   _moneyRow('GST', lr.freight.gst),
                   const Divider(),
                   _moneyRow('Total', lr.freight.total, bold: true),
                   _moneyRow('Advance', lr.freight.advance),
                   _moneyRow('Balance', lr.freight.balance,
                       bold: true, color: AppColors.red),
+                  if (format.showVistarMargin && _isInternalCopy) ...[
+                    const Divider(),
+                    _moneyRow(
+                      'Vistar Margin',
+                      lr.freight.vistarMargin,
+                      bold: true,
+                      color: AppColors.plum,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -295,9 +357,10 @@ class LrCopyView extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                'All disputes subject to Pune jurisdiction. Goods carried at owner\'s risk. Insurance to be arranged by consignor unless otherwise agreed.',
+                format.terms,
                 style: TextStyle(
-                    fontSize: 10, color: AppColors.slate.withValues(alpha: 0.9)),
+                    fontSize: 10,
+                    color: AppColors.slate.withValues(alpha: 0.9)),
               ),
             ],
           ),
@@ -306,8 +369,8 @@ class LrCopyView extends StatelessWidget {
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            const Text('For Vistar Logitek Pvt Ltd',
-                style: TextStyle(
+            Text(format.footer,
+                style: const TextStyle(
                     fontWeight: FontWeight.w800, fontSize: 12)),
             const SizedBox(height: 28),
             Container(
@@ -316,8 +379,7 @@ class LrCopyView extends StatelessWidget {
                 color: AppColors.ink.withValues(alpha: 0.4)),
             const SizedBox(height: 4),
             const Text('Authorised Signatory',
-                style: TextStyle(
-                    fontSize: 11, color: AppColors.slate)),
+                style: TextStyle(fontSize: 11, color: AppColors.slate)),
           ],
         ),
       ],

@@ -1,9 +1,22 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class SystemConfig {
+  // LR numbering
   final String lrPrefix;
   final String lrFormat;
   final int nextLrNumber;
+
+  // LR print format
+  final String companyName;
+  final String companyTagline;
+  final String termsText;
+  final String footerText;
+  final bool showVistarMargin;
+  final bool showMathadi;
+  final bool showInsurance;
+  final bool showEwb;
+
+  // Security / system
   final bool dailyBackup;
   final String backupTime;
   final bool auditTrail;
@@ -13,6 +26,15 @@ class SystemConfig {
     this.lrPrefix = 'VLL',
     this.lrFormat = 'VLL/YY/MM/00001',
     this.nextLrNumber = 57,
+    this.companyName = 'Vistar Logitek Pvt Ltd',
+    this.companyTagline = 'Transport Documentation · Dispatch · Billing',
+    this.termsText =
+        'All disputes subject to Pune jurisdiction. Goods carried at owner\'s risk. Insurance to be arranged by consignor unless otherwise agreed.',
+    this.footerText = 'For Vistar Logitek Pvt Ltd',
+    this.showVistarMargin = false,
+    this.showMathadi = true,
+    this.showInsurance = true,
+    this.showEwb = true,
     this.dailyBackup = true,
     this.backupTime = '02:00',
     this.auditTrail = true,
@@ -23,6 +45,14 @@ class SystemConfig {
     String? lrPrefix,
     String? lrFormat,
     int? nextLrNumber,
+    String? companyName,
+    String? companyTagline,
+    String? termsText,
+    String? footerText,
+    bool? showVistarMargin,
+    bool? showMathadi,
+    bool? showInsurance,
+    bool? showEwb,
     bool? dailyBackup,
     String? backupTime,
     bool? auditTrail,
@@ -32,6 +62,14 @@ class SystemConfig {
       lrPrefix: lrPrefix ?? this.lrPrefix,
       lrFormat: lrFormat ?? this.lrFormat,
       nextLrNumber: nextLrNumber ?? this.nextLrNumber,
+      companyName: companyName ?? this.companyName,
+      companyTagline: companyTagline ?? this.companyTagline,
+      termsText: termsText ?? this.termsText,
+      footerText: footerText ?? this.footerText,
+      showVistarMargin: showVistarMargin ?? this.showVistarMargin,
+      showMathadi: showMathadi ?? this.showMathadi,
+      showInsurance: showInsurance ?? this.showInsurance,
+      showEwb: showEwb ?? this.showEwb,
       dailyBackup: dailyBackup ?? this.dailyBackup,
       backupTime: backupTime ?? this.backupTime,
       auditTrail: auditTrail ?? this.auditTrail,

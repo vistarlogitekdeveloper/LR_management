@@ -27,6 +27,13 @@ class AdminScreen extends ConsumerWidget {
         tint: AppColors.orange,
       ),
       const _AdminTile(
+        title: 'LR Format',
+        subtitle: 'Header, terms, footer & optional fields',
+        icon: Icons.description_outlined,
+        path: '/admin/lr-format',
+        tint: AppColors.red,
+      ),
+      const _AdminTile(
         title: 'Audit Trail',
         subtitle: 'All system events with user & timestamp',
         icon: Icons.fact_check_outlined,

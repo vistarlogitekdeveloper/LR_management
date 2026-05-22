@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/accounts/screens/accounts_screen.dart';
 import '../../features/admin/screens/admin_screen.dart';
 import '../../features/admin/screens/audit_screen.dart';
+import '../../features/admin/screens/lr_format_screen.dart';
 import '../../features/admin/screens/numbering_screen.dart';
 import '../../features/admin/screens/settings_screen.dart';
 import '../../features/admin/screens/users_screen.dart';
@@ -185,6 +186,11 @@ final routerProvider = Provider<GoRouter>((ref) {
                 path: 'numbering',
                 pageBuilder: (context, state) =>
                     const NoTransitionPage(child: NumberingScreen()),
+              ),
+              GoRoute(
+                path: 'lr-format',
+                pageBuilder: (context, state) =>
+                    const NoTransitionPage(child: LrFormatScreen()),
               ),
               GoRoute(
                 path: 'audit',

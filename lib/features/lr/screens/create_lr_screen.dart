@@ -1,10 +1,13 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/mock_data.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../shared/models/attachment.dart';
 import '../../../shared/models/consignee.dart';
 import '../../../shared/models/consignor.dart';
 import '../../../shared/models/lr_models.dart';
@@ -65,6 +68,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
   bool _isEdit = false;
   LorryReceipt? _editing;
+
+  List<Attachment> _attachments = [];
 
   @override
   void initState() {
@@ -129,6 +134,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         _tripLeadBy = lr.freight.tripLeadBy;
         _ewbCtrl.text = lr.ewb?.number ?? '';
         _ewbLoad = lr.ewb?.loadType ?? 'Full Load';
+        _attachments = List.of(lr.attachments);
       });
     } else {
       setState(() {
@@ -185,6 +191,37 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       _gst;
 
   double get _balance => _total - _toDouble(_advanceCtrl);
+
+  Future<void> _pickInvoices() async {
+    final user = ref.read(currentUserProvider);
+    final picked = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'xls', 'xlsx'],
+      withData: false,
+    );
+    if (picked == null || picked.files.isEmpty) return;
+    final now = DateTime.now();
+    final newOnes = picked.files
+        .map((f) => Attachment(
+              id: const Uuid().v4(),
+              name: f.name,
+              sizeBytes: f.size,
+              mimeType: f.extension,
+              uploadedAt: now,
+              uploadedBy: user?.username ?? 'system',
+            ))
+        .toList();
+    setState(() {
+      _attachments = [..._attachments, ...newOnes];
+    });
+  }
+
+  void _removeAttachment(String id) {
+    setState(() {
+      _attachments = _attachments.where((a) => a.id != id).toList();
+    });
+  }
 
   String? _validateEwb(String? value) {
     final v = value?.trim() ?? '';
@@ -253,6 +290,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         payType: _payType,
         deliveryType: _deliveryType,
         status: _status,
+        attachments: _attachments,
       );
       final withItems = LorryReceipt(
         id: updated.id,
@@ -273,6 +311,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         deliveryType: _deliveryType,
         status: _status,
         remarks: updated.remarks,
+        attachments: _attachments,
       );
       ref.read(lrListProvider.notifier).update(withItems);
       ref.read(auditProvider.notifier).log(
@@ -308,6 +347,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         payType: _payType,
         deliveryType: _deliveryType,
         status: _status,
+        attachments: _attachments,
       );
       ref.read(lrListProvider.notifier).add(lr);
       ref.read(auditProvider.notifier).log(
@@ -599,6 +639,108 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                               ),
                             ),
                           ]),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    AppCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SectionTitle(
+                            icon: Icons.attach_file_rounded,
+                            title: 'Invoice Attachments',
+                            trailing: AppButton(
+                              label: 'Upload',
+                              icon: Icons.upload_file_outlined,
+                              kind: BtnKind.soft,
+                              small: true,
+                              onPressed: _pickInvoices,
+                            ),
+                          ),
+                          if (_attachments.isEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 18),
+                              decoration: BoxDecoration(
+                                color: AppColors.mist,
+                                border: Border.all(color: AppColors.line),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.cloud_upload_outlined,
+                                      color: AppColors.slate, size: 18),
+                                  SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      'PDF, JPG, PNG or Excel. Operators can upload one or more invoice copies per LR.',
+                                      style: TextStyle(
+                                          color: AppColors.slate,
+                                          fontSize: 12.5),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else
+                            Column(
+                              children: [
+                                for (final a in _attachments)
+                                  Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      border:
+                                          Border.all(color: AppColors.line),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                            Icons.insert_drive_file_outlined,
+                                            size: 18,
+                                            color: AppColors.plum),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                a.name,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  color: AppColors.ink,
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                              Text(
+                                                '${a.sizeLabel} · uploaded by ${a.uploadedBy}',
+                                                style: const TextStyle(
+                                                  color: AppColors.slate,
+                                                  fontSize: 11.5,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        IconButton(
+                                          tooltip: 'Remove',
+                                          icon: const Icon(Icons.close_rounded,
+                                              size: 18,
+                                              color: AppColors.slate),
+                                          onPressed: () =>
+                                              _removeAttachment(a.id),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
                         ],
                       ),
                     ),

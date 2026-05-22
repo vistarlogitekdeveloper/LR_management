@@ -1,3 +1,4 @@
+import 'attachment.dart';
 import 'consignee.dart';
 import 'consignor.dart';
 import 'transporter.dart';
@@ -139,6 +140,7 @@ class LorryReceipt {
   final DeliveryType deliveryType;
   final LrStatus status;
   final String? remarks;
+  final List<Attachment> attachments;
 
   const LorryReceipt({
     required this.id,
@@ -159,6 +161,7 @@ class LorryReceipt {
     required this.deliveryType,
     required this.status,
     this.remarks,
+    this.attachments = const [],
   });
 
   int get totalPackages =>
@@ -175,6 +178,7 @@ class LorryReceipt {
     FreightDetails? freight,
     EwayBill? ewb,
     String? remarks,
+    List<Attachment>? attachments,
   }) {
     return LorryReceipt(
       id: id,
@@ -195,6 +199,7 @@ class LorryReceipt {
       deliveryType: deliveryType ?? this.deliveryType,
       status: status ?? this.status,
       remarks: remarks ?? this.remarks,
+      attachments: attachments ?? this.attachments,
     );
   }
 }
