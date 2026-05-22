@@ -1,0 +1,46 @@
+name: lr_management
+description: "Vistar Logitek - LR Generation Application"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State management
+  flutter_riverpod: ^2.5.1
+
+  # Routing
+  go_router: ^14.6.2
+
+  # Fonts & icons
+  google_fonts: ^6.2.1
+
+  # Formatting
+  intl: ^0.19.0
+
+  # PDF / Print
+  pdf: ^3.11.1
+  printing: ^5.13.4
+
+  # Persistence (lightweight, for session)
+  shared_preferences: ^2.3.3
+
+  # UUID for ids
+  uuid: ^4.5.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
