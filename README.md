@@ -1,17 +1,51 @@
-# lr_management
+# Vistar Logitek — LR Management
 
-A new Flutter project.
+Digital Lorry Receipt generation, dispatch, billing and reporting system built per the SRS for Vistar Logitek Pvt Ltd.
 
-## Getting Started
+**Stack:** Flutter (web · Windows · Android · iOS) · Riverpod · go_router · Plus Jakarta Sans
 
-This project is a starting point for a Flutter application.
+## Quick start
 
-A few resources to get you started if this is your first Flutter project:
+```bash
+flutter pub get
+flutter run -d chrome     # or windows / android
+```
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+**Demo logins** (one-click sign-in available on the login screen):
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+| Role | Username | Password |
+|---|---|---|
+| Admin | `admin` | `admin` |
+| Operator | `anita` | `anita` |
+| Accounts | `ravi` | `ravi` |
+
+## Project structure
+
+```
+lib/
+  core/            theme, router, constants, utils
+  shared/          models, reusable widgets
+  features/
+    auth/          login, profile, change/forgot password
+    dashboard/     stats, role-flow, top customers
+    lr/            list, create, edit, detail, print (4 copies)
+    masters/       consignors, consignees, vehicles, drivers, transporters, routes
+    ewb/           12-digit validator + expiry tracking
+    warehouse/     booked / in-transit / delivered
+    reports/       daily / monthly / accounts tabs + CSV / Tally export
+    accounts/      pending freight + margin + Tally export
+    admin/         users, numbering, audit, settings
+    shell/         sidebar + topbar layout
+```
+
+## Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for Cloudflare Pages setup (GitHub Actions auto-deploy + direct CLI).
+
+## Verification
+
+```bash
+flutter analyze     # static analysis (clean)
+flutter test        # widget tests (passing)
+flutter build web --release
+```
