@@ -107,6 +107,34 @@ class FreightDetails {
 
   double get total => freight + doorDelivery + handling + gst + insurance;
   double get balance => total - advance;
+
+  FreightDetails copyWith({
+    double? freight,
+    double? collection,
+    double? doorDelivery,
+    double? handling,
+    double? insurance,
+    double? gst,
+    double? advance,
+    double? mathadi,
+    double? vistarMargin,
+    String? advancePaidBy,
+    String? tripLeadBy,
+  }) {
+    return FreightDetails(
+      freight: freight ?? this.freight,
+      collection: collection ?? this.collection,
+      doorDelivery: doorDelivery ?? this.doorDelivery,
+      handling: handling ?? this.handling,
+      insurance: insurance ?? this.insurance,
+      gst: gst ?? this.gst,
+      advance: advance ?? this.advance,
+      mathadi: mathadi ?? this.mathadi,
+      vistarMargin: vistarMargin ?? this.vistarMargin,
+      advancePaidBy: advancePaidBy ?? this.advancePaidBy,
+      tripLeadBy: tripLeadBy ?? this.tripLeadBy,
+    );
+  }
 }
 
 class EwayBill {
