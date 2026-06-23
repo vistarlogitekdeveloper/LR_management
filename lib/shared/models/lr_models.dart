@@ -1,3 +1,4 @@
+import '../../core/utils/json_parse.dart';
 import 'attachment.dart';
 import 'consignee.dart';
 import 'consignor.dart';
@@ -123,10 +124,10 @@ class InvoiceItem {
           DateTime.now(),
       asn: (json['asn'] as String?) ?? '',
       partDescription: (json['part_description'] as String?) ?? '',
-      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
-      weight: (json['weight_kg'] as num?)?.toDouble() ?? 0,
-      grossValue: (json['gross_value'] as num?)?.toDouble() ?? 0,
-      packages: (json['packages'] as num?)?.toInt() ?? 0,
+      quantity: asInt(json['quantity']),
+      weight: asDouble(json['weight_kg']),
+      grossValue: asDouble(json['gross_value']),
+      packages: asInt(json['packages']),
       packageTypeId: pkgId ?? '',
       packageType: pkgLabel,
       natureOfGoods: (json['nature_of_goods'] as String?) ?? '',
@@ -191,25 +192,24 @@ class FreightDetails {
     Map<String, dynamic> json, {
     LookupResolver resolveLookup = _noopResolve,
   }) {
-    double d(String k) => (json[k] as num?)?.toDouble() ?? 0;
     final apbId = json['advance_paid_by_id'] as String?;
     final tlbId = json['trip_lead_by_id'] as String?;
     return FreightDetails(
-      freight: d('freight'),
-      collection: d('collection'),
-      doorDelivery: d('door_delivery'),
-      handling: d('handling'),
-      insurance: d('insurance'),
-      gst: d('gst'),
-      advance: d('advance'),
-      mathadi: d('mathadi'),
-      vistarMargin: d('vistar_margin'),
+      freight: asDouble(json['freight']),
+      collection: asDouble(json['collection']),
+      doorDelivery: asDouble(json['door_delivery']),
+      handling: asDouble(json['handling']),
+      insurance: asDouble(json['insurance']),
+      gst: asDouble(json['gst']),
+      advance: asDouble(json['advance']),
+      mathadi: asDouble(json['mathadi']),
+      vistarMargin: asDouble(json['vistar_margin']),
       advancePaidById: apbId ?? '',
       tripLeadById: tlbId ?? '',
       advancePaidBy: resolveLookup('ADVANCE_PAID_BY', apbId),
       tripLeadBy: resolveLookup('TRIP_LEAD_BY', tlbId),
-      total: (json['total'] as num?)?.toDouble(),
-      balance: (json['balance'] as num?)?.toDouble(),
+      total: asDoubleOrNull(json['total']),
+      balance: asDoubleOrNull(json['balance']),
     );
   }
 
@@ -380,7 +380,7 @@ class LorryReceipt {
       date: DateTime.tryParse(json['lr_date']?.toString() ?? '') ??
           DateTime.now(),
       enteredBy: (json['entered_by'] as String?) ?? '',
-      version: (json['version'] as num?)?.toInt() ?? 0,
+      version: asInt(json['version']),
       consignor: consignorJson != null
           ? Consignor.fromJson(consignorJson)
           : Consignor(

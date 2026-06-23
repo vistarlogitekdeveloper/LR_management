@@ -25,7 +25,11 @@ class ConsignorsNotifier extends StateNotifier<List<Consignor>> {
   final ConsignorsRepository _repo;
 
   Future<void> refresh() async {
-    state = await _repo.list();
+    try {
+      state = await _repo.list();
+    } catch (_) {
+      // A transient backend/DB error shouldn't crash the UI; keep prior state.
+    }
   }
 
   Future<void> add(Consignor c) async {
@@ -51,7 +55,11 @@ class ConsigneesNotifier extends StateNotifier<List<Consignee>> {
   final ConsigneesRepository _repo;
 
   Future<void> refresh() async {
-    state = await _repo.list();
+    try {
+      state = await _repo.list();
+    } catch (_) {
+      // A transient backend/DB error shouldn't crash the UI; keep prior state.
+    }
   }
 
   Future<void> add(Consignee c) async {
@@ -77,7 +85,11 @@ class VehiclesNotifier extends StateNotifier<List<Vehicle>> {
   final VehiclesRepository _repo;
 
   Future<void> refresh() async {
-    state = await _repo.list();
+    try {
+      state = await _repo.list();
+    } catch (_) {
+      // A transient backend/DB error shouldn't crash the UI; keep prior state.
+    }
   }
 
   Future<void> add(Vehicle v) async {
@@ -103,7 +115,11 @@ class TransportersNotifier extends StateNotifier<List<Transporter>> {
   final TransportersRepository _repo;
 
   Future<void> refresh() async {
-    state = await _repo.list();
+    try {
+      state = await _repo.list();
+    } catch (_) {
+      // A transient backend/DB error shouldn't crash the UI; keep prior state.
+    }
   }
 
   Future<void> add(Transporter t) async {
@@ -129,7 +145,11 @@ class DriversNotifier extends StateNotifier<List<Driver>> {
   final DriversRepository _repo;
 
   Future<void> refresh() async {
-    state = await _repo.list();
+    try {
+      state = await _repo.list();
+    } catch (_) {
+      // A transient backend/DB error shouldn't crash the UI; keep prior state.
+    }
   }
 
   Future<void> add(Driver d) async {
@@ -155,7 +175,11 @@ class RoutesNotifier extends StateNotifier<List<RouteMaster>> {
   final RoutesRepository _repo;
 
   Future<void> refresh() async {
-    state = await _repo.list();
+    try {
+      state = await _repo.list();
+    } catch (_) {
+      // A transient backend/DB error shouldn't crash the UI; keep prior state.
+    }
   }
 
   Future<void> add(RouteMaster r) async {

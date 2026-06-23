@@ -1,3 +1,5 @@
+import '../../core/utils/json_parse.dart';
+
 class RouteMaster {
   final String id;
   final String fromCity;
@@ -21,9 +23,9 @@ class RouteMaster {
         id: json['id'] as String,
         fromCity: (json['from_city'] as String?) ?? '',
         toCity: (json['to_city'] as String?) ?? '',
-        distanceKm: (json['distance_km'] as num?)?.toDouble() ?? 0,
-        baseRate: (json['base_rate'] as num?)?.toDouble() ?? 0,
-        version: (json['version'] as num?)?.toInt() ?? 0,
+        distanceKm: asDouble(json['distance_km']),
+        baseRate: asDouble(json['base_rate']),
+        version: asInt(json['version']),
       );
 
   Map<String, dynamic> toJson() => {

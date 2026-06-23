@@ -8,7 +8,7 @@ import '../data/admin_repository.dart';
 final adminRepositoryProvider = Provider<AdminRepository>(
     (ref) => AdminRepository(ref.watch(apiClientProvider)));
 
-final rolesProvider = FutureProvider<List<RoleInfo>>((ref) async {
+final rolesProvider = FutureProvider.autoDispose<List<RoleInfo>>((ref) async {
   final user = ref.watch(currentUserProvider);
   if (user == null) return const [];
   return ref.watch(adminRepositoryProvider).listRoles();

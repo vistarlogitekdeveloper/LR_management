@@ -37,6 +37,9 @@ class ApiClient {
         final isAuthFailure = e.response?.statusCode == 401;
         final alreadyRetried = e.requestOptions.extra['__retried'] == true;
         if (!isAuthFailure || alreadyRetried) {
+          // Transient upstream errors (e.g. the DB briefly unreachable) on
+          // idempotent GETs are retried a couple of times before surfacing.
+          if (await _maybeRetryTransient(e, handler)) return;
           handler.next(_withMappedError(e));
           return;
         }
@@ -77,6 +80,34 @@ class ApiClient {
         }
       },
     );
+  }
+
+  /// Retries idempotent GETs on transient upstream failures (5xx) using a bare
+  /// Dio so it doesn't recurse through this interceptor. Returns true when it
+  /// resolved the request. The original request's headers (incl. auth) are
+  /// preserved on `RequestOptions`.
+  Future<bool> _maybeRetryTransient(
+    DioException e,
+    ErrorInterceptorHandler handler,
+  ) async {
+    final opts = e.requestOptions;
+    final status = e.response?.statusCode ?? 0;
+    final transient =
+        status == 500 || status == 502 || status == 503 || status == 504;
+    if (opts.method.toUpperCase() != 'GET' || !transient) return false;
+
+    final bare = Dio(BaseOptions(baseUrl: ApiConfig.baseUrl));
+    for (var attempt = 1; attempt <= 2; attempt++) {
+      await Future.delayed(Duration(milliseconds: 400 * attempt));
+      try {
+        final resp = await bare.fetch(opts);
+        handler.resolve(resp);
+        return true;
+      } on DioException {
+        // try again, then fall through to surface the original error
+      }
+    }
+    return false;
   }
 
   Future<String> _refreshTokens(String refreshToken) async {

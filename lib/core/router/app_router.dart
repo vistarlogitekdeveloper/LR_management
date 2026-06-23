@@ -26,10 +26,15 @@ import '../../features/masters/screens/drivers_screen.dart';
 import '../../features/masters/screens/routes_screen.dart';
 import '../../features/masters/screens/transporters_screen.dart';
 import '../../features/masters/screens/vehicles_screen.dart';
+import '../../features/admin/providers/system_config_provider.dart';
+import '../../features/admin/providers/users_provider.dart';
+import '../../features/lr/providers/lr_providers.dart';
+import '../../features/masters/providers/master_providers.dart';
 import '../../features/reports/screens/reports_screen.dart';
 import '../../features/shell/app_shell.dart';
 import '../../features/warehouse/screens/warehouse_screen.dart';
 import '../../shared/models/user.dart';
+import '../../shared/widgets/refresh_gate.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(authProvider);
@@ -71,8 +76,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: '/dashboard',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: DashboardScreen()),
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: RefreshGate(
+                onEnter: (ref) => ref.read(lrListProvider.notifier).refresh(),
+                child: const DashboardScreen(),
+              ),
+            ),
           ),
           GoRoute(
             path: '/profile',
@@ -88,8 +98,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/lrs',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: LrListScreen()),
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: RefreshGate(
+                onEnter: (ref) => ref.read(lrListProvider.notifier).refresh(),
+                child: const LrListScreen(),
+              ),
+            ),
             routes: [
               GoRoute(
                 path: 'new',
@@ -125,52 +140,104 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/ewb',
             pageBuilder: (context, state) =>
-                const NoTransitionPage(child: EwbScreen()),
+                NoTransitionPage(key: state.pageKey, child: const EwbScreen()),
           ),
           GoRoute(
             path: '/masters/consignors',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: ConsignorsScreen()),
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: RefreshGate(
+                onEnter: (ref) =>
+                    ref.read(consignorsProvider.notifier).refresh(),
+                child: const ConsignorsScreen(),
+              ),
+            ),
           ),
           GoRoute(
             path: '/masters/consignees',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: ConsigneesScreen()),
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: RefreshGate(
+                onEnter: (ref) =>
+                    ref.read(consigneesProvider.notifier).refresh(),
+                child: const ConsigneesScreen(),
+              ),
+            ),
           ),
           GoRoute(
             path: '/masters/vehicles',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: VehiclesScreen()),
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: RefreshGate(
+                onEnter: (ref) {
+                  ref.read(vehiclesProvider.notifier).refresh();
+                  ref.read(driversProvider.notifier).refresh();
+                  ref.read(transportersProvider.notifier).refresh();
+                },
+                child: const VehiclesScreen(),
+              ),
+            ),
           ),
           GoRoute(
             path: '/masters/drivers',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: DriversScreen()),
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: RefreshGate(
+                onEnter: (ref) => ref.read(driversProvider.notifier).refresh(),
+                child: const DriversScreen(),
+              ),
+            ),
           ),
           GoRoute(
             path: '/masters/transporters',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: TransportersScreen()),
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: RefreshGate(
+                onEnter: (ref) =>
+                    ref.read(transportersProvider.notifier).refresh(),
+                child: const TransportersScreen(),
+              ),
+            ),
           ),
           GoRoute(
             path: '/masters/routes',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: RoutesScreen()),
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: RefreshGate(
+                onEnter: (ref) => ref.read(routesProvider.notifier).refresh(),
+                child: const RoutesScreen(),
+              ),
+            ),
           ),
           GoRoute(
             path: '/warehouse',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: WarehouseScreen()),
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: RefreshGate(
+                onEnter: (ref) => ref.read(lrListProvider.notifier).refresh(),
+                child: const WarehouseScreen(),
+              ),
+            ),
           ),
           GoRoute(
             path: '/reports',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: ReportsScreen()),
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: RefreshGate(
+                onEnter: (ref) => ref.read(lrListProvider.notifier).refresh(),
+                child: const ReportsScreen(),
+              ),
+            ),
           ),
           GoRoute(
             path: '/accounts',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: AccountsScreen()),
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: RefreshGate(
+                onEnter: (ref) => ref.read(lrListProvider.notifier).refresh(),
+                child: const AccountsScreen(),
+              ),
+            ),
           ),
           GoRoute(
             path: '/admin',
@@ -179,23 +246,41 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: 'users',
-                pageBuilder: (context, state) =>
-                    const NoTransitionPage(child: UsersAdminScreen()),
+                pageBuilder: (context, state) => NoTransitionPage(
+                  key: state.pageKey,
+                  child: RefreshGate(
+                    onEnter: (ref) =>
+                        ref.read(usersProvider.notifier).refresh(),
+                    child: const UsersAdminScreen(),
+                  ),
+                ),
               ),
               GoRoute(
                 path: 'numbering',
-                pageBuilder: (context, state) =>
-                    const NoTransitionPage(child: NumberingScreen()),
+                pageBuilder: (context, state) => NoTransitionPage(
+                  key: state.pageKey,
+                  child: RefreshGate(
+                    onEnter: (ref) =>
+                        ref.read(systemConfigProvider.notifier).refresh(),
+                    child: const NumberingScreen(),
+                  ),
+                ),
               ),
               GoRoute(
                 path: 'lr-format',
-                pageBuilder: (context, state) =>
-                    const NoTransitionPage(child: LrFormatScreen()),
+                pageBuilder: (context, state) => NoTransitionPage(
+                  key: state.pageKey,
+                  child: RefreshGate(
+                    onEnter: (ref) =>
+                        ref.read(systemConfigProvider.notifier).refresh(),
+                    child: const LrFormatScreen(),
+                  ),
+                ),
               ),
               GoRoute(
                 path: 'audit',
-                pageBuilder: (context, state) =>
-                    const NoTransitionPage(child: AuditScreen()),
+                pageBuilder: (context, state) => NoTransitionPage(
+                    key: state.pageKey, child: const AuditScreen()),
               ),
               GoRoute(
                 path: 'settings',

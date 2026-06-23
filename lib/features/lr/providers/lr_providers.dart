@@ -38,7 +38,11 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
   final LrRepository _repo;
 
   Future<void> refresh() async {
-    state = await _repo.list();
+    try {
+      state = await _repo.list();
+    } catch (_) {
+      // A transient backend/DB error shouldn't crash the UI; keep prior state.
+    }
   }
 
   Future<LorryReceipt> create(Map<String, dynamic> payload,
@@ -123,6 +127,6 @@ final lrByIdProvider = Provider.family<LorryReceipt?, String>((ref, id) {
 
 /// Full LR detail (invoice items, attachments, freight, EWB) fetched on demand.
 final lrDetailProvider =
-    FutureProvider.family<LorryReceipt, String>((ref, id) async {
+    FutureProvider.autoDispose.family<LorryReceipt, String>((ref, id) async {
   return ref.watch(lrRepositoryProvider).getById(id);
 });

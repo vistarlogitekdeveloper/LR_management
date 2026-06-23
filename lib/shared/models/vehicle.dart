@@ -1,3 +1,5 @@
+import '../../core/utils/json_parse.dart';
+
 class Vehicle {
   final String id;
   final String number; // registration_no
@@ -49,14 +51,14 @@ class Vehicle {
           '',
       typeId: (json['vehicle_type_id'] as String?) ?? '',
       type: (vt?['label'] as String?) ?? (json['type'] as String?) ?? '',
-      capacityMt: (json['capacity_mt'] as num?)?.toDouble() ?? 0,
+      capacityMt: asDouble(json['capacity_mt']),
       transporterId: json['transporter_id'] as String?,
       transporterName: (tr?['name'] as String?) ?? '',
       currentDriverId: json['current_driver_id'] as String?,
       driver: (dr?['name'] as String?) ?? (json['driver'] as String?) ?? '',
       driverMobile:
           (dr?['mobile'] as String?) ?? (json['driverMobile'] as String?) ?? '',
-      version: (json['version'] as num?)?.toInt() ?? 0,
+      version: asInt(json['version']),
     );
   }
 

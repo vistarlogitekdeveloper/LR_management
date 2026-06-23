@@ -21,7 +21,8 @@ class AppShell extends ConsumerWidget {
           ? null
           : Drawer(
               backgroundColor: AppColors.white,
-              child: AppSidebar(currentLocation: location),
+              width: 224,
+              child: AppSidebar(currentLocation: location, compact: true),
             ),
       appBar: isWide
           ? null

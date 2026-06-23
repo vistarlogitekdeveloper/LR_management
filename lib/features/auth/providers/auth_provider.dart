@@ -50,7 +50,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         (res.data['data'] as Map).cast<String, dynamic>(),
       );
       state = AuthState(user: user);
-    } on DioException {
+    } catch (_) {
       await _tokens.clear();
       state = const AuthState();
     }
@@ -79,8 +79,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return true;
     } on DioException catch (e) {
       final err = e.error;
-      final msg = err is ApiException ? err.message : 'Invalid username or password';
+      final msg =
+          err is ApiException ? err.message : 'Invalid username or password';
       state = state.copyWith(loading: false, error: msg);
+      return false;
+    } catch (_) {
+      // Never leave the button stuck on a non-network failure.
+      state = state.copyWith(
+          loading: false, error: 'Login failed. Please try again.');
       return false;
     }
   }

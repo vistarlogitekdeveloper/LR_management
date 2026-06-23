@@ -10,7 +10,17 @@ import '../../auth/providers/auth_provider.dart';
 
 class AppSidebar extends ConsumerWidget {
   final String currentLocation;
-  const AppSidebar({super.key, required this.currentLocation});
+
+  /// Compact layout for the mobile drawer: narrower, tighter spacing and
+  /// smaller type so it takes far less screen space. Tapping an item also
+  /// closes the drawer.
+  final bool compact;
+
+  const AppSidebar({
+    super.key,
+    required this.currentLocation,
+    this.compact = false,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -22,38 +32,40 @@ class AppSidebar extends ConsumerWidget {
       final filtered =
           section.items.where((i) => i.canAccess(user.role)).toList();
       if (filtered.isNotEmpty) {
-        visibleSections
-            .add(NavSection(title: section.title, items: filtered));
+        visibleSections.add(NavSection(title: section.title, items: filtered));
       }
     }
 
     return Container(
-      width: 260,
+      width: compact ? 224 : 260,
       color: AppColors.white,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 18),
+            padding: compact
+                ? const EdgeInsets.fromLTRB(16, 14, 16, 12)
+                : const EdgeInsets.fromLTRB(20, 24, 20, 18),
             decoration: const BoxDecoration(
               border: Border(bottom: BorderSide(color: AppColors.line)),
             ),
-            child: const BrandLogo(height: 34),
+            child: BrandLogo(height: compact ? 28 : 34),
           ),
           Expanded(
             child: ListView(
-              padding:
-                  const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+              padding: EdgeInsets.symmetric(
+                  vertical: compact ? 4 : 10, horizontal: compact ? 8 : 12),
               children: [
                 for (final section in visibleSections) ...[
                   Padding(
-                    padding:
-                        const EdgeInsets.fromLTRB(10, 14, 10, 6),
+                    padding: compact
+                        ? const EdgeInsets.fromLTRB(10, 8, 10, 3)
+                        : const EdgeInsets.fromLTRB(10, 14, 10, 6),
                     child: Text(
                       section.title.toUpperCase(),
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.slate,
-                        fontSize: 10.5,
+                        fontSize: compact ? 9.5 : 10.5,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 0.8,
                       ),
@@ -63,28 +75,34 @@ class AppSidebar extends ConsumerWidget {
                     _SidebarTile(
                       item: item,
                       active: _isActive(item.path),
-                      onTap: () => context.go(item.path),
+                      compact: compact,
+                      onTap: () {
+                        context.go(item.path);
+                        if (compact) Scaffold.maybeOf(context)?.closeDrawer();
+                      },
                     ),
                 ],
               ],
             ),
           ),
           Container(
-            padding: const EdgeInsets.all(14),
+            padding: EdgeInsets.all(compact ? 10 : 14),
             decoration: const BoxDecoration(
               border: Border(top: BorderSide(color: AppColors.line)),
             ),
             child: InkWell(
               borderRadius: BorderRadius.circular(10),
-              onTap: () => context.go('/profile'),
+              onTap: () {
+                context.go('/profile');
+                if (compact) Scaffold.maybeOf(context)?.closeDrawer();
+              },
               child: Padding(
                 padding: const EdgeInsets.all(4),
                 child: Row(
                   children: [
                     CircleAvatar(
-                      radius: 18,
-                      backgroundColor:
-                          AppColors.plum.withValues(alpha: 0.12),
+                      radius: compact ? 15 : 18,
+                      backgroundColor: AppColors.plum.withValues(alpha: 0.12),
                       child: Text(
                         user.name.isNotEmpty
                             ? user.name.substring(0, 1).toUpperCase()
@@ -102,9 +120,9 @@ class AppSidebar extends ConsumerWidget {
                         children: [
                           Text(
                             user.name,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w800,
-                              fontSize: 13,
+                              fontSize: compact ? 12.5 : 13,
                               color: AppColors.ink,
                             ),
                             overflow: TextOverflow.ellipsis,
@@ -121,6 +139,7 @@ class AppSidebar extends ConsumerWidget {
                     ),
                     IconButton(
                       tooltip: 'Logout',
+                      visualDensity: compact ? VisualDensity.compact : null,
                       onPressed: () {
                         ref.read(authProvider.notifier).logout();
                         context.go('/login');
@@ -147,26 +166,28 @@ class AppSidebar extends ConsumerWidget {
 class _SidebarTile extends StatelessWidget {
   final NavItem item;
   final bool active;
+  final bool compact;
   final VoidCallback onTap;
 
   const _SidebarTile({
     required this.item,
     required this.active,
     required this.onTap,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: EdgeInsets.symmetric(vertical: compact ? 1 : 2),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
           onTap: onTap,
           child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: EdgeInsets.symmetric(
+                horizontal: compact ? 10 : 12, vertical: compact ? 8 : 10),
             decoration: BoxDecoration(
               color: active
                   ? AppColors.plum.withValues(alpha: 0.1)
@@ -177,15 +198,15 @@ class _SidebarTile extends StatelessWidget {
               children: [
                 Icon(
                   item.icon,
-                  size: 18,
+                  size: compact ? 17 : 18,
                   color: active ? AppColors.plum : AppColors.slate,
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: compact ? 10 : 12),
                 Text(
                   item.label,
                   style: TextStyle(
                     fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-                    fontSize: 13.5,
+                    fontSize: compact ? 13 : 13.5,
                     color: active ? AppColors.plum : AppColors.ink,
                   ),
                 ),

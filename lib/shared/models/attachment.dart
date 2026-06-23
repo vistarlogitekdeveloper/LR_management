@@ -1,3 +1,5 @@
+import '../../core/utils/json_parse.dart';
+
 class Attachment {
   final String id;
   final String name;
@@ -22,7 +24,7 @@ class Attachment {
   factory Attachment.fromJson(Map<String, dynamic> json) => Attachment(
         id: (json['id'] as String?) ?? '',
         name: (json['file_name'] as String?) ?? (json['name'] as String?) ?? '',
-        sizeBytes: (json['size_bytes'] as num?)?.toInt() ?? 0,
+        sizeBytes: asInt(json['size_bytes']),
         mimeType: json['mime_type'] as String?,
         uploadedAt:
             DateTime.tryParse(json['uploaded_at']?.toString() ?? '') ??

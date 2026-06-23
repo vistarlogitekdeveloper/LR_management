@@ -10,7 +10,7 @@ final reportsRepositoryProvider = Provider<ReportsRepository>(
 /// Server-side aggregates for the dashboard headline tiles. Refetches when the
 /// authenticated user changes (i.e. after login).
 final dashboardSummaryProvider =
-    FutureProvider<DashboardSummary>((ref) async {
+    FutureProvider.autoDispose<DashboardSummary>((ref) async {
   final user = ref.watch(currentUserProvider);
   if (user == null) return const DashboardSummary();
   return ref.watch(reportsRepositoryProvider).dashboard();
