@@ -12,6 +12,7 @@ import '../../../shared/widgets/pills.dart';
 import '../../../shared/widgets/section_title.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../lr/providers/lr_providers.dart';
+import '../../reports/providers/reports_providers.dart';
 import '../../shell/widgets/app_topbar.dart';
 import '../models/role_flow.dart';
 
@@ -22,18 +23,27 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final lrs = ref.watch(lrListProvider);
+    final summary = ref.watch(dashboardSummaryProvider).valueOrNull;
 
     final flow = user == null ? null : RoleFlows.flows[user.role];
     final canCreate = user?.role.canCreate ?? false;
 
     final today = lrs.take(6).toList();
-    final pendingFreight = lrs
+    final pendingFreightLocal = lrs
         .where((lr) => lr.freight.balance > 0)
         .fold<double>(0, (sum, lr) => sum + lr.freight.balance);
-    final inTransit =
+    final inTransitLocal =
         lrs.where((lr) => lr.status == LrStatus.inTransit).length;
     final dispatched =
         lrs.where((lr) => lr.status != LrStatus.booked).length;
+
+    // Prefer server-side aggregates when the summary has loaded; otherwise fall
+    // back to values computed from the live LR list.
+    final pendingFreight = summary?.outstanding ?? pendingFreightLocal;
+    final inTransit =
+        summary == null ? inTransitLocal : (summary.byStatus['IN_TRANSIT'] ?? 0);
+    final totalLrCount = summary?.count ?? lrs.length;
+    final todayCount = summary?.count ?? today.length;
     final marginMtd =
         lrs.fold<double>(0, (sum, lr) => sum + lr.freight.vistarMargin);
 
@@ -89,8 +99,8 @@ class DashboardScreen extends ConsumerWidget {
                           icon: Icons.description_outlined,
                           tint: AppColors.plum,
                           label: 'Today\'s LR',
-                          value: '${today.length}',
-                          sub: '${lrs.length} total in system',
+                          value: '$todayCount',
+                          sub: '$totalLrCount total in system',
                         ),
                         _StatTile(
                           icon: Icons.local_shipping_outlined,

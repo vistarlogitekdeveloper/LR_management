@@ -1,6 +1,11 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/constants/mock_data.dart';
+import '../../../core/network/api_client.dart';
+import '../../../core/network/api_config.dart';
+import '../../../core/network/api_exception.dart';
+import '../../../core/network/api_providers.dart';
+import '../../../core/network/token_storage.dart';
 import '../../../shared/models/user.dart';
 
 class AuthState {
@@ -28,34 +33,75 @@ class AuthState {
 }
 
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier() : super(const AuthState());
-
-  Future<bool> login(String username, String password) async {
-    state = state.copyWith(loading: true, clearError: true);
-    await Future.delayed(const Duration(milliseconds: 350));
-    final match = MockData.users.where(
-      (u) =>
-          u.username.toLowerCase() == username.trim().toLowerCase() &&
-          u.password == password,
-    );
-    if (match.isEmpty) {
-      state = state.copyWith(
-        loading: false,
-        error: 'Invalid username or password',
-      );
-      return false;
-    }
-    state = AuthState(user: match.first);
-    return true;
+  AuthNotifier(this._api, this._tokens) : super(const AuthState()) {
+    _bootstrap();
   }
 
-  void logout() {
+  final ApiClient _api;
+  final TokenStorage _tokens;
+
+  Future<void> _bootstrap() async {
+    final access = await _tokens.readAccess();
+    if (access == null || access.isEmpty) return;
+    state = state.copyWith(loading: true);
+    try {
+      final res = await _api.dio.get('/auth/me');
+      final user = AppUser.fromJson(
+        (res.data['data'] as Map).cast<String, dynamic>(),
+      );
+      state = AuthState(user: user);
+    } on DioException {
+      await _tokens.clear();
+      state = const AuthState();
+    }
+  }
+
+  Future<bool> login(
+    String username,
+    String password, {
+    String? tenantCode,
+  }) async {
+    state = state.copyWith(loading: true, clearError: true);
+    try {
+      final res = await _api.dio.post('/auth/login', data: {
+        'tenant_code': tenantCode ?? ApiConfig.defaultTenantCode,
+        'username': username.trim(),
+        'password': password,
+      });
+      final data = (res.data['data'] as Map).cast<String, dynamic>();
+      final access = data['access_token'] as String;
+      final refresh = data['refresh_token'] as String;
+      await _tokens.write(access: access, refresh: refresh);
+      final user = AppUser.fromJson(
+        (data['user'] as Map).cast<String, dynamic>(),
+      );
+      state = AuthState(user: user);
+      return true;
+    } on DioException catch (e) {
+      final err = e.error;
+      final msg = err is ApiException ? err.message : 'Invalid username or password';
+      state = state.copyWith(loading: false, error: msg);
+      return false;
+    }
+  }
+
+  Future<void> logout() async {
+    try {
+      await _api.dio.post('/auth/logout');
+    } catch (_) {
+      // best-effort; clear local session regardless
+    }
+    await _tokens.clear();
     state = const AuthState();
   }
 }
 
-final authProvider =
-    StateNotifierProvider<AuthNotifier, AuthState>((ref) => AuthNotifier());
+final authProvider = StateNotifierProvider<AuthNotifier, AuthState>(
+  (ref) => AuthNotifier(
+    ref.watch(apiClientProvider),
+    ref.watch(tokenStorageProvider),
+  ),
+);
 
 final currentUserProvider = Provider<AppUser?>(
   (ref) => ref.watch(authProvider).user,

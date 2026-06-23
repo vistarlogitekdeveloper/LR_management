@@ -2,25 +2,27 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:uuid/uuid.dart';
 
-import '../../../core/constants/mock_data.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../shared/models/attachment.dart';
 import '../../../shared/models/consignee.dart';
 import '../../../shared/models/consignor.dart';
+import '../../../shared/models/driver.dart';
 import '../../../shared/models/lr_models.dart';
+import '../../../shared/models/route_master.dart';
 import '../../../shared/models/transporter.dart';
 import '../../../shared/models/vehicle.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/labeled_field.dart';
 import '../../../shared/widgets/section_title.dart';
-import '../../admin/providers/audit_provider.dart';
-import '../../auth/providers/auth_provider.dart';
+import '../../lookups/data/lookup_value.dart';
+import '../../lookups/providers/lookups_provider.dart';
 import '../../masters/providers/master_providers.dart';
+import '../../masters/widgets/master_actions.dart';
 import '../../shell/widgets/app_topbar.dart';
+import '../data/lr_repository.dart';
 import '../providers/lr_providers.dart';
 
 class CreateLrScreen extends ConsumerStatefulWidget {
@@ -38,79 +40,95 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   Consignee? _consignee;
   Vehicle? _vehicle;
   Transporter? _transporter;
-  String? _route;
-  PayType _payType = PayType.tbb;
-  DeliveryType _deliveryType = DeliveryType.doorDelivery;
-  LrStatus _status = LrStatus.booked;
+  Driver? _driver;
+  RouteMaster? _route;
+
+  LookupValue? _payType;
+  LookupValue? _deliveryType;
+  LookupValue? _packageType;
+  LookupValue? _advancePaidBy;
+  LookupValue? _tripLeadBy;
+  LookupValue? _ewbLoad;
 
   final _invoiceCtrl = TextEditingController();
   final _asnCtrl = TextEditingController();
   final _partsCtrl = TextEditingController();
-  final _qtyCtrl = TextEditingController(text: '50');
-  final _weightCtrl = TextEditingController(text: '1200');
-  final _valueCtrl = TextEditingController(text: '250000');
-  final _packagesCtrl = TextEditingController(text: '12');
-  String _packageType = 'Pallet';
+  final _qtyCtrl = TextEditingController(text: '0');
+  final _weightCtrl = TextEditingController(text: '0');
+  final _valueCtrl = TextEditingController(text: '0');
+  final _packagesCtrl = TextEditingController(text: '0');
   final _natureCtrl = TextEditingController(text: 'Industrial Goods');
 
-  final _freightCtrl = TextEditingController(text: '8000');
+  final _freightCtrl = TextEditingController(text: '0');
   final _doorCtrl = TextEditingController(text: '0');
-  final _handlingCtrl = TextEditingController(text: '300');
+  final _handlingCtrl = TextEditingController(text: '0');
   final _insuranceCtrl = TextEditingController(text: '0');
   final _advanceCtrl = TextEditingController(text: '0');
   final _mathadiCtrl = TextEditingController(text: '0');
-  final _marginCtrl = TextEditingController(text: '1500');
-
+  final _marginCtrl = TextEditingController(text: '0');
+  final _remarksCtrl = TextEditingController();
   final _ewbCtrl = TextEditingController();
-  String _ewbLoad = 'Full Load';
-  String _advancePaidBy = 'Vistar';
-  String _tripLeadBy = 'Operations';
 
   bool _isEdit = false;
+  bool _saving = false;
+  bool _loading = true;
   LorryReceipt? _editing;
 
-  List<Attachment> _attachments = [];
+  List<Attachment> _existingAttachments = [];
+  final List<PlatformFile> _newFiles = [];
 
   @override
   void initState() {
     super.initState();
-    if (widget.editId != null) {
-      _isEdit = true;
-    }
+    _isEdit = widget.editId != null;
     WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
   }
 
-  void _hydrate() {
+  Map<String, List<LookupValue>> get _lookups => ref.read(lookupsMapProvider);
+
+  LookupValue? _firstLookup(String category) {
+    final list = _lookups[category] ?? const [];
+    return list.isEmpty ? null : list.first;
+  }
+
+  Future<void> _hydrate() async {
     final consignors = ref.read(consignorsProvider);
     final consignees = ref.read(consigneesProvider);
     final vehicles = ref.read(vehiclesProvider);
     final transporters = ref.read(transportersProvider);
+    final drivers = ref.read(driversProvider);
+    final routes = ref.read(routesProvider);
 
     if (_isEdit) {
-      final lr = ref.read(lrByIdProvider(widget.editId!));
-      if (lr == null) return;
-      _editing = lr;
-      setState(() {
-        _consignor = consignors.firstWhere(
-          (c) => c.id == lr.consignor.id,
-          orElse: () => lr.consignor,
-        );
-        _consignee = consignees.firstWhere(
-          (c) => c.id == lr.consignee.id,
-          orElse: () => lr.consignee,
-        );
-        _vehicle = vehicles.firstWhere(
-          (v) => v.id == lr.vehicle.id,
-          orElse: () => lr.vehicle,
-        );
-        _transporter = transporters.firstWhere(
-          (t) => t.id == lr.transporter.id,
-          orElse: () => lr.transporter,
-        );
-        _route = lr.route;
-        _payType = lr.payType;
-        _deliveryType = lr.deliveryType;
-        _status = lr.status;
+      try {
+        final lr = await ref.read(lrRepositoryProvider).getById(widget.editId!);
+        _editing = lr;
+        T? pick<T>(List<T> list, bool Function(T) test) {
+          for (final e in list) {
+            if (test(e)) return e;
+          }
+          return null;
+        }
+
+        _consignor =
+            pick(consignors, (c) => c.id == lr.consignor.id) ?? lr.consignor;
+        _consignee =
+            pick(consignees, (c) => c.id == lr.consignee.id) ?? lr.consignee;
+        _vehicle = pick(vehicles, (v) => v.id == lr.vehicle.id) ??
+            (lr.vehicle.id.isNotEmpty ? lr.vehicle : null);
+        _transporter = pick(transporters, (t) => t.id == lr.transporter.id) ??
+            (lr.transporter.id.isNotEmpty ? lr.transporter : null);
+        _driver = pick(drivers, (d) => d.id == lr.driverId);
+        _route = pick(routes, (r) => r.id == lr.routeId);
+
+        _payType = _byCode('PAY_TYPE', lr.payType.code);
+        _deliveryType = _byCode('DELIVERY_TYPE', lr.deliveryType.code);
+        _advancePaidBy =
+            lookupById(_lookups, 'ADVANCE_PAID_BY', lr.freight.advancePaidById);
+        _tripLeadBy =
+            lookupById(_lookups, 'TRIP_LEAD_BY', lr.freight.tripLeadById);
+        _ewbLoad = lookupById(_lookups, 'EWB_LOAD_TYPE', lr.ewb?.loadTypeId);
+
         if (lr.items.isNotEmpty) {
           final i = lr.items.first;
           _invoiceCtrl.text = i.invoiceNo;
@@ -120,9 +138,11 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
           _weightCtrl.text = i.weight.toStringAsFixed(0);
           _valueCtrl.text = i.grossValue.toStringAsFixed(0);
           _packagesCtrl.text = '${i.packages}';
-          _packageType = i.packageType;
           _natureCtrl.text = i.natureOfGoods;
+          _packageType = lookupById(_lookups, 'PACKAGE_TYPE', i.packageTypeId);
         }
+        _packageType ??= _firstLookup('PACKAGE_TYPE');
+
         _freightCtrl.text = lr.freight.freight.toStringAsFixed(0);
         _doorCtrl.text = lr.freight.doorDelivery.toStringAsFixed(0);
         _handlingCtrl.text = lr.freight.handling.toStringAsFixed(0);
@@ -130,21 +150,33 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         _advanceCtrl.text = lr.freight.advance.toStringAsFixed(0);
         _mathadiCtrl.text = lr.freight.mathadi.toStringAsFixed(0);
         _marginCtrl.text = lr.freight.vistarMargin.toStringAsFixed(0);
-        _advancePaidBy = lr.freight.advancePaidBy;
-        _tripLeadBy = lr.freight.tripLeadBy;
+        _remarksCtrl.text = lr.remarks ?? '';
         _ewbCtrl.text = lr.ewb?.number ?? '';
-        _ewbLoad = lr.ewb?.loadType ?? 'Full Load';
-        _attachments = List.of(lr.attachments);
-      });
+        _existingAttachments = List.of(lr.attachments);
+      } catch (e) {
+        if (mounted) MasterActions.showError(context, e);
+      }
     } else {
-      setState(() {
-        _consignor = consignors.isNotEmpty ? consignors.first : null;
-        _consignee = consignees.isNotEmpty ? consignees.first : null;
-        _vehicle = vehicles.isNotEmpty ? vehicles.first : null;
-        _transporter = transporters.isNotEmpty ? transporters.first : null;
-        _route = MockData.routes.first;
-      });
+      _consignor = consignors.isNotEmpty ? consignors.first : null;
+      _consignee = consignees.isNotEmpty ? consignees.first : null;
+      _vehicle = vehicles.isNotEmpty ? vehicles.first : null;
+      _transporter = transporters.isNotEmpty ? transporters.first : null;
+      _route = routes.isNotEmpty ? routes.first : null;
+      _payType = _firstLookup('PAY_TYPE');
+      _deliveryType = _firstLookup('DELIVERY_TYPE');
+      _packageType = _firstLookup('PACKAGE_TYPE');
+      _advancePaidBy = _firstLookup('ADVANCE_PAID_BY');
+      _tripLeadBy = _firstLookup('TRIP_LEAD_BY');
+      _ewbLoad = _firstLookup('EWB_LOAD_TYPE');
     }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  LookupValue? _byCode(String category, String code) {
+    for (final v in _lookups[category] ?? const <LookupValue>[]) {
+      if (v.code == code) return v;
+    }
+    return _firstLookup(category);
   }
 
   @override
@@ -165,6 +197,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       _advanceCtrl,
       _mathadiCtrl,
       _marginCtrl,
+      _remarksCtrl,
       _ewbCtrl,
     ]) {
       c.dispose();
@@ -177,9 +210,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   int _toInt(TextEditingController c) => int.tryParse(c.text.trim()) ?? 0;
 
   double get _gst {
-    final base = _toDouble(_freightCtrl) +
-        _toDouble(_doorCtrl) +
-        _toDouble(_handlingCtrl);
+    final base =
+        _toDouble(_freightCtrl) + _toDouble(_doorCtrl) + _toDouble(_handlingCtrl);
     return (base * 0.12).roundToDouble();
   }
 
@@ -193,34 +225,26 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   double get _balance => _total - _toDouble(_advanceCtrl);
 
   Future<void> _pickInvoices() async {
-    final user = ref.read(currentUserProvider);
     final picked = await FilePicker.platform.pickFiles(
       allowMultiple: true,
       type: FileType.custom,
       allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'xls', 'xlsx'],
-      withData: false,
+      withData: true,
     );
     if (picked == null || picked.files.isEmpty) return;
-    final now = DateTime.now();
-    final newOnes = picked.files
-        .map((f) => Attachment(
-              id: const Uuid().v4(),
-              name: f.name,
-              sizeBytes: f.size,
-              mimeType: f.extension,
-              uploadedAt: now,
-              uploadedBy: user?.username ?? 'system',
-            ))
-        .toList();
-    setState(() {
-      _attachments = [..._attachments, ...newOnes];
-    });
+    setState(() => _newFiles.addAll(picked.files));
   }
 
-  void _removeAttachment(String id) {
-    setState(() {
-      _attachments = _attachments.where((a) => a.id != id).toList();
-    });
+  Future<void> _removeExistingAttachment(Attachment a) async {
+    try {
+      await ref
+          .read(lrRepositoryProvider)
+          .deleteAttachment(_editing!.id, a.id);
+      setState(() =>
+          _existingAttachments = _existingAttachments.where((x) => x.id != a.id).toList());
+    } catch (e) {
+      if (mounted) MasterActions.showError(context, e);
+    }
   }
 
   String? _validateEwb(String? value) {
@@ -231,135 +255,123 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     return null;
   }
 
-  void _save() {
+  Map<String, dynamic> _buildPayload(DateTime date) {
+    return {
+      'lr_date': date.toIso8601String().substring(0, 10),
+      'consignor_id': _consignor!.id,
+      'consignee_id': _consignee!.id,
+      if (_vehicle != null) 'vehicle_id': _vehicle!.id,
+      if (_transporter != null) 'transporter_id': _transporter!.id,
+      if (_driver != null) 'driver_id': _driver!.id,
+      if (_route != null) 'route_id': _route!.id,
+      if (_route != null) 'from_city': _route!.fromCity,
+      if (_route != null) 'to_city': _route!.toCity,
+      'pay_type_id': _payType!.id,
+      'delivery_type_id': _deliveryType!.id,
+      'freight': _toDouble(_freightCtrl),
+      'door_delivery': _toDouble(_doorCtrl),
+      'handling': _toDouble(_handlingCtrl),
+      'insurance': _toDouble(_insuranceCtrl),
+      'advance': _toDouble(_advanceCtrl),
+      'mathadi': _toDouble(_mathadiCtrl),
+      'vistar_margin': _toDouble(_marginCtrl),
+      if (_advancePaidBy != null) 'advance_paid_by_id': _advancePaidBy!.id,
+      if (_tripLeadBy != null) 'trip_lead_by_id': _tripLeadBy!.id,
+      if (_remarksCtrl.text.trim().isNotEmpty) 'remarks': _remarksCtrl.text.trim(),
+      'invoice_items': [
+        {
+          if (_invoiceCtrl.text.trim().isNotEmpty)
+            'invoice_no': _invoiceCtrl.text.trim(),
+          'invoice_date': date.toIso8601String(),
+          if (_asnCtrl.text.trim().isNotEmpty) 'asn': _asnCtrl.text.trim(),
+          if (_partsCtrl.text.trim().isNotEmpty)
+            'part_description': _partsCtrl.text.trim(),
+          'quantity': _toInt(_qtyCtrl),
+          'weight_kg': _toDouble(_weightCtrl),
+          'gross_value': _toDouble(_valueCtrl),
+          'packages': _toInt(_packagesCtrl),
+          if (_packageType != null) 'package_type_id': _packageType!.id,
+          if (_natureCtrl.text.trim().isNotEmpty)
+            'nature_of_goods': _natureCtrl.text.trim(),
+        }
+      ],
+    };
+  }
+
+  EwbInput? _buildEwb() {
+    final number = _ewbCtrl.text.trim();
+    if (number.isEmpty) return null;
+    return EwbInput(
+      number: number,
+      expiryAt: DateTime.now().add(const Duration(days: 15)),
+      loadTypeId: _ewbLoad?.id,
+    );
+  }
+
+  Future<void> _uploadNewFiles(String lrId) async {
+    if (_newFiles.isEmpty) return;
+    final repo = ref.read(lrRepositoryProvider);
+    for (final f in _newFiles) {
+      await repo.uploadAttachment(
+        lrId,
+        fileName: f.name,
+        bytes: f.bytes,
+        filePath: f.path,
+      );
+    }
+  }
+
+  Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_consignor == null ||
-        _consignee == null ||
-        _vehicle == null ||
-        _transporter == null ||
-        _route == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill required master fields')),
+    if (_consignor == null || _consignee == null) {
+      MasterActions.showError(
+        context,
+        'Select a consignor and consignee (add them in Masters first).',
       );
       return;
     }
-    final user = ref.read(currentUserProvider);
-    final now = DateTime.now();
-    final parts = _route!.split(' → ');
+    if (_payType == null || _deliveryType == null) {
+      MasterActions.showError(
+        context,
+        'Pay type and delivery type are required (lookups not loaded).',
+      );
+      return;
+    }
 
-    final freight = FreightDetails(
-      freight: _toDouble(_freightCtrl),
-      doorDelivery: _toDouble(_doorCtrl),
-      handling: _toDouble(_handlingCtrl),
-      insurance: _toDouble(_insuranceCtrl),
-      gst: _gst,
-      advance: _toDouble(_advanceCtrl),
-      mathadi: _toDouble(_mathadiCtrl),
-      vistarMargin: _toDouble(_marginCtrl),
-      advancePaidBy: _advancePaidBy,
-      tripLeadBy: _tripLeadBy,
-    );
-
-    final ewb = _ewbCtrl.text.trim().isNotEmpty
-        ? EwayBill(
-            number: _ewbCtrl.text.trim(),
-            expiry: now.add(const Duration(days: 7)),
-            loadType: _ewbLoad,
-          )
-        : null;
-
-    final item = InvoiceItem(
-      invoiceNo: _invoiceCtrl.text.isEmpty
-          ? 'INV/${now.millisecondsSinceEpoch % 10000}'
-          : _invoiceCtrl.text,
-      invoiceDate: _isEdit ? (_editing!.items.first.invoiceDate) : now,
-      asn: _asnCtrl.text,
-      partDescription: _partsCtrl.text,
-      quantity: _toInt(_qtyCtrl),
-      weight: _toDouble(_weightCtrl),
-      grossValue: _toDouble(_valueCtrl),
-      packages: _toInt(_packagesCtrl),
-      packageType: _packageType,
-      natureOfGoods: _natureCtrl.text,
-    );
-
-    if (_isEdit && _editing != null) {
-      final updated = _editing!.copyWith(
-        freight: freight,
-        ewb: ewb,
-        payType: _payType,
-        deliveryType: _deliveryType,
-        status: _status,
-        attachments: _attachments,
-      );
-      final withItems = LorryReceipt(
-        id: updated.id,
-        number: updated.number,
-        date: updated.date,
-        enteredBy: updated.enteredBy,
-        consignor: _consignor!,
-        consignee: _consignee!,
-        vehicle: _vehicle!,
-        transporter: _transporter!,
-        route: _route!,
-        fromCity: parts[0],
-        toCity: parts.length > 1 ? parts[1] : parts[0],
-        items: [item],
-        freight: freight,
-        ewb: ewb,
-        payType: _payType,
-        deliveryType: _deliveryType,
-        status: _status,
-        remarks: updated.remarks,
-        attachments: _attachments,
-      );
-      ref.read(lrListProvider.notifier).update(withItems);
-      ref.read(auditProvider.notifier).log(
-            user: user?.username ?? 'system',
-            action: 'UPDATE',
-            entity: 'LR',
-            entityRef: withItems.number,
-          );
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('LR ${withItems.number} updated')),
-      );
-      context.go('/lrs/${withItems.id}');
-    } else {
-      final lrs = ref.read(lrListProvider);
-      final next = (lrs.length + 56).toString().padLeft(5, '0');
-      final number =
-          'VLL/${now.year.toString().substring(2)}/${now.month.toString().padLeft(2, '0')}/$next';
-      final lr = LorryReceipt(
-        id: 'LR${DateTime.now().millisecondsSinceEpoch}',
-        number: number,
-        date: now,
-        enteredBy: user?.username ?? 'system',
-        consignor: _consignor!,
-        consignee: _consignee!,
-        vehicle: _vehicle!,
-        transporter: _transporter!,
-        route: _route!,
-        fromCity: parts[0],
-        toCity: parts.length > 1 ? parts[1] : parts[0],
-        items: [item],
-        freight: freight,
-        ewb: ewb,
-        payType: _payType,
-        deliveryType: _deliveryType,
-        status: _status,
-        attachments: _attachments,
-      );
-      ref.read(lrListProvider.notifier).add(lr);
-      ref.read(auditProvider.notifier).log(
-            user: user?.username ?? 'system',
-            action: 'CREATE',
-            entity: 'LR',
-            entityRef: lr.number,
-          );
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('LR ${lr.number} created')),
-      );
-      context.go('/lrs/${lr.id}');
+    setState(() => _saving = true);
+    final notifier = ref.read(lrListProvider.notifier);
+    try {
+      final ewb = _buildEwb();
+      if (_isEdit && _editing != null) {
+        final payload = _buildPayload(_editing!.date);
+        final updated = await notifier.updateLr(
+          _editing!.id,
+          _editing!.version,
+          payload,
+          ewb: ewb,
+          existingEwbId: _editing!.ewb?.id,
+          existingEwbVersion: 0,
+        );
+        await _uploadNewFiles(updated.id);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('LR ${updated.number} updated')),
+        );
+        context.go('/lrs/${updated.id}');
+      } else {
+        final payload = _buildPayload(DateTime.now());
+        final created = await notifier.create(payload, ewb: ewb);
+        await _uploadNewFiles(created.id);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('LR ${created.number} created')),
+        );
+        context.go('/lrs/${created.id}');
+      }
+    } catch (e) {
+      if (mounted) MasterActions.showError(context, e);
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -369,10 +381,16 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     final consignees = ref.watch(consigneesProvider);
     final vehicles = ref.watch(vehiclesProvider);
     final transporters = ref.watch(transportersProvider);
+    final drivers = ref.watch(driversProvider);
     final routes = ref.watch(routesProvider);
-    final routeNames = routes.isEmpty
-        ? MockData.routes
-        : routes.map((r) => r.name).toList();
+    final lookups = ref.watch(lookupsMapProvider);
+
+    final payTypes = lookupList(lookups, 'PAY_TYPE');
+    final deliveryTypes = lookupList(lookups, 'DELIVERY_TYPE');
+    final packageTypes = lookupList(lookups, 'PACKAGE_TYPE');
+    final advancePaidByList = lookupList(lookups, 'ADVANCE_PAID_BY');
+    final tripLeadByList = lookupList(lookups, 'TRIP_LEAD_BY');
+    final ewbLoadList = lookupList(lookups, 'EWB_LOAD_TYPE');
 
     return Scaffold(
       backgroundColor: AppColors.mist,
@@ -386,7 +404,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                   : 'Create Lorry Receipt',
               subtitle: _isEdit
                   ? 'Updating existing LR'
-                  : 'Number will be auto-generated on save',
+                  : 'Number is auto-generated by the server on save',
               actions: [
                 AppButton(
                   label: 'Cancel',
@@ -395,507 +413,518 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                       context.go(_isEdit ? '/lrs/${widget.editId}' : '/lrs'),
                 ),
                 AppButton(
-                  label: _isEdit ? 'Save Changes' : 'Save LR',
+                  label: _saving
+                      ? 'Saving…'
+                      : (_isEdit ? 'Save Changes' : 'Save LR'),
                   icon: Icons.save_outlined,
-                  onPressed: _save,
+                  onPressed: _saving ? null : _save,
                 ),
               ],
             ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(28),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    AppCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SectionTitle(
-                            icon: Icons.swap_horiz_rounded,
-                            title: 'Parties',
-                          ),
-                          _grid(2, [
-                            LabeledField(
-                              label: 'Consignor',
-                              required: true,
-                              child: DropdownButtonFormField<Consignor>(
-                                initialValue: _consignor,
-                                isExpanded: true,
-                                items: [
-                                  for (final c in consignors)
-                                    DropdownMenuItem(
-                                        value: c, child: Text(c.name)),
-                                ],
-                                onChanged: (v) =>
-                                    setState(() => _consignor = v),
-                              ),
+            if (_loading)
+              const Expanded(
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(28),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      AppCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SectionTitle(
+                              icon: Icons.swap_horiz_rounded,
+                              title: 'Parties',
                             ),
-                            LabeledField(
-                              label: 'Consignee',
-                              required: true,
-                              child: DropdownButtonFormField<Consignee>(
-                                initialValue: _consignee,
-                                isExpanded: true,
-                                items: [
-                                  for (final c in consignees)
-                                    DropdownMenuItem(
-                                        value: c, child: Text(c.name)),
-                                ],
-                                onChanged: (v) =>
-                                    setState(() => _consignee = v),
-                              ),
-                            ),
-                          ]),
-                          if (_consignor != null) ...[
-                            const SizedBox(height: 8),
-                            _autoFillStrip(
-                              '${_consignor!.address} · GST: ${_consignor!.gst}',
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    AppCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SectionTitle(
-                            icon: Icons.local_shipping_outlined,
-                            title: 'Vehicle & Route',
-                          ),
-                          _grid(2, [
-                            LabeledField(
-                              label: 'Vehicle',
-                              required: true,
-                              child: DropdownButtonFormField<Vehicle>(
-                                initialValue: _vehicle,
-                                isExpanded: true,
-                                items: [
-                                  for (final v in vehicles)
-                                    DropdownMenuItem(
-                                      value: v,
-                                      child: Text('${v.number} · ${v.type}'),
-                                    ),
-                                ],
-                                onChanged: (v) => setState(() => _vehicle = v),
-                              ),
-                            ),
-                            LabeledField(
-                              label: 'Transporter',
-                              child: DropdownButtonFormField<Transporter>(
-                                initialValue: _transporter,
-                                isExpanded: true,
-                                items: [
-                                  for (final t in transporters)
-                                    DropdownMenuItem(
-                                        value: t, child: Text(t.name)),
-                                ],
-                                onChanged: (v) =>
-                                    setState(() => _transporter = v),
-                              ),
-                            ),
-                            LabeledField(
-                              label: 'Route',
-                              required: true,
-                              child: DropdownButtonFormField<String>(
-                                initialValue: _route,
-                                isExpanded: true,
-                                items: [
-                                  for (final r in routeNames)
-                                    DropdownMenuItem(value: r, child: Text(r)),
-                                ],
-                                onChanged: (v) => setState(() => _route = v),
-                              ),
-                            ),
-                            LabeledField(
-                              label: 'Delivery Type',
-                              child: DropdownButtonFormField<DeliveryType>(
-                                initialValue: _deliveryType,
-                                isExpanded: true,
-                                items: [
-                                  for (final d in DeliveryType.values)
-                                    DropdownMenuItem(
-                                        value: d, child: Text(d.label)),
-                                ],
-                                onChanged: (v) => setState(
-                                    () => _deliveryType = v ?? _deliveryType),
-                              ),
-                            ),
-                          ]),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    AppCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SectionTitle(
-                            icon: Icons.inventory_2_outlined,
-                            title: 'Invoice & Goods',
-                          ),
-                          _grid(3, [
-                            LabeledField(
-                              label: 'Invoice No',
-                              child: TextFormField(controller: _invoiceCtrl),
-                            ),
-                            LabeledField(
-                              label: 'ASN',
-                              child: TextFormField(controller: _asnCtrl),
-                            ),
-                            LabeledField(
-                              label: 'Nature of Goods',
-                              child: TextFormField(controller: _natureCtrl),
-                            ),
-                            LabeledField(
-                              label: 'No of Packages',
-                              child: TextFormField(
-                                controller: _packagesCtrl,
-                                keyboardType: TextInputType.number,
-                              ),
-                            ),
-                            LabeledField(
-                              label: 'Package Type',
-                              child: DropdownButtonFormField<String>(
-                                initialValue: _packageType,
-                                isExpanded: true,
-                                items: [
-                                  for (final p in MockData.packageTypes)
-                                    DropdownMenuItem(value: p, child: Text(p)),
-                                ],
-                                onChanged: (v) => setState(
-                                    () => _packageType = v ?? _packageType),
-                              ),
-                            ),
-                            LabeledField(
-                              label: 'Quantity',
-                              child: TextFormField(
-                                controller: _qtyCtrl,
-                                keyboardType: TextInputType.number,
-                              ),
-                            ),
-                            LabeledField(
-                              label: 'Weight (kg)',
-                              child: TextFormField(
-                                controller: _weightCtrl,
-                                keyboardType: TextInputType.number,
-                              ),
-                            ),
-                            LabeledField(
-                              label: 'Gross Value',
-                              child: TextFormField(
-                                controller: _valueCtrl,
-                                keyboardType: TextInputType.number,
-                              ),
-                            ),
-                            LabeledField(
-                              label: 'Part Description',
-                              child: TextFormField(controller: _partsCtrl),
-                            ),
-                          ]),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    AppCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SectionTitle(
-                            icon: Icons.qr_code_2_rounded,
-                            title: 'E-Way Bill',
-                          ),
-                          _grid(2, [
-                            LabeledField(
-                              label: 'EWB Number (12 digits)',
-                              child: TextFormField(
-                                controller: _ewbCtrl,
-                                keyboardType: TextInputType.number,
-                                maxLength: 12,
-                                decoration: const InputDecoration(
-                                  counterText: '',
-                                  hintText: 'Optional',
-                                ),
-                                validator: _validateEwb,
-                              ),
-                            ),
-                            LabeledField(
-                              label: 'Load Type',
-                              child: DropdownButtonFormField<String>(
-                                initialValue: _ewbLoad,
-                                isExpanded: true,
-                                items: const [
-                                  DropdownMenuItem(
-                                      value: 'Full Load',
-                                      child: Text('Full Load')),
-                                  DropdownMenuItem(
-                                      value: 'Part Load',
-                                      child: Text('Part Load')),
-                                ],
-                                onChanged: (v) =>
-                                    setState(() => _ewbLoad = v ?? _ewbLoad),
-                              ),
-                            ),
-                          ]),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    AppCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SectionTitle(
-                            icon: Icons.attach_file_rounded,
-                            title: 'Invoice Attachments',
-                            trailing: AppButton(
-                              label: 'Upload',
-                              icon: Icons.upload_file_outlined,
-                              kind: BtnKind.soft,
-                              small: true,
-                              onPressed: _pickInvoices,
-                            ),
-                          ),
-                          if (_attachments.isEmpty)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 18),
-                              decoration: BoxDecoration(
-                                color: AppColors.mist,
-                                border: Border.all(color: AppColors.line),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Row(
-                                children: [
-                                  Icon(Icons.cloud_upload_outlined,
-                                      color: AppColors.slate, size: 18),
-                                  SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      'PDF, JPG, PNG or Excel. Operators can upload one or more invoice copies per LR.',
-                                      style: TextStyle(
-                                          color: AppColors.slate,
-                                          fontSize: 12.5),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          else
-                            Column(
-                              children: [
-                                for (final a in _attachments)
-                                  Container(
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 10),
-                                    decoration: BoxDecoration(
-                                      border:
-                                          Border.all(color: AppColors.line),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        const Icon(
-                                            Icons.insert_drive_file_outlined,
-                                            size: 18,
-                                            color: AppColors.plum),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                a.name,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(
-                                                  color: AppColors.ink,
-                                                  fontWeight: FontWeight.w700,
-                                                  fontSize: 13,
-                                                ),
-                                              ),
-                                              Text(
-                                                '${a.sizeLabel} · uploaded by ${a.uploadedBy}',
-                                                style: const TextStyle(
-                                                  color: AppColors.slate,
-                                                  fontSize: 11.5,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        IconButton(
-                                          tooltip: 'Remove',
-                                          icon: const Icon(Icons.close_rounded,
-                                              size: 18,
-                                              color: AppColors.slate),
-                                          onPressed: () =>
-                                              _removeAttachment(a.id),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                              ],
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    AppCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SectionTitle(
-                            icon: Icons.calculate_outlined,
-                            title: 'Freight & Payment',
-                          ),
-                          _grid(3, [
-                            LabeledField(
-                              label: 'Freight',
-                              child: TextFormField(
-                                controller: _freightCtrl,
-                                keyboardType: TextInputType.number,
-                                onChanged: (_) => setState(() {}),
-                              ),
-                            ),
-                            LabeledField(
-                              label: 'Door Delivery',
-                              child: TextFormField(
-                                controller: _doorCtrl,
-                                keyboardType: TextInputType.number,
-                                onChanged: (_) => setState(() {}),
-                              ),
-                            ),
-                            LabeledField(
-                              label: 'Handling',
-                              child: TextFormField(
-                                controller: _handlingCtrl,
-                                keyboardType: TextInputType.number,
-                                onChanged: (_) => setState(() {}),
-                              ),
-                            ),
-                            LabeledField(
-                              label: 'Insurance',
-                              child: TextFormField(
-                                controller: _insuranceCtrl,
-                                keyboardType: TextInputType.number,
-                                onChanged: (_) => setState(() {}),
-                              ),
-                            ),
-                            LabeledField(
-                              label: 'Mathadi',
-                              child: TextFormField(
-                                controller: _mathadiCtrl,
-                                keyboardType: TextInputType.number,
-                              ),
-                            ),
-                            LabeledField(
-                              label: 'Vistar Margin',
-                              child: TextFormField(
-                                controller: _marginCtrl,
-                                keyboardType: TextInputType.number,
-                              ),
-                            ),
-                            LabeledField(
-                              label: 'Advance',
-                              child: TextFormField(
-                                controller: _advanceCtrl,
-                                keyboardType: TextInputType.number,
-                                onChanged: (_) => setState(() {}),
-                              ),
-                            ),
-                            LabeledField(
-                              label: 'Advance Paid By',
-                              child: DropdownButtonFormField<String>(
-                                initialValue: _advancePaidBy,
-                                isExpanded: true,
-                                items: const [
-                                  DropdownMenuItem(
-                                      value: 'Vistar', child: Text('Vistar')),
-                                  DropdownMenuItem(
-                                      value: 'Customer',
-                                      child: Text('Customer')),
-                                ],
-                                onChanged: (v) => setState(
-                                    () => _advancePaidBy = v ?? _advancePaidBy),
-                              ),
-                            ),
-                            LabeledField(
-                              label: 'Trip Lead By',
-                              child: DropdownButtonFormField<String>(
-                                initialValue: _tripLeadBy,
-                                isExpanded: true,
-                                items: const [
-                                  DropdownMenuItem(
-                                      value: 'Operations',
-                                      child: Text('Operations')),
-                                  DropdownMenuItem(
-                                      value: 'Sales', child: Text('Sales')),
-                                ],
-                                onChanged: (v) => setState(
-                                    () => _tripLeadBy = v ?? _tripLeadBy),
-                              ),
-                            ),
-                            LabeledField(
-                              label: 'Pay Type',
-                              child: DropdownButtonFormField<PayType>(
-                                initialValue: _payType,
-                                isExpanded: true,
-                                items: [
-                                  for (final p in PayType.values)
-                                    DropdownMenuItem(
-                                        value: p, child: Text(p.label)),
-                                ],
-                                onChanged: (v) =>
-                                    setState(() => _payType = v ?? _payType),
-                              ),
-                            ),
-                            if (_isEdit)
+                            _grid(2, [
                               LabeledField(
-                                label: 'Status',
-                                child: DropdownButtonFormField<LrStatus>(
-                                  initialValue: _status,
+                                label: 'Consignor',
+                                required: true,
+                                child: DropdownButtonFormField<Consignor>(
+                                  initialValue: _consignor,
                                   isExpanded: true,
                                   items: [
-                                    for (final s in LrStatus.values)
+                                    for (final c in consignors)
                                       DropdownMenuItem(
-                                          value: s, child: Text(s.label)),
+                                          value: c, child: Text(c.name)),
                                   ],
                                   onChanged: (v) =>
-                                      setState(() => _status = v ?? _status),
+                                      setState(() => _consignor = v),
                                 ),
                               ),
-                          ]),
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: AppColors.plum.withValues(alpha: 0.05),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              children: [
-                                _summaryRow('GST (12%)', inr(_gst)),
-                                _summaryRow('Total', inr(_total),
-                                    emphasis: true),
-                                _summaryRow('Balance', inr(_balance),
-                                    emphasis: true, color: AppColors.red),
-                              ],
-                            ),
-                          ),
-                        ],
+                              LabeledField(
+                                label: 'Consignee',
+                                required: true,
+                                child: DropdownButtonFormField<Consignee>(
+                                  initialValue: _consignee,
+                                  isExpanded: true,
+                                  items: [
+                                    for (final c in consignees)
+                                      DropdownMenuItem(
+                                          value: c, child: Text(c.name)),
+                                  ],
+                                  onChanged: (v) =>
+                                      setState(() => _consignee = v),
+                                ),
+                              ),
+                            ]),
+                            if (_consignor != null) ...[
+                              const SizedBox(height: 8),
+                              _autoFillStrip(
+                                '${_consignor!.address} · GST: ${_consignor!.gst}',
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 20),
+                      AppCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SectionTitle(
+                              icon: Icons.local_shipping_outlined,
+                              title: 'Vehicle & Route',
+                            ),
+                            _grid(2, [
+                              LabeledField(
+                                label: 'Vehicle',
+                                child: DropdownButtonFormField<Vehicle?>(
+                                  initialValue: _vehicle,
+                                  isExpanded: true,
+                                  items: [
+                                    const DropdownMenuItem(
+                                        value: null, child: Text('—')),
+                                    for (final v in vehicles)
+                                      DropdownMenuItem(
+                                        value: v,
+                                        child: Text(v.type.isEmpty
+                                            ? v.number
+                                            : '${v.number} · ${v.type}'),
+                                      ),
+                                  ],
+                                  onChanged: (v) => setState(() => _vehicle = v),
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Driver',
+                                child: DropdownButtonFormField<Driver?>(
+                                  initialValue: _driver,
+                                  isExpanded: true,
+                                  items: [
+                                    const DropdownMenuItem(
+                                        value: null, child: Text('—')),
+                                    for (final d in drivers)
+                                      DropdownMenuItem(
+                                          value: d, child: Text(d.name)),
+                                  ],
+                                  onChanged: (v) => setState(() => _driver = v),
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Transporter',
+                                child: DropdownButtonFormField<Transporter?>(
+                                  initialValue: _transporter,
+                                  isExpanded: true,
+                                  items: [
+                                    const DropdownMenuItem(
+                                        value: null, child: Text('—')),
+                                    for (final t in transporters)
+                                      DropdownMenuItem(
+                                          value: t, child: Text(t.name)),
+                                  ],
+                                  onChanged: (v) =>
+                                      setState(() => _transporter = v),
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Route',
+                                child: DropdownButtonFormField<RouteMaster?>(
+                                  initialValue: _route,
+                                  isExpanded: true,
+                                  items: [
+                                    const DropdownMenuItem(
+                                        value: null, child: Text('—')),
+                                    for (final r in routes)
+                                      DropdownMenuItem(
+                                          value: r, child: Text(r.name)),
+                                  ],
+                                  onChanged: (v) => setState(() => _route = v),
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Delivery Type',
+                                child: _lookupDropdown(
+                                  value: _deliveryType,
+                                  options: deliveryTypes,
+                                  onChanged: (v) =>
+                                      setState(() => _deliveryType = v),
+                                ),
+                              ),
+                            ]),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      AppCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SectionTitle(
+                              icon: Icons.inventory_2_outlined,
+                              title: 'Invoice & Goods',
+                            ),
+                            _grid(3, [
+                              LabeledField(
+                                label: 'Invoice No',
+                                child: TextFormField(controller: _invoiceCtrl),
+                              ),
+                              LabeledField(
+                                label: 'ASN',
+                                child: TextFormField(controller: _asnCtrl),
+                              ),
+                              LabeledField(
+                                label: 'Nature of Goods',
+                                child: TextFormField(controller: _natureCtrl),
+                              ),
+                              LabeledField(
+                                label: 'No of Packages',
+                                child: TextFormField(
+                                  controller: _packagesCtrl,
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Package Type',
+                                child: _lookupDropdown(
+                                  value: _packageType,
+                                  options: packageTypes,
+                                  onChanged: (v) =>
+                                      setState(() => _packageType = v),
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Quantity',
+                                child: TextFormField(
+                                  controller: _qtyCtrl,
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Weight (kg)',
+                                child: TextFormField(
+                                  controller: _weightCtrl,
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Gross Value',
+                                child: TextFormField(
+                                  controller: _valueCtrl,
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Part Description',
+                                child: TextFormField(controller: _partsCtrl),
+                              ),
+                            ]),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      AppCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SectionTitle(
+                              icon: Icons.qr_code_2_rounded,
+                              title: 'E-Way Bill',
+                            ),
+                            _grid(2, [
+                              LabeledField(
+                                label: 'EWB Number (12 digits)',
+                                child: TextFormField(
+                                  controller: _ewbCtrl,
+                                  keyboardType: TextInputType.number,
+                                  maxLength: 12,
+                                  decoration: const InputDecoration(
+                                    counterText: '',
+                                    hintText: 'Optional',
+                                  ),
+                                  validator: _validateEwb,
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Load Type',
+                                child: _lookupDropdown(
+                                  value: _ewbLoad,
+                                  options: ewbLoadList,
+                                  onChanged: (v) => setState(() => _ewbLoad = v),
+                                ),
+                              ),
+                            ]),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      _attachmentsCard(),
+                      const SizedBox(height: 20),
+                      AppCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SectionTitle(
+                              icon: Icons.calculate_outlined,
+                              title: 'Freight & Payment',
+                            ),
+                            _grid(3, [
+                              LabeledField(
+                                label: 'Freight',
+                                child: TextFormField(
+                                  controller: _freightCtrl,
+                                  keyboardType: TextInputType.number,
+                                  onChanged: (_) => setState(() {}),
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Door Delivery',
+                                child: TextFormField(
+                                  controller: _doorCtrl,
+                                  keyboardType: TextInputType.number,
+                                  onChanged: (_) => setState(() {}),
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Handling',
+                                child: TextFormField(
+                                  controller: _handlingCtrl,
+                                  keyboardType: TextInputType.number,
+                                  onChanged: (_) => setState(() {}),
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Insurance',
+                                child: TextFormField(
+                                  controller: _insuranceCtrl,
+                                  keyboardType: TextInputType.number,
+                                  onChanged: (_) => setState(() {}),
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Mathadi',
+                                child: TextFormField(
+                                  controller: _mathadiCtrl,
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Vistar Margin',
+                                child: TextFormField(
+                                  controller: _marginCtrl,
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Advance',
+                                child: TextFormField(
+                                  controller: _advanceCtrl,
+                                  keyboardType: TextInputType.number,
+                                  onChanged: (_) => setState(() {}),
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Advance Paid By',
+                                child: _lookupDropdown(
+                                  value: _advancePaidBy,
+                                  options: advancePaidByList,
+                                  onChanged: (v) =>
+                                      setState(() => _advancePaidBy = v),
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Trip Lead By',
+                                child: _lookupDropdown(
+                                  value: _tripLeadBy,
+                                  options: tripLeadByList,
+                                  onChanged: (v) =>
+                                      setState(() => _tripLeadBy = v),
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Pay Type',
+                                required: true,
+                                child: _lookupDropdown(
+                                  value: _payType,
+                                  options: payTypes,
+                                  onChanged: (v) => setState(() => _payType = v),
+                                ),
+                              ),
+                            ]),
+                            const SizedBox(height: 12),
+                            LabeledField(
+                              label: 'Remarks',
+                              child: TextFormField(
+                                controller: _remarksCtrl,
+                                maxLines: 2,
+                                decoration: const InputDecoration(
+                                    hintText: 'Optional notes'),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: AppColors.plum.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Column(
+                                children: [
+                                  _summaryRow('GST (12%)', inr(_gst)),
+                                  _summaryRow('Total', inr(_total),
+                                      emphasis: true),
+                                  _summaryRow('Balance', inr(_balance),
+                                      emphasis: true, color: AppColors.red),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _lookupDropdown({
+    required LookupValue? value,
+    required List<LookupValue> options,
+    required ValueChanged<LookupValue?> onChanged,
+  }) {
+    return DropdownButtonFormField<LookupValue>(
+      initialValue: value,
+      isExpanded: true,
+      items: [
+        for (final v in options)
+          DropdownMenuItem(value: v, child: Text(v.label)),
+      ],
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _attachmentsCard() {
+    final hasAny = _existingAttachments.isNotEmpty || _newFiles.isNotEmpty;
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionTitle(
+            icon: Icons.attach_file_rounded,
+            title: 'Invoice Attachments',
+            trailing: AppButton(
+              label: 'Upload',
+              icon: Icons.upload_file_outlined,
+              kind: BtnKind.soft,
+              small: true,
+              onPressed: _pickInvoices,
+            ),
+          ),
+          if (!hasAny)
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+              decoration: BoxDecoration(
+                color: AppColors.mist,
+                border: Border.all(color: AppColors.line),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.cloud_upload_outlined,
+                      color: AppColors.slate, size: 18),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'PDF, JPG, PNG or Excel. Files upload to the server when you save.',
+                      style: TextStyle(color: AppColors.slate, fontSize: 12.5),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Column(
+              children: [
+                for (final a in _existingAttachments)
+                  _fileRow(
+                    title: a.name,
+                    subtitle: '${a.sizeLabel} · uploaded',
+                    onRemove: () => _removeExistingAttachment(a),
+                  ),
+                for (final f in _newFiles)
+                  _fileRow(
+                    title: f.name,
+                    subtitle:
+                        '${(f.size / 1024).toStringAsFixed(1)} KB · pending upload',
+                    onRemove: () => setState(() => _newFiles.remove(f)),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _fileRow({
+    required String title,
+    required String subtitle,
+    required VoidCallback onRemove,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.insert_drive_file_outlined,
+              size: 18, color: AppColors.plum),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(title,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: AppColors.ink,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13)),
+                Text(subtitle,
+                    style: const TextStyle(
+                        color: AppColors.slate, fontSize: 11.5)),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Remove',
+            icon: const Icon(Icons.close_rounded,
+                size: 18, color: AppColors.slate),
+            onPressed: onRemove,
+          ),
+        ],
       ),
     );
   }
@@ -938,8 +967,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
           children: [
             for (final child in children)
               SizedBox(
-                width:
-                    (c.maxWidth - spacing * (actualCols - 1)) / actualCols,
+                width: (c.maxWidth - spacing * (actualCols - 1)) / actualCols,
                 child: child,
               ),
           ],

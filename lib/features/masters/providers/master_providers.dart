@@ -1,87 +1,213 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/constants/mock_data.dart';
+import '../../../core/network/api_providers.dart';
 import '../../../shared/models/consignee.dart';
 import '../../../shared/models/consignor.dart';
 import '../../../shared/models/driver.dart';
 import '../../../shared/models/route_master.dart';
 import '../../../shared/models/transporter.dart';
 import '../../../shared/models/vehicle.dart';
+import '../data/consignees_repository.dart';
+import '../data/consignors_repository.dart';
+import '../data/drivers_repository.dart';
+import '../data/routes_repository.dart';
+import '../data/transporters_repository.dart';
+import '../data/vehicles_repository.dart';
+
+// All masters are API-backed. Each notifier exposes `List<T>` so existing
+// screens keep working; state is empty until refresh() resolves, and the CRUD
+// methods are async — callers await them to surface errors.
 
 class ConsignorsNotifier extends StateNotifier<List<Consignor>> {
-  ConsignorsNotifier() : super(List.of(MockData.consignors));
+  ConsignorsNotifier(this._repo) : super(const []) {
+    refresh();
+  }
+  final ConsignorsRepository _repo;
 
-  void add(Consignor c) => state = [...state, c];
-  void update(Consignor c) =>
-      state = [for (final x in state) x.id == c.id ? c : x];
-  void remove(String id) => state = state.where((x) => x.id != id).toList();
+  Future<void> refresh() async {
+    state = await _repo.list();
+  }
+
+  Future<void> add(Consignor c) async {
+    final created = await _repo.create(c);
+    state = [...state, created];
+  }
+
+  Future<void> update(Consignor c) async {
+    final updated = await _repo.update(c);
+    state = [for (final x in state) x.id == updated.id ? updated : x];
+  }
+
+  Future<void> remove(String id) async {
+    await _repo.remove(id);
+    state = state.where((x) => x.id != id).toList();
+  }
 }
 
 class ConsigneesNotifier extends StateNotifier<List<Consignee>> {
-  ConsigneesNotifier() : super(List.of(MockData.consignees));
+  ConsigneesNotifier(this._repo) : super(const []) {
+    refresh();
+  }
+  final ConsigneesRepository _repo;
 
-  void add(Consignee c) => state = [...state, c];
-  void update(Consignee c) =>
-      state = [for (final x in state) x.id == c.id ? c : x];
-  void remove(String id) => state = state.where((x) => x.id != id).toList();
+  Future<void> refresh() async {
+    state = await _repo.list();
+  }
+
+  Future<void> add(Consignee c) async {
+    final created = await _repo.create(c);
+    state = [...state, created];
+  }
+
+  Future<void> update(Consignee c) async {
+    final updated = await _repo.update(c);
+    state = [for (final x in state) x.id == updated.id ? updated : x];
+  }
+
+  Future<void> remove(String id) async {
+    await _repo.remove(id);
+    state = state.where((x) => x.id != id).toList();
+  }
 }
 
 class VehiclesNotifier extends StateNotifier<List<Vehicle>> {
-  VehiclesNotifier() : super(List.of(MockData.vehicles));
+  VehiclesNotifier(this._repo) : super(const []) {
+    refresh();
+  }
+  final VehiclesRepository _repo;
 
-  void add(Vehicle v) => state = [...state, v];
-  void update(Vehicle v) =>
-      state = [for (final x in state) x.id == v.id ? v : x];
-  void remove(String id) => state = state.where((x) => x.id != id).toList();
+  Future<void> refresh() async {
+    state = await _repo.list();
+  }
+
+  Future<void> add(Vehicle v) async {
+    final created = await _repo.create(v);
+    state = [...state, created];
+  }
+
+  Future<void> update(Vehicle v) async {
+    final updated = await _repo.update(v);
+    state = [for (final x in state) x.id == updated.id ? updated : x];
+  }
+
+  Future<void> remove(String id) async {
+    await _repo.remove(id);
+    state = state.where((x) => x.id != id).toList();
+  }
 }
 
 class TransportersNotifier extends StateNotifier<List<Transporter>> {
-  TransportersNotifier() : super(List.of(MockData.transporters));
+  TransportersNotifier(this._repo) : super(const []) {
+    refresh();
+  }
+  final TransportersRepository _repo;
 
-  void add(Transporter t) => state = [...state, t];
-  void update(Transporter t) =>
-      state = [for (final x in state) x.id == t.id ? t : x];
-  void remove(String id) => state = state.where((x) => x.id != id).toList();
+  Future<void> refresh() async {
+    state = await _repo.list();
+  }
+
+  Future<void> add(Transporter t) async {
+    final created = await _repo.create(t);
+    state = [...state, created];
+  }
+
+  Future<void> update(Transporter t) async {
+    final updated = await _repo.update(t);
+    state = [for (final x in state) x.id == updated.id ? updated : x];
+  }
+
+  Future<void> remove(String id) async {
+    await _repo.remove(id);
+    state = state.where((x) => x.id != id).toList();
+  }
 }
 
 class DriversNotifier extends StateNotifier<List<Driver>> {
-  DriversNotifier() : super(List.of(MockData.drivers));
+  DriversNotifier(this._repo) : super(const []) {
+    refresh();
+  }
+  final DriversRepository _repo;
 
-  void add(Driver d) => state = [...state, d];
-  void update(Driver d) =>
-      state = [for (final x in state) x.id == d.id ? d : x];
-  void remove(String id) => state = state.where((x) => x.id != id).toList();
+  Future<void> refresh() async {
+    state = await _repo.list();
+  }
+
+  Future<void> add(Driver d) async {
+    final created = await _repo.create(d);
+    state = [...state, created];
+  }
+
+  Future<void> update(Driver d) async {
+    final updated = await _repo.update(d);
+    state = [for (final x in state) x.id == updated.id ? updated : x];
+  }
+
+  Future<void> remove(String id) async {
+    await _repo.remove(id);
+    state = state.where((x) => x.id != id).toList();
+  }
 }
 
 class RoutesNotifier extends StateNotifier<List<RouteMaster>> {
-  RoutesNotifier() : super(List.of(MockData.routeMasters));
+  RoutesNotifier(this._repo) : super(const []) {
+    refresh();
+  }
+  final RoutesRepository _repo;
 
-  void add(RouteMaster r) => state = [...state, r];
-  void update(RouteMaster r) =>
-      state = [for (final x in state) x.id == r.id ? r : x];
-  void remove(String id) => state = state.where((x) => x.id != id).toList();
+  Future<void> refresh() async {
+    state = await _repo.list();
+  }
+
+  Future<void> add(RouteMaster r) async {
+    final created = await _repo.create(r);
+    state = [...state, created];
+  }
+
+  Future<void> update(RouteMaster r) async {
+    final updated = await _repo.update(r);
+    state = [for (final x in state) x.id == updated.id ? updated : x];
+  }
+
+  Future<void> remove(String id) async {
+    await _repo.remove(id);
+    state = state.where((x) => x.id != id).toList();
+  }
 }
 
+// ---- Repository providers ----
+final consignorsRepositoryProvider = Provider<ConsignorsRepository>(
+    (ref) => ConsignorsRepository(ref.watch(apiClientProvider)));
+final consigneesRepositoryProvider = Provider<ConsigneesRepository>(
+    (ref) => ConsigneesRepository(ref.watch(apiClientProvider)));
+final vehiclesRepositoryProvider = Provider<VehiclesRepository>(
+    (ref) => VehiclesRepository(ref.watch(apiClientProvider)));
+final transportersRepositoryProvider = Provider<TransportersRepository>(
+    (ref) => TransportersRepository(ref.watch(apiClientProvider)));
+final driversRepositoryProvider = Provider<DriversRepository>(
+    (ref) => DriversRepository(ref.watch(apiClientProvider)));
+final routesRepositoryProvider = Provider<RoutesRepository>(
+    (ref) => RoutesRepository(ref.watch(apiClientProvider)));
+
+// ---- State notifier providers ----
 final consignorsProvider =
     StateNotifierProvider<ConsignorsNotifier, List<Consignor>>(
-        (ref) => ConsignorsNotifier());
+        (ref) => ConsignorsNotifier(ref.watch(consignorsRepositoryProvider)));
 
 final consigneesProvider =
     StateNotifierProvider<ConsigneesNotifier, List<Consignee>>(
-        (ref) => ConsigneesNotifier());
+        (ref) => ConsigneesNotifier(ref.watch(consigneesRepositoryProvider)));
 
 final vehiclesProvider =
     StateNotifierProvider<VehiclesNotifier, List<Vehicle>>(
-        (ref) => VehiclesNotifier());
+        (ref) => VehiclesNotifier(ref.watch(vehiclesRepositoryProvider)));
 
 final transportersProvider =
     StateNotifierProvider<TransportersNotifier, List<Transporter>>(
-        (ref) => TransportersNotifier());
+        (ref) => TransportersNotifier(ref.watch(transportersRepositoryProvider)));
 
-final driversProvider =
-    StateNotifierProvider<DriversNotifier, List<Driver>>(
-        (ref) => DriversNotifier());
+final driversProvider = StateNotifierProvider<DriversNotifier, List<Driver>>(
+    (ref) => DriversNotifier(ref.watch(driversRepositoryProvider)));
 
 final routesProvider =
     StateNotifierProvider<RoutesNotifier, List<RouteMaster>>(
-        (ref) => RoutesNotifier());
+        (ref) => RoutesNotifier(ref.watch(routesRepositoryProvider)));

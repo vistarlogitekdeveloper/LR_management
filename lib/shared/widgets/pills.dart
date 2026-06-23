@@ -27,9 +27,8 @@ class PayPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final fg = switch (pay) {
       PayType.tbb => AppColors.plum,
-      PayType.toPay => AppColors.red,
+      PayType.tbr => AppColors.red,
       PayType.paid => AppColors.ok,
-      PayType.foc => AppColors.slate,
     };
     return _Pill(text: pay.label, fg: fg, bg: fg.withValues(alpha: 0.12));
   }

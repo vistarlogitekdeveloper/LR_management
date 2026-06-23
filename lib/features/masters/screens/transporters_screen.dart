@@ -48,22 +48,27 @@ class TransportersScreen extends ConsumerWidget {
               'tds': existing.tds,
             },
       onSave: (values) async {
-        final n = ref.read(transportersProvider.notifier);
-        if (existing == null) {
-          n.add(Transporter(
-            id: const Uuid().v4(),
-            name: values['name'] ?? '',
-            pan: values['pan'] ?? '',
-            tds: values['tds'] ?? 'No',
-          ));
-        } else {
-          n.update(existing.copyWith(
-            name: values['name'],
-            pan: values['pan'],
-            tds: values['tds'],
-          ));
+        try {
+          final n = ref.read(transportersProvider.notifier);
+          if (existing == null) {
+            await n.add(Transporter(
+              id: const Uuid().v4(),
+              name: values['name'] ?? '',
+              pan: values['pan'] ?? '',
+              tds: values['tds'] ?? 'No',
+            ));
+          } else {
+            await n.update(existing.copyWith(
+              name: values['name'],
+              pan: values['pan'],
+              tds: values['tds'],
+            ));
+          }
+          return true;
+        } catch (e) {
+          MasterActions.showError(context, e);
+          return false;
         }
-        return true;
       },
     );
   }
@@ -90,7 +95,12 @@ class TransportersScreen extends ConsumerWidget {
           ? (id) async {
               final ok = await MasterActions.confirmDelete(
                   context: context, label: 'this transporter');
-              if (ok) ref.read(transportersProvider.notifier).remove(id);
+              if (!ok) return;
+              try {
+                await ref.read(transportersProvider.notifier).remove(id);
+              } catch (e) {
+                if (context.mounted) MasterActions.showError(context, e);
+              }
             }
           : null,
       columns: const ['Name', 'PAN', 'TDS Applicable'],

@@ -38,16 +38,25 @@ class _NumberingScreenState extends ConsumerState<NumberingScreen> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
     final cfg = ref.read(systemConfigProvider);
-    ref.read(systemConfigProvider.notifier).update(cfg.copyWith(
-          lrPrefix: _prefixCtrl.text.trim(),
-          lrFormat: _formatCtrl.text.trim(),
-          nextLrNumber: int.tryParse(_nextCtrl.text.trim()) ?? cfg.nextLrNumber,
-        ));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('LR numbering updated')),
+    final next = cfg.copyWith(
+      lrPrefix: _prefixCtrl.text.trim(),
+      lrFormat: _formatCtrl.text.trim(),
     );
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(systemConfigProvider.notifier).saveNumbering(next);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('LR numbering updated')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not save: $e')),
+      );
+    }
   }
 
   String _preview() {
@@ -110,12 +119,12 @@ class _NumberingScreenState extends ConsumerState<NumberingScreen> {
                                 ),
                               ),
                               LabeledField(
-                                label: 'Next number',
-                                required: true,
+                                label: 'Next number (managed by system)',
                                 child: TextField(
                                   controller: _nextCtrl,
+                                  readOnly: true,
+                                  enabled: false,
                                   keyboardType: TextInputType.number,
-                                  onChanged: (_) => setState(() {}),
                                 ),
                               ),
                             ])

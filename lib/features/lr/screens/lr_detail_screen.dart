@@ -11,8 +11,8 @@ import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/confirm_dialog.dart';
 import '../../../shared/widgets/pills.dart';
 import '../../../shared/widgets/section_title.dart';
-import '../../admin/providers/audit_provider.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../masters/widgets/master_actions.dart';
 import '../../shell/widgets/app_topbar.dart';
 import '../providers/lr_providers.dart';
 
@@ -22,12 +22,22 @@ class LrDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final lr = ref.watch(lrByIdProvider(id));
+    final asyncLr = ref.watch(lrDetailProvider(id));
     final user = ref.watch(currentUserProvider);
     final canEdit = user?.role.canEdit ?? false;
     final canDelete = user?.role.canDelete ?? false;
-    if (lr == null) {
-      return Scaffold(
+
+    return asyncLr.when(
+      loading: () => const Scaffold(
+        backgroundColor: AppColors.mist,
+        body: Column(
+          children: [
+            AppTopbar(title: 'LR Detail'),
+            Expanded(child: Center(child: CircularProgressIndicator())),
+          ],
+        ),
+      ),
+      error: (e, _) => Scaffold(
         backgroundColor: AppColors.mist,
         body: Column(
           children: [
@@ -40,8 +50,8 @@ class LrDetailScreen extends ConsumerWidget {
                     const Icon(Icons.error_outline,
                         size: 48, color: AppColors.slate),
                     const SizedBox(height: 12),
-                    const Text('LR not found',
-                        style: TextStyle(color: AppColors.slate)),
+                    Text(MasterActions.messageFor(e),
+                        style: const TextStyle(color: AppColors.slate)),
                     const SizedBox(height: 16),
                     AppButton(
                       label: 'Back to list',
@@ -54,16 +64,20 @@ class LrDetailScreen extends ConsumerWidget {
             ),
           ],
         ),
-      );
-    }
+      ),
+      data: (lr) => _buildLoaded(context, ref, lr, canEdit, canDelete),
+    );
+  }
 
+  Widget _buildLoaded(BuildContext context, WidgetRef ref, LorryReceipt lr,
+      bool canEdit, bool canDelete) {
     return Scaffold(
       backgroundColor: AppColors.mist,
       body: Column(
         children: [
           AppTopbar(
             title: lr.number,
-            subtitle: '${formatDate(lr.date)} · entered by ${lr.enteredBy}',
+            subtitle: '${formatDate(lr.date)} · ${lr.status.label}',
             actions: [
               AppButton(
                 label: 'Back',
@@ -71,6 +85,13 @@ class LrDetailScreen extends ConsumerWidget {
                 icon: Icons.arrow_back_rounded,
                 onPressed: () => context.go('/lrs'),
               ),
+              if (canEdit)
+                AppButton(
+                  label: 'Status',
+                  kind: BtnKind.soft,
+                  icon: Icons.flag_outlined,
+                  onPressed: () => _changeStatus(context, ref, lr),
+                ),
               if (canEdit)
                 AppButton(
                   label: 'Edit',
@@ -83,25 +104,7 @@ class LrDetailScreen extends ConsumerWidget {
                   label: 'Delete',
                   kind: BtnKind.danger,
                   icon: Icons.delete_outline,
-                  onPressed: () async {
-                    final ok = await showConfirmDialog(
-                      context: context,
-                      title: 'Delete LR ${lr.number}?',
-                      message:
-                          'This cannot be undone. The LR record will be removed from the system.',
-                      confirmLabel: 'Delete LR',
-                    );
-                    if (!ok) return;
-                    if (!context.mounted) return;
-                    ref.read(lrListProvider.notifier).remove(lr.id);
-                    ref.read(auditProvider.notifier).log(
-                          user: user?.username ?? 'system',
-                          action: 'DELETE',
-                          entity: 'LR',
-                          entityRef: lr.number,
-                        );
-                    context.go('/lrs');
-                  },
+                  onPressed: () => _delete(context, ref, lr),
                 ),
               AppButton(
                 label: 'Print',
@@ -139,6 +142,101 @@ class LrDetailScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _changeStatus(
+      BuildContext context, WidgetRef ref, LorryReceipt lr) async {
+    final next = await showDialog<LrStatus>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Change status'),
+        children: [
+          for (final s in LrStatus.values)
+            if (s != lr.status)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(ctx, s),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      StatusPill(status: s),
+                      const SizedBox(width: 10),
+                      Text('Mark as ${s.label}'),
+                    ],
+                  ),
+                ),
+              ),
+        ],
+      ),
+    );
+    if (next == null || !context.mounted) return;
+
+    String? reason;
+    if (next == LrStatus.cancelled) {
+      reason = await _promptReason(context);
+      if (reason == null) return; // cancelled the prompt
+    }
+
+    try {
+      await ref
+          .read(lrListProvider.notifier)
+          .changeStatus(lr.id, next, reason: reason);
+      ref.invalidate(lrDetailProvider(lr.id));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Status updated to ${next.label}')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) MasterActions.showError(context, e);
+    }
+  }
+
+  Future<String?> _promptReason(BuildContext context) {
+    final ctrl = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancellation reason'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Why is this LR cancelled?'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Back'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final v = ctrl.text.trim();
+              if (v.isEmpty) return;
+              Navigator.pop(ctx, v);
+            },
+            child: const Text('Confirm Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _delete(
+      BuildContext context, WidgetRef ref, LorryReceipt lr) async {
+    final ok = await showConfirmDialog(
+      context: context,
+      title: 'Delete LR ${lr.number}?',
+      message:
+          'This cannot be undone. The LR record will be removed from the system.',
+      confirmLabel: 'Delete LR',
+    );
+    if (!ok || !context.mounted) return;
+    try {
+      await ref.read(lrListProvider.notifier).remove(lr.id);
+      if (context.mounted) context.go('/lrs');
+    } catch (e) {
+      if (context.mounted) MasterActions.showError(context, e);
+    }
   }
 }
 
@@ -179,6 +277,12 @@ class _LeftColumn extends StatelessWidget {
                 icon: Icons.inventory_2_outlined,
                 title: 'Invoice & Goods',
               ),
+              if (lr.items.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text('No invoice items',
+                      style: TextStyle(color: AppColors.slate)),
+                ),
               for (final item in lr.items) _ItemRow(item: item),
             ],
           ),
@@ -222,7 +326,7 @@ class _LeftColumn extends StatelessWidget {
                                 ),
                               ),
                               Text(
-                                '${a.sizeLabel} · ${formatDate(a.uploadedAt)} · by ${a.uploadedBy}',
+                                '${a.sizeLabel} · ${formatDate(a.uploadedAt)}',
                                 style: const TextStyle(
                                   color: AppColors.slate,
                                   fontSize: 11.5,
@@ -251,7 +355,6 @@ class _LeftColumn extends StatelessWidget {
                 ('Vehicle', '${lr.vehicle.number} · ${lr.vehicle.type}'),
                 ('Driver', '${lr.vehicle.driver} (${lr.vehicle.driverMobile})'),
                 ('Capacity', lr.vehicle.capacity),
-                ('P-Mark', lr.vehicle.pmark),
                 ('Route', lr.route),
                 ('Transporter', lr.transporter.name),
               ]),
@@ -359,8 +462,10 @@ class _RightColumn extends StatelessWidget {
               const SizedBox(height: 10),
               _KeyValueGrid(items: [
                 ('Mathadi', inr(lr.freight.mathadi)),
-                ('Advance Paid By', lr.freight.advancePaidBy),
-                ('Trip Lead By', lr.freight.tripLeadBy),
+                if (lr.freight.advancePaidBy.isNotEmpty)
+                  ('Advance Paid By', lr.freight.advancePaidBy),
+                if (lr.freight.tripLeadBy.isNotEmpty)
+                  ('Trip Lead By', lr.freight.tripLeadBy),
               ]),
             ],
           ),
@@ -446,8 +551,7 @@ class _ItemRow extends StatelessWidget {
               ),
               Text(
                 formatDate(item.invoiceDate),
-                style: const TextStyle(
-                    color: AppColors.slate, fontSize: 12.5),
+                style: const TextStyle(color: AppColors.slate, fontSize: 12.5),
               ),
             ],
           ),
@@ -478,8 +582,7 @@ class _ItemRow extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text('$label: ',
-            style:
-                const TextStyle(color: AppColors.slate, fontSize: 12.5)),
+            style: const TextStyle(color: AppColors.slate, fontSize: 12.5)),
         Text(value,
             style: const TextStyle(
                 color: AppColors.ink,

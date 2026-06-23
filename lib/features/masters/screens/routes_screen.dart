@@ -56,26 +56,31 @@ class RoutesScreen extends ConsumerWidget {
               'baseRate': existing.baseRate.toStringAsFixed(0),
             },
       onSave: (values) async {
-        final n = ref.read(routesProvider.notifier);
-        final distance = double.tryParse(values['distanceKm'] ?? '0') ?? 0;
-        final rate = double.tryParse(values['baseRate'] ?? '0') ?? 0;
-        if (existing == null) {
-          n.add(RouteMaster(
-            id: const Uuid().v4(),
-            fromCity: values['fromCity'] ?? '',
-            toCity: values['toCity'] ?? '',
-            distanceKm: distance,
-            baseRate: rate,
-          ));
-        } else {
-          n.update(existing.copyWith(
-            fromCity: values['fromCity'],
-            toCity: values['toCity'],
-            distanceKm: distance,
-            baseRate: rate,
-          ));
+        try {
+          final n = ref.read(routesProvider.notifier);
+          final distance = double.tryParse(values['distanceKm'] ?? '0') ?? 0;
+          final rate = double.tryParse(values['baseRate'] ?? '0') ?? 0;
+          if (existing == null) {
+            await n.add(RouteMaster(
+              id: const Uuid().v4(),
+              fromCity: values['fromCity'] ?? '',
+              toCity: values['toCity'] ?? '',
+              distanceKm: distance,
+              baseRate: rate,
+            ));
+          } else {
+            await n.update(existing.copyWith(
+              fromCity: values['fromCity'],
+              toCity: values['toCity'],
+              distanceKm: distance,
+              baseRate: rate,
+            ));
+          }
+          return true;
+        } catch (e) {
+          MasterActions.showError(context, e);
+          return false;
         }
-        return true;
       },
     );
   }
@@ -102,7 +107,12 @@ class RoutesScreen extends ConsumerWidget {
           ? (id) async {
               final ok = await MasterActions.confirmDelete(
                   context: context, label: 'this route');
-              if (ok) ref.read(routesProvider.notifier).remove(id);
+              if (!ok) return;
+              try {
+                await ref.read(routesProvider.notifier).remove(id);
+              } catch (e) {
+                if (context.mounted) MasterActions.showError(context, e);
+              }
             }
           : null,
       columns: const [

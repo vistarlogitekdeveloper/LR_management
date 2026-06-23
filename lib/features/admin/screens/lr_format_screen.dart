@@ -56,26 +56,37 @@ class _LrFormatScreenState extends ConsumerState<LrFormatScreen> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
     final cfg = ref.read(systemConfigProvider);
-    ref.read(systemConfigProvider.notifier).update(cfg.copyWith(
-          companyName: _companyCtrl.text.trim(),
-          companyTagline: _taglineCtrl.text.trim(),
-          termsText: _termsCtrl.text.trim(),
-          footerText: _footerCtrl.text.trim(),
-          showVistarMargin: _showMargin,
-          showMathadi: _showMathadi,
-          showInsurance: _showInsurance,
-          showEwb: _showEwb,
-        ));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('LR format updated')),
+    final next = cfg.copyWith(
+      companyName: _companyCtrl.text.trim(),
+      companyTagline: _taglineCtrl.text.trim(),
+      termsText: _termsCtrl.text.trim(),
+      footerText: _footerCtrl.text.trim(),
+      showVistarMargin: _showMargin,
+      showMathadi: _showMathadi,
+      showInsurance: _showInsurance,
+      showEwb: _showEwb,
     );
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(systemConfigProvider.notifier).saveFormat(next);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('LR format updated')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not save: $e')),
+      );
+    }
   }
 
   void _reset() {
+    const def = SystemConfig();
+    ref.read(systemConfigProvider.notifier).update(def);
     setState(() {
-      const def = SystemConfig();
       _companyCtrl.text = def.companyName;
       _taglineCtrl.text = def.companyTagline;
       _termsCtrl.text = def.termsText;
@@ -112,11 +123,9 @@ class _LrFormatScreenState extends ConsumerState<LrFormatScreen> {
       id: 'preview',
       number: 'MH12 AB 4567',
       type: 'Truck',
-      capacity: '10MT 22FT',
+      capacityMt: 10,
       driver: 'Ramesh Pawar',
       driverMobile: '90110 23344',
-      mode: 'Road',
-      pmark: 'P-22',
     );
     const transporter = Transporter(
         id: 'preview',

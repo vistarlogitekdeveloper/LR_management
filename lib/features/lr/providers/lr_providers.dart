@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/constants/mock_data.dart';
+import '../../../core/network/api_providers.dart';
 import '../../../shared/models/lr_models.dart';
+import '../../lookups/providers/lookups_provider.dart';
+import '../data/lr_repository.dart';
 
 class LrFilter {
   final String query;
@@ -10,7 +12,12 @@ class LrFilter {
 
   const LrFilter({this.query = '', this.status, this.route});
 
-  LrFilter copyWith({String? query, LrStatus? status, String? route, bool clearStatus = false, bool clearRoute = false}) {
+  LrFilter copyWith(
+      {String? query,
+      LrStatus? status,
+      String? route,
+      bool clearStatus = false,
+      bool clearRoute = false}) {
     return LrFilter(
       query: query ?? this.query,
       status: clearStatus ? null : (status ?? this.status),
@@ -19,34 +26,69 @@ class LrFilter {
   }
 }
 
+final lrRepositoryProvider = Provider<LrRepository>((ref) {
+  final lookups = ref.watch(lookupsProvider).valueOrNull ?? const {};
+  return LrRepository(ref.watch(apiClientProvider), lookups);
+});
+
 class LrNotifier extends StateNotifier<List<LorryReceipt>> {
-  LrNotifier() : super(MockData.seedLrs());
+  LrNotifier(this._repo) : super(const []) {
+    refresh();
+  }
+  final LrRepository _repo;
 
-  void add(LorryReceipt lr) => state = [lr, ...state];
-
-  void update(LorryReceipt updated) {
-    state = [
-      for (final lr in state)
-        if (lr.id == updated.id) updated else lr,
-    ];
+  Future<void> refresh() async {
+    state = await _repo.list();
   }
 
-  void remove(String id) {
+  Future<LorryReceipt> create(Map<String, dynamic> payload,
+      {EwbInput? ewb}) async {
+    final created = await _repo.create(payload, ewb: ewb);
+    state = [created, ...state];
+    return created;
+  }
+
+  Future<LorryReceipt> updateLr(
+    String id,
+    int version,
+    Map<String, dynamic> payload, {
+    EwbInput? ewb,
+    String? existingEwbId,
+    int existingEwbVersion = 0,
+  }) async {
+    final updated = await _repo.update(id, version, payload,
+        ewb: ewb,
+        existingEwbId: existingEwbId,
+        existingEwbVersion: existingEwbVersion);
+    state = [for (final lr in state) lr.id == updated.id ? updated : lr];
+    return updated;
+  }
+
+  Future<void> changeStatus(String id, LrStatus to, {String? reason}) async {
+    await _repo.changeStatus(id, to.code, reason: reason);
+    final fresh = await _repo.getById(id);
+    state = [for (final lr in state) lr.id == id ? fresh : lr];
+  }
+
+  Future<void> remove(String id) async {
+    await _repo.remove(id);
     state = state.where((lr) => lr.id != id).toList();
   }
 
-  LorryReceipt? findById(String id) =>
-      state.where((lr) => lr.id == id).cast<LorryReceipt?>().firstWhere(
-            (e) => true,
-            orElse: () => null,
-          );
+  LorryReceipt? findById(String id) {
+    for (final lr in state) {
+      if (lr.id == id) return lr;
+    }
+    return null;
+  }
 }
 
 final lrListProvider =
-    StateNotifierProvider<LrNotifier, List<LorryReceipt>>((ref) => LrNotifier());
+    StateNotifierProvider<LrNotifier, List<LorryReceipt>>((ref) {
+  return LrNotifier(ref.watch(lrRepositoryProvider));
+});
 
-final lrFilterProvider =
-    StateProvider<LrFilter>((ref) => const LrFilter());
+final lrFilterProvider = StateProvider<LrFilter>((ref) => const LrFilter());
 
 final filteredLrsProvider = Provider<List<LorryReceipt>>((ref) {
   final list = ref.watch(lrListProvider);
@@ -70,10 +112,17 @@ final filteredLrsProvider = Provider<List<LorryReceipt>>((ref) {
   }).toList();
 });
 
+/// Quick summary lookup from the already-loaded list.
 final lrByIdProvider = Provider.family<LorryReceipt?, String>((ref, id) {
   final list = ref.watch(lrListProvider);
   for (final lr in list) {
     if (lr.id == id) return lr;
   }
   return null;
+});
+
+/// Full LR detail (invoice items, attachments, freight, EWB) fetched on demand.
+final lrDetailProvider =
+    FutureProvider.family<LorryReceipt, String>((ref, id) async {
+  return ref.watch(lrRepositoryProvider).getById(id);
 });

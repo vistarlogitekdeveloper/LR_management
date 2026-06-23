@@ -1,63 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../../shared/models/audit_entry.dart';
+import '../../auth/providers/auth_provider.dart';
+import 'users_provider.dart';
 
-class AuditNotifier extends StateNotifier<List<AuditEntry>> {
-  AuditNotifier() : super(_seed());
-
-  static List<AuditEntry> _seed() {
-    final now = DateTime.now();
-    return [
-      AuditEntry(
-        id: const Uuid().v4(),
-        user: 'admin',
-        action: 'LOGIN',
-        entity: 'Session',
-        timestamp: now.subtract(const Duration(hours: 1)),
-      ),
-      AuditEntry(
-        id: const Uuid().v4(),
-        user: 'anita',
-        action: 'CREATE',
-        entity: 'LR',
-        entityRef: 'VLL/25/11/00057',
-        timestamp: now.subtract(const Duration(hours: 4)),
-      ),
-      AuditEntry(
-        id: const Uuid().v4(),
-        user: 'admin',
-        action: 'UPDATE',
-        entity: 'Consignor',
-        entityRef: 'LUMINAZ SAFETY GLASS',
-        timestamp: now.subtract(const Duration(days: 1)),
-        details: 'GST updated',
-      ),
-    ];
-  }
-
-  void log({
-    required String user,
-    required String action,
-    required String entity,
-    String? entityRef,
-    String? details,
-  }) {
-    state = [
-      AuditEntry(
-        id: const Uuid().v4(),
-        user: user,
-        action: action,
-        entity: entity,
-        entityRef: entityRef,
-        details: details,
-        timestamp: DateTime.now(),
-      ),
-      ...state,
-    ];
-  }
-}
-
-final auditProvider =
-    StateNotifierProvider<AuditNotifier, List<AuditEntry>>(
-        (ref) => AuditNotifier());
+/// Read-only audit trail sourced from the backend `audit_logs` table. Every
+/// mutating API call is recorded server-side, so the client no longer logs
+/// entries itself — it just reads them here.
+final auditProvider = FutureProvider<List<AuditEntry>>((ref) async {
+  final user = ref.watch(currentUserProvider);
+  if (user == null) return const [];
+  return ref.watch(adminRepositoryProvider).listAudit();
+});

@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/constants/mock_data.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../shared/models/lr_models.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/pills.dart';
+import '../../masters/providers/master_providers.dart';
 import '../../shell/widgets/app_topbar.dart';
 import '../providers/lr_providers.dart';
 
@@ -103,7 +103,7 @@ class _FilterBar extends ConsumerWidget {
             decoration: const InputDecoration(labelText: 'Route'),
             items: [
               const DropdownMenuItem(value: null, child: Text('All routes')),
-              for (final r in MockData.routes)
+              for (final r in ref.watch(routesProvider).map((r) => r.name))
                 DropdownMenuItem(value: r, child: Text(r)),
             ],
             onChanged: (v) => ref.read(lrFilterProvider.notifier).update(

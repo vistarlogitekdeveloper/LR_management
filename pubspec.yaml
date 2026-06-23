@@ -39,6 +39,12 @@ dependencies:
   # Invoice file uploads
   file_picker: ^8.1.4
 
+  # HTTP client
+  dio: ^5.7.0
+
+  # Secure storage for JWT (access + refresh)
+  flutter_secure_storage: ^9.2.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -4,10 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
-import '../../../shared/models/lr_models.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/section_title.dart';
-import '../../lr/providers/lr_providers.dart';
+import '../data/ewb_repository.dart';
+import '../providers/ewb_providers.dart';
 import '../../shell/widgets/app_topbar.dart';
 
 class EwbScreen extends ConsumerStatefulWidget {
@@ -59,19 +59,8 @@ class _EwbScreenState extends ConsumerState<EwbScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final lrs = ref.watch(lrListProvider);
-    final withEwb = lrs.where((lr) => lr.ewb != null).toList();
+    final ewbAsync = ref.watch(ewbListProvider);
     final now = DateTime.now();
-    final expiringSoon = withEwb.where((lr) {
-      final exp = lr.ewb!.expiry;
-      if (exp == null) return false;
-      final days = exp.difference(now).inDays;
-      return days <= 3 && days >= 0;
-    }).toList();
-    final expired = withEwb.where((lr) {
-      final exp = lr.ewb!.expiry;
-      return exp != null && exp.isBefore(now);
-    }).toList();
 
     return Scaffold(
       backgroundColor: AppColors.mist,
@@ -163,99 +152,137 @@ class _EwbScreenState extends ConsumerState<EwbScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  LayoutBuilder(
-                    builder: (context, c) {
-                      final cols = c.maxWidth >= 900 ? 3 : 1;
-                      final tiles = <_EwbStat>[
-                        _EwbStat(
-                          icon: Icons.list_alt,
-                          label: 'EWBs Issued',
-                          value: '${withEwb.length}',
-                          tint: AppColors.plum,
+                  ewbAsync.when(
+                    loading: () => const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 48),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                    error: (err, _) => AppCard(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Text(
+                          'Could not load E-Way Bills: $err',
+                          style: const TextStyle(
+                            color: AppColors.danger,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                        _EwbStat(
-                          icon: Icons.warning_amber_rounded,
-                          label: 'Expiring ≤ 3 days',
-                          value: '${expiringSoon.length}',
-                          tint: AppColors.warn,
-                        ),
-                        _EwbStat(
-                          icon: Icons.error_outline,
-                          label: 'Expired',
-                          value: '${expired.length}',
-                          tint: AppColors.danger,
-                        ),
-                      ];
-                      return Wrap(
-                        spacing: 16,
-                        runSpacing: 16,
+                      ),
+                    ),
+                    data: (records) {
+                      final expiringSoon = records.where((rec) {
+                        final exp = rec.expiry;
+                        if (exp == null) return false;
+                        final days = exp.difference(now).inDays;
+                        return days <= 3 && days >= 0;
+                      }).toList();
+                      final expired = records.where((rec) {
+                        final exp = rec.expiry;
+                        return exp != null && exp.isBefore(now);
+                      }).toList();
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          for (final t in tiles)
-                            SizedBox(
-                              width:
-                                  (c.maxWidth - 16 * (cols - 1)) / cols,
-                              child: t,
+                          LayoutBuilder(
+                            builder: (context, c) {
+                              final cols = c.maxWidth >= 900 ? 3 : 1;
+                              final tiles = <_EwbStat>[
+                                _EwbStat(
+                                  icon: Icons.list_alt,
+                                  label: 'EWBs Issued',
+                                  value: '${records.length}',
+                                  tint: AppColors.plum,
+                                ),
+                                _EwbStat(
+                                  icon: Icons.warning_amber_rounded,
+                                  label: 'Expiring ≤ 3 days',
+                                  value: '${expiringSoon.length}',
+                                  tint: AppColors.warn,
+                                ),
+                                _EwbStat(
+                                  icon: Icons.error_outline,
+                                  label: 'Expired',
+                                  value: '${expired.length}',
+                                  tint: AppColors.danger,
+                                ),
+                              ];
+                              return Wrap(
+                                spacing: 16,
+                                runSpacing: 16,
+                                children: [
+                                  for (final t in tiles)
+                                    SizedBox(
+                                      width:
+                                          (c.maxWidth - 16 * (cols - 1)) / cols,
+                                      child: t,
+                                    ),
+                                ],
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 20),
+                          AppCard(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const SectionTitle(
+                                  icon: Icons.qr_code_2_rounded,
+                                  title: 'All EWBs',
+                                ),
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: DataTable(
+                                    headingRowColor: WidgetStatePropertyAll(
+                                      AppColors.plum.withValues(alpha: 0.05),
+                                    ),
+                                    columnSpacing: 24,
+                                    columns: const [
+                                      DataColumn(label: Text('LR No')),
+                                      DataColumn(label: Text('EWB Number')),
+                                      DataColumn(label: Text('Load Type')),
+                                      DataColumn(label: Text('Expiry')),
+                                      DataColumn(label: Text('Status')),
+                                      DataColumn(label: Text('')),
+                                    ],
+                                    rows: [
+                                      for (final rec in records)
+                                        DataRow(cells: [
+                                          DataCell(Text(
+                                            rec.lrNumber,
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.w700),
+                                          )),
+                                          DataCell(Text(rec.number)),
+                                          DataCell(Text(rec.loadType)),
+                                          DataCell(Text(
+                                            rec.expiry == null
+                                                ? '—'
+                                                : formatDate(rec.expiry!),
+                                          )),
+                                          DataCell(_expiryBadge(rec, now)),
+                                          DataCell(IconButton(
+                                            tooltip: 'Open LR',
+                                            icon: const Icon(
+                                              Icons.arrow_forward_rounded,
+                                              color: AppColors.plum,
+                                              size: 18,
+                                            ),
+                                            onPressed: (rec.lrId != null &&
+                                                    rec.lrId!.isNotEmpty)
+                                                ? () => context
+                                                    .go('/lrs/${rec.lrId}')
+                                                : null,
+                                          )),
+                                        ]),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
+                          ),
                         ],
                       );
                     },
-                  ),
-                  const SizedBox(height: 20),
-                  AppCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SectionTitle(
-                          icon: Icons.qr_code_2_rounded,
-                          title: 'All EWBs',
-                        ),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: DataTable(
-                            headingRowColor: WidgetStatePropertyAll(
-                              AppColors.plum.withValues(alpha: 0.05),
-                            ),
-                            columnSpacing: 24,
-                            columns: const [
-                              DataColumn(label: Text('LR No')),
-                              DataColumn(label: Text('EWB Number')),
-                              DataColumn(label: Text('Load Type')),
-                              DataColumn(label: Text('Expiry')),
-                              DataColumn(label: Text('Status')),
-                              DataColumn(label: Text('')),
-                            ],
-                            rows: [
-                              for (final lr in withEwb)
-                                DataRow(cells: [
-                                  DataCell(Text(
-                                    lr.number,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w700),
-                                  )),
-                                  DataCell(Text(lr.ewb!.number)),
-                                  DataCell(Text(lr.ewb!.loadType)),
-                                  DataCell(Text(
-                                    lr.ewb!.expiry == null
-                                        ? '—'
-                                        : formatDate(lr.ewb!.expiry!),
-                                  )),
-                                  DataCell(_expiryBadge(lr, now)),
-                                  DataCell(IconButton(
-                                    tooltip: 'Open LR',
-                                    icon: const Icon(
-                                      Icons.arrow_forward_rounded,
-                                      color: AppColors.plum,
-                                      size: 18,
-                                    ),
-                                    onPressed: () =>
-                                        context.go('/lrs/${lr.id}'),
-                                  )),
-                                ]),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
                 ],
               ),
@@ -266,18 +293,35 @@ class _EwbScreenState extends ConsumerState<EwbScreen> {
     );
   }
 
-  Widget _expiryBadge(LorryReceipt lr, DateTime now) {
-    final exp = lr.ewb?.expiry;
-    if (exp == null) {
-      return const Text('—',
-          style: TextStyle(color: AppColors.slate));
+  Widget _expiryBadge(EwbRecord rec, DateTime now) {
+    final status = rec.validationStatus.toLowerCase();
+    final exp = rec.expiry;
+    late final String label;
+    late final Color color;
+    if (status == 'invalid') {
+      label = 'Invalid';
+      color = AppColors.danger;
+    } else if (status == 'expired' || (exp != null && exp.isBefore(now))) {
+      label = 'Expired';
+      color = AppColors.danger;
+    } else if (exp == null) {
+      if (status == 'valid') {
+        label = 'Valid';
+        color = AppColors.ok;
+      } else {
+        label = 'Pending';
+        color = AppColors.slate;
+      }
+    } else {
+      final diff = exp.difference(now).inDays;
+      if (diff <= 3) {
+        label = '${diff}d left';
+        color = AppColors.warn;
+      } else {
+        label = status == 'valid' ? 'Valid' : 'OK';
+        color = AppColors.ok;
+      }
     }
-    final diff = exp.difference(now).inDays;
-    final (label, color) = diff < 0
-        ? ('Expired', AppColors.danger)
-        : diff <= 3
-            ? ('${diff}d left', AppColors.warn)
-            : ('OK', AppColors.ok);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(

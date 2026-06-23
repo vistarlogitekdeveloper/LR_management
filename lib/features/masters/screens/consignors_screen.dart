@@ -66,30 +66,35 @@ class ConsignorsScreen extends ConsumerWidget {
               'email': existing.email,
             },
       onSave: (values) async {
-        final n = ref.read(consignorsProvider.notifier);
-        if (existing == null) {
-          n.add(Consignor(
-            id: const Uuid().v4(),
-            name: values['name'] ?? '',
-            gst: values['gst'] ?? '',
-            city: values['city'] ?? '',
-            address: values['address'] ?? '',
-            contact: values['contact'] ?? '',
-            mobile: values['mobile'] ?? '',
-            email: values['email'] ?? '',
-          ));
-        } else {
-          n.update(existing.copyWith(
-            name: values['name'],
-            gst: values['gst'],
-            city: values['city'],
-            address: values['address'],
-            contact: values['contact'],
-            mobile: values['mobile'],
-            email: values['email'],
-          ));
+        try {
+          final n = ref.read(consignorsProvider.notifier);
+          if (existing == null) {
+            await n.add(Consignor(
+              id: const Uuid().v4(),
+              name: values['name'] ?? '',
+              gst: values['gst'] ?? '',
+              city: values['city'] ?? '',
+              address: values['address'] ?? '',
+              contact: values['contact'] ?? '',
+              mobile: values['mobile'] ?? '',
+              email: values['email'] ?? '',
+            ));
+          } else {
+            await n.update(existing.copyWith(
+              name: values['name'],
+              gst: values['gst'],
+              city: values['city'],
+              address: values['address'],
+              contact: values['contact'],
+              mobile: values['mobile'],
+              email: values['email'],
+            ));
+          }
+          return true;
+        } catch (e) {
+          MasterActions.showError(context, e);
+          return false;
         }
-        return true;
       },
     );
   }
@@ -116,7 +121,12 @@ class ConsignorsScreen extends ConsumerWidget {
           ? (id) async {
               final ok = await MasterActions.confirmDelete(
                   context: context, label: 'this consignor');
-              if (ok) ref.read(consignorsProvider.notifier).remove(id);
+              if (!ok) return;
+              try {
+                await ref.read(consignorsProvider.notifier).remove(id);
+              } catch (e) {
+                if (context.mounted) MasterActions.showError(context, e);
+              }
             }
           : null,
       columns: const [

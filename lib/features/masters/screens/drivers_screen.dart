@@ -60,27 +60,33 @@ class DriversScreen extends ConsumerWidget {
               'address': existing.address,
             },
       onSave: (values) async {
-        final n = ref.read(driversProvider.notifier);
-        if (existing == null) {
-          n.add(Driver(
-            id: const Uuid().v4(),
-            name: values['name'] ?? '',
-            mobile: values['mobile'] ?? '',
-            licenseNo: values['licenseNo'] ?? '',
-            licenseExpiry:
-                values['licenseExpiry']!.isEmpty ? null : values['licenseExpiry'],
-            address: values['address'] ?? '',
-          ));
-        } else {
-          n.update(existing.copyWith(
-            name: values['name'],
-            mobile: values['mobile'],
-            licenseNo: values['licenseNo'],
-            licenseExpiry: values['licenseExpiry'],
-            address: values['address'],
-          ));
+        try {
+          final n = ref.read(driversProvider.notifier);
+          if (existing == null) {
+            await n.add(Driver(
+              id: const Uuid().v4(),
+              name: values['name'] ?? '',
+              mobile: values['mobile'] ?? '',
+              licenseNo: values['licenseNo'] ?? '',
+              licenseExpiry: (values['licenseExpiry'] ?? '').isEmpty
+                  ? null
+                  : values['licenseExpiry'],
+              address: values['address'] ?? '',
+            ));
+          } else {
+            await n.update(existing.copyWith(
+              name: values['name'],
+              mobile: values['mobile'],
+              licenseNo: values['licenseNo'],
+              licenseExpiry: values['licenseExpiry'],
+              address: values['address'],
+            ));
+          }
+          return true;
+        } catch (e) {
+          MasterActions.showError(context, e);
+          return false;
         }
-        return true;
       },
     );
   }
@@ -107,7 +113,12 @@ class DriversScreen extends ConsumerWidget {
           ? (id) async {
               final ok = await MasterActions.confirmDelete(
                   context: context, label: 'this driver');
-              if (ok) ref.read(driversProvider.notifier).remove(id);
+              if (!ok) return;
+              try {
+                await ref.read(driversProvider.notifier).remove(id);
+              } catch (e) {
+                if (context.mounted) MasterActions.showError(context, e);
+              }
             }
           : null,
       columns: const [

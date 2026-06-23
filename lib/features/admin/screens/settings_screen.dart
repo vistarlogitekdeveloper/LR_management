@@ -117,7 +117,7 @@ class SettingsScreen extends ConsumerWidget {
                             label: 'App version', value: '1.0.0'),
                         _ConfigRow(
                             label: 'Database',
-                            value: 'In-memory (mock) · swap to MySQL/PostgreSQL'),
+                            value: 'PostgreSQL (live API)'),
                         _ConfigRow(
                             label: 'Hosting target',
                             value: 'Web · Windows · Android'),

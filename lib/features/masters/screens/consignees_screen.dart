@@ -43,6 +43,11 @@ class ConsigneesScreen extends ConsumerWidget {
             type: FieldType.number,
             maxLength: 12,
             initialValue: c?.mobile),
+        FormFieldSpec(
+            name: 'email',
+            label: 'Email',
+            type: FieldType.email,
+            initialValue: c?.email),
       ];
 
   Future<void> _openForm(BuildContext context, WidgetRef ref,
@@ -61,30 +66,38 @@ class ConsigneesScreen extends ConsumerWidget {
               'address': existing.address,
               'contact': existing.contact,
               'mobile': existing.mobile,
+              'email': existing.email,
             },
       onSave: (values) async {
-        final n = ref.read(consigneesProvider.notifier);
-        if (existing == null) {
-          n.add(Consignee(
-            id: const Uuid().v4(),
-            name: values['name'] ?? '',
-            gst: values['gst'] ?? '',
-            location: values['location'] ?? '',
-            address: values['address'] ?? '',
-            contact: values['contact'] ?? '',
-            mobile: values['mobile'] ?? '',
-          ));
-        } else {
-          n.update(existing.copyWith(
-            name: values['name'],
-            gst: values['gst'],
-            location: values['location'],
-            address: values['address'],
-            contact: values['contact'],
-            mobile: values['mobile'],
-          ));
+        try {
+          final n = ref.read(consigneesProvider.notifier);
+          if (existing == null) {
+            await n.add(Consignee(
+              id: const Uuid().v4(),
+              name: values['name'] ?? '',
+              gst: values['gst'] ?? '',
+              location: values['location'] ?? '',
+              address: values['address'] ?? '',
+              contact: values['contact'] ?? '',
+              mobile: values['mobile'] ?? '',
+              email: values['email'] ?? '',
+            ));
+          } else {
+            await n.update(existing.copyWith(
+              name: values['name'],
+              gst: values['gst'],
+              location: values['location'],
+              address: values['address'],
+              contact: values['contact'],
+              mobile: values['mobile'],
+              email: values['email'],
+            ));
+          }
+          return true;
+        } catch (e) {
+          MasterActions.showError(context, e);
+          return false;
         }
-        return true;
       },
     );
   }
@@ -111,7 +124,12 @@ class ConsigneesScreen extends ConsumerWidget {
           ? (id) async {
               final ok = await MasterActions.confirmDelete(
                   context: context, label: 'this consignee');
-              if (ok) ref.read(consigneesProvider.notifier).remove(id);
+              if (!ok) return;
+              try {
+                await ref.read(consigneesProvider.notifier).remove(id);
+              } catch (e) {
+                if (context.mounted) MasterActions.showError(context, e);
+              }
             }
           : null,
       columns: const [

@@ -9,8 +9,6 @@ import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/pills.dart';
 import '../../../shared/widgets/section_title.dart';
-import '../../admin/providers/audit_provider.dart';
-import '../../auth/providers/auth_provider.dart';
 import '../../lr/providers/lr_providers.dart';
 import '../../shell/widgets/app_topbar.dart';
 
@@ -326,22 +324,19 @@ class _LrPaymentCard extends ConsumerWidget {
       confirmLabel: 'Record Advance',
     );
     if (amount == null || amount <= 0) return;
-    final newAdvance = lr.freight.advance + amount;
-    final newFreight = lr.freight.copyWith(advance: newAdvance);
-    final balance = newFreight.balance;
-    final updated = lr.copyWith(
-      freight: newFreight,
-      payType: balance <= 0 ? PayType.paid : lr.payType,
-    );
-    ref.read(lrListProvider.notifier).update(updated);
-    final user = ref.read(currentUserProvider);
-    ref.read(auditProvider.notifier).log(
-          user: user?.username ?? 'accounts',
-          action: 'PAYMENT',
-          entity: 'LR',
-          entityRef: lr.number,
-          details: 'Advance received ${inr(amount)}',
-        );
+    final newAdvance =
+        (lr.freight.advance + amount).clamp(0, lr.freight.total).toDouble();
+    try {
+      await ref
+          .read(lrListProvider.notifier)
+          .updateLr(lr.id, lr.version, {'advance': newAdvance});
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not record advance: $e')),
+      );
+      return;
+    }
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Advance ${inr(amount)} recorded for ${lr.number}')),
@@ -372,20 +367,18 @@ class _LrPaymentCard extends ConsumerWidget {
         ) ??
         false;
     if (!ok) return;
-    final newFreight = lr.freight.copyWith(advance: lr.freight.total);
-    final updated = lr.copyWith(
-      freight: newFreight,
-      payType: PayType.paid,
-    );
-    ref.read(lrListProvider.notifier).update(updated);
-    final user = ref.read(currentUserProvider);
-    ref.read(auditProvider.notifier).log(
-          user: user?.username ?? 'accounts',
-          action: 'PAYMENT',
-          entity: 'LR',
-          entityRef: lr.number,
-          details: 'Balance ${inr(remaining)} settled · marked Paid',
-        );
+    final newAdvance = lr.freight.total;
+    try {
+      await ref
+          .read(lrListProvider.notifier)
+          .updateLr(lr.id, lr.version, {'advance': newAdvance});
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not complete payment: $e')),
+      );
+      return;
+    }
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('${lr.number} settled in full')),

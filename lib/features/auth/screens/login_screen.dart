@@ -17,7 +17,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _userCtrl = TextEditingController(text: 'admin');
-  final _passCtrl = TextEditingController(text: 'admin');
+  final _passCtrl = TextEditingController(text: '123456');
 
   @override
   void dispose() {
@@ -172,8 +172,13 @@ class _Hero extends StatelessWidget {
                 ),
                 SizedBox(height: 6),
                 Text(
-                  'admin / admin · anita / anita · ravi / ravi',
+                  'admin · operator · accounts  (password: 123456)',
                   style: TextStyle(color: Colors.white70, fontSize: 12.5),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Tenant: VISTAR',
+                  style: TextStyle(color: Colors.white60, fontSize: 11.5),
                 ),
               ],
             ),
@@ -337,24 +342,24 @@ class _RoleQuickPicker extends StatelessWidget {
     _RoleOption(
       label: 'Admin',
       username: 'admin',
-      password: 'admin',
-      displayName: 'Yash Patil',
+      password: '123456',
+      displayName: 'admin',
       icon: Icons.shield_outlined,
       tint: AppColors.plum,
     ),
     _RoleOption(
       label: 'Operator',
-      username: 'anita',
-      password: 'anita',
-      displayName: 'Anita Deshmukh',
+      username: 'operator',
+      password: '123456',
+      displayName: 'operator',
       icon: Icons.local_shipping_outlined,
       tint: AppColors.orange,
     ),
     _RoleOption(
       label: 'Accounts',
-      username: 'ravi',
-      password: 'ravi',
-      displayName: 'Ravi Kulkarni',
+      username: 'accounts',
+      password: '123456',
+      displayName: 'accounts',
       icon: Icons.account_balance_wallet_outlined,
       tint: AppColors.ok,
     ),
