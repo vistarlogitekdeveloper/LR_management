@@ -97,6 +97,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 passCtrl: _passCtrl,
                                 loading: auth.loading,
                                 error: auth.error,
+                                compact: true,
                                 onSubmit: _submit,
                                 onQuickSignIn: _quickSignIn,
                               ),
@@ -119,13 +120,38 @@ class _Hero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Mobile: a slim branded header (logo + one-line title) so the login form
+    // sits near the top and needs little scrolling.
+    if (compact) {
+      return Container(
+        decoration: const BoxDecoration(gradient: AppColors.loginHeroGradient),
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+        child: const Row(
+          children: [
+            BrandLogo(height: 28, light: true),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Lorry Receipt Management',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  height: 1.15,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return Container(
       decoration: const BoxDecoration(
         gradient: AppColors.loginHeroGradient,
       ),
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 28 : 54,
-        vertical: compact ? 36 : 56,
+      padding: const EdgeInsets.symmetric(
+        horizontal: 54,
+        vertical: 56,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,11 +215,12 @@ class _Hero extends StatelessWidget {
   }
 }
 
-class _Form extends StatelessWidget {
+class _Form extends StatefulWidget {
   final TextEditingController userCtrl;
   final TextEditingController passCtrl;
   final bool loading;
   final String? error;
+  final bool compact;
   final VoidCallback onSubmit;
   final Future<void> Function(String username, String password) onQuickSignIn;
 
@@ -204,12 +231,24 @@ class _Form extends StatelessWidget {
     required this.error,
     required this.onSubmit,
     required this.onQuickSignIn,
+    this.compact = false,
   });
 
   @override
+  State<_Form> createState() => _FormState();
+}
+
+class _FormState extends State<_Form> {
+  bool _obscurePassword = true; // hidden by default; the eye icon toggles it
+
+  @override
   Widget build(BuildContext context) {
+    final compact = widget.compact;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 56),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 22 : 44,
+        vertical: compact ? 26 : 56,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisAlignment: MainAxisAlignment.center,
@@ -227,12 +266,13 @@ class _Form extends StatelessWidget {
             'Sign in to continue dispatching',
             style: TextStyle(color: AppColors.slate, fontSize: 14),
           ),
-          const SizedBox(height: 28),
+          SizedBox(height: compact ? 20 : 28),
           LabeledField(
             label: 'Username',
             required: true,
             child: TextField(
-              controller: userCtrl,
+              controller: widget.userCtrl,
+              textInputAction: TextInputAction.next,
               decoration: const InputDecoration(hintText: 'admin'),
             ),
           ),
@@ -241,13 +281,29 @@ class _Form extends StatelessWidget {
             label: 'Password',
             required: true,
             child: TextField(
-              controller: passCtrl,
-              obscureText: true,
-              onSubmitted: (_) => onSubmit(),
-              decoration: const InputDecoration(hintText: '••••'),
+              controller: widget.passCtrl,
+              obscureText: _obscurePassword,
+              onSubmitted: (_) => widget.onSubmit(),
+              decoration: InputDecoration(
+                hintText: '••••',
+                // Eye icon to show / hide the password.
+                suffixIcon: IconButton(
+                  tooltip:
+                      _obscurePassword ? 'Show password' : 'Hide password',
+                  icon: Icon(
+                    _obscurePassword
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                    color: AppColors.slate,
+                    size: 20,
+                  ),
+                  onPressed: () =>
+                      setState(() => _obscurePassword = !_obscurePassword),
+                ),
+              ),
             ),
           ),
-          if (error != null) ...[
+          if (widget.error != null) ...[
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.symmetric(
@@ -257,7 +313,7 @@ class _Form extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
-                error!,
+                widget.error!,
                 style: const TextStyle(
                   color: AppColors.danger,
                   fontWeight: FontWeight.w600,
@@ -276,12 +332,12 @@ class _Form extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           AppButton(
-            label: loading ? 'Signing in…' : 'Sign in',
+            label: widget.loading ? 'Signing in…' : 'Sign in',
             icon: Icons.login_rounded,
             expanded: true,
-            onPressed: loading ? null : onSubmit,
+            onPressed: widget.loading ? null : widget.onSubmit,
           ),
-          const SizedBox(height: 22),
+          SizedBox(height: compact ? 16 : 22),
           Row(
             children: [
               const Expanded(child: Divider(color: AppColors.line)),
@@ -301,8 +357,9 @@ class _Form extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          _RoleQuickPicker(loading: loading, onPick: onQuickSignIn),
-          const SizedBox(height: 18),
+          _RoleQuickPicker(
+              loading: widget.loading, onPick: widget.onQuickSignIn),
+          SizedBox(height: compact ? 14 : 18),
           const Center(
             child: Text(
               '© Vistar Logitek Pvt Ltd',

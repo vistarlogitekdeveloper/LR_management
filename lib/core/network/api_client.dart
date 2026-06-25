@@ -106,11 +106,21 @@ class ApiClient {
   ) async {
     final opts = e.requestOptions;
     final status = e.response?.statusCode ?? 0;
-    final transient =
+    final transient5xx =
         status == 500 || status == 502 || status == 503 || status == 504;
-    if (opts.method.toUpperCase() != 'GET' || !transient) return false;
+    // A pre-connection failure (DNS lookup / connect timeout) means the request
+    // never reached the server, so retrying is safe for ANY method — this is
+    // the common flaky-mobile-network case (e.g. "Failed host lookup").
+    final preConnect = e.type == DioExceptionType.connectionError ||
+        e.type == DioExceptionType.connectionTimeout;
+    final retryGet5xx = opts.method.toUpperCase() == 'GET' && transient5xx;
+    if (!preConnect && !retryGet5xx) return false;
 
-    final bare = Dio(BaseOptions(baseUrl: ApiConfig.baseUrl));
+    final bare = Dio(BaseOptions(
+      baseUrl: ApiConfig.baseUrl,
+      connectTimeout: ApiConfig.connectTimeout,
+      receiveTimeout: ApiConfig.receiveTimeout,
+    ));
     for (var attempt = 1; attempt <= 2; attempt++) {
       await Future.delayed(Duration(milliseconds: 400 * attempt));
       try {
@@ -150,11 +160,41 @@ class ApiClient {
     }
   }
 
+  // Turns Dio's raw transport errors (e.g. "Failed host lookup: '…'") into a
+  // short, human message. Server errors with a JSON body override this below.
+  String _friendlyNetworkMessage(DioException e) {
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+        return 'The server is taking too long to respond. Please check your '
+            'internet connection and try again.';
+      case DioExceptionType.connectionError:
+        return "Can't reach the server. Please check your internet connection "
+            'and try again.';
+      case DioExceptionType.badCertificate:
+        return 'Secure connection to the server failed. Please try again.';
+      case DioExceptionType.cancel:
+        return 'The request was cancelled.';
+      case DioExceptionType.badResponse:
+      case DioExceptionType.unknown:
+        final raw = e.message ?? '';
+        if (raw.contains('Failed host lookup') ||
+            raw.contains('SocketException') ||
+            raw.contains('XMLHttpRequest') ||
+            raw.contains('Connection refused')) {
+          return "Can't reach the server. Please check your internet "
+              'connection and try again.';
+        }
+        return 'Something went wrong. Please try again.';
+    }
+  }
+
   DioException _withMappedError(DioException e) {
     final status = e.response?.statusCode ?? 0;
     final body = e.response?.data;
     String code = 'NETWORK_ERROR';
-    String message = e.message ?? 'Network error';
+    String message = _friendlyNetworkMessage(e);
     String? traceId;
     dynamic details;
     if (body is Map) {
