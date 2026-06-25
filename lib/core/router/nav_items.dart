@@ -79,6 +79,13 @@ class AppNav {
           canAccess: (u) => u.role != UserRole.accounts,
         ),
         NavItem(
+          id: 'customers',
+          label: 'Customers',
+          icon: Icons.business_outlined,
+          path: '/masters/customers',
+          canAccess: (u) => u.role != UserRole.accounts,
+        ),
+        NavItem(
           id: 'consignees',
           label: 'Consignees',
           icon: Icons.people_outline,

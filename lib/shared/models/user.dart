@@ -2,18 +2,18 @@ enum UserRole { superAdmin, admin, operator, accounts }
 
 extension UserRoleX on UserRole {
   String get label => switch (this) {
-        UserRole.superAdmin => 'Super Admin',
-        UserRole.admin => 'Admin',
-        UserRole.operator => 'Operator',
-        UserRole.accounts => 'Accounts',
-      };
+    UserRole.superAdmin => 'Super Admin',
+    UserRole.admin => 'Admin',
+    UserRole.operator => 'Operator',
+    UserRole.accounts => 'Accounts',
+  };
 
   String get code => switch (this) {
-        UserRole.superAdmin => 'SUPER_ADMIN',
-        UserRole.admin => 'ADMIN',
-        UserRole.operator => 'OPERATOR',
-        UserRole.accounts => 'ACCOUNTS',
-      };
+    UserRole.superAdmin => 'SUPER_ADMIN',
+    UserRole.admin => 'ADMIN',
+    UserRole.operator => 'OPERATOR',
+    UserRole.accounts => 'ACCOUNTS',
+  };
 
   bool get isSuperAdmin => this == UserRole.superAdmin;
 
@@ -79,6 +79,7 @@ class AppUser {
   // even if the frontend is deployed ahead of the backend).
   bool _canMaster(String code) => can(code) || can('MASTERS_MANAGE');
   bool get canManageConsignors => _canMaster('MASTER_CONSIGNOR_MANAGE');
+  bool get canManageCustomers => _canMaster('MASTER_CUSTOMER_MANAGE');
   bool get canManageConsignees => _canMaster('MASTER_CONSIGNEE_MANAGE');
   bool get canManageVehicles => _canMaster('MASTER_VEHICLE_MANAGE');
   bool get canManageDrivers => _canMaster('MASTER_DRIVER_MANAGE');
@@ -115,7 +116,8 @@ class AppUser {
     if (roleField is String) {
       roleStr = roleField;
     } else if (roleField is Map) {
-      roleStr = (roleField['code'] ?? roleField['name'] ?? 'operator').toString();
+      roleStr = (roleField['code'] ?? roleField['name'] ?? 'operator')
+          .toString();
       roleId = (roleField['id'] as String?) ?? roleId;
     } else {
       roleStr = 'operator';

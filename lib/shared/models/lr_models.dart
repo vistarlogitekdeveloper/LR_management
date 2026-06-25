@@ -297,6 +297,8 @@ class LorryReceipt {
   final int version;
   final String customerName;
   final String orderNo;
+  final DateTime? inDateTime;
+  final DateTime? outDateTime;
   final Consignor consignor;
   final Consignee consignee;
   final Vehicle vehicle;
@@ -327,6 +329,8 @@ class LorryReceipt {
     this.version = 0,
     this.customerName = '',
     this.orderNo = '',
+    this.inDateTime,
+    this.outDateTime,
     required this.consignor,
     required this.consignee,
     required this.vehicle,
@@ -399,6 +403,8 @@ class LorryReceipt {
       version: asInt(json['version']),
       customerName: (json['customer_name'] as String?) ?? '',
       orderNo: (json['order_no'] as String?) ?? '',
+      inDateTime: DateTime.tryParse(json['in_datetime']?.toString() ?? ''),
+      outDateTime: DateTime.tryParse(json['out_datetime']?.toString() ?? ''),
       consignor: consignorJson != null
           ? Consignor.fromJson(consignorJson)
           : Consignor(
@@ -481,6 +487,8 @@ class LorryReceipt {
       version: version ?? this.version,
       customerName: customerName,
       orderNo: orderNo,
+      inDateTime: inDateTime,
+      outDateTime: outDateTime,
       consignor: consignor,
       consignee: consignee,
       vehicle: vehicle,

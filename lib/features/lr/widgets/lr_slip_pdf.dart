@@ -204,6 +204,7 @@ pw.Widget _copyBody(
 ) {
   final df = DateFormat('dd/MM/yyyy');
   final idf = DateFormat('dd MMM yy');
+  final dtf = DateFormat('dd/MM/yy HH:mm');
 
   final routeStr = (lr.fromCity.isNotEmpty || lr.toCity.isNotEmpty)
       ? [lr.fromCity, lr.toCity].where((s) => s.isNotEmpty).join(' - ')
@@ -332,8 +333,14 @@ pw.Widget _copyBody(
           ),
           pw.TableRow(
             children: [
-              _kv('ID Date', ''),
-              _kv('Out Date', ''),
+              _kv(
+                'ID Date',
+                lr.inDateTime != null ? dtf.format(lr.inDateTime!) : '',
+              ),
+              _kv(
+                'Out Date',
+                lr.outDateTime != null ? dtf.format(lr.outDateTime!) : '',
+              ),
               _kv('Order No', lr.orderNo),
               _pad(_txt('')),
             ],

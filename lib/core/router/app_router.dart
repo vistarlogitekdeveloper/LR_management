@@ -23,6 +23,7 @@ import '../../features/lr/screens/lr_list_screen.dart';
 import '../../features/lr/screens/print_lr_screen.dart';
 import '../../features/masters/screens/consignees_screen.dart';
 import '../../features/masters/screens/consignors_screen.dart';
+import '../../features/masters/screens/customers_screen.dart';
 import '../../features/masters/screens/drivers_screen.dart';
 import '../../features/masters/screens/routes_screen.dart';
 import '../../features/masters/screens/transporters_screen.dart';
@@ -81,7 +82,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         if (loc.startsWith('/admin/regions') && !role.canManageRegions) {
           return '/dashboard';
         }
-        if (loc.startsWith('/masters/') && !(role.canMasters || role.canReports)) {
+        if (loc.startsWith('/masters/') &&
+            !(role.canMasters || role.canReports)) {
           return '/dashboard';
         }
         // LR create/edit honour per-user permission overrides.
@@ -94,14 +96,10 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(
         path: '/splash',
-        builder: (context, state) => const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        ),
+        builder: (context, state) =>
+            const Scaffold(body: Center(child: CircularProgressIndicator())),
       ),
-      GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginScreen(),
-      ),
+      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(
         path: '/forgot-password',
         builder: (context, state) => const ForgotPasswordScreen(),
@@ -126,8 +124,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: 'change-password',
-                pageBuilder: (context, state) => const NoTransitionPage(
-                    child: ChangePasswordScreen()),
+                pageBuilder: (context, state) =>
+                    const NoTransitionPage(child: ChangePasswordScreen()),
               ),
             ],
           ),
@@ -163,9 +161,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'print',
                     pageBuilder: (context, state) => NoTransitionPage(
-                      child: PrintLrScreen(
-                        id: state.pathParameters['id']!,
-                      ),
+                      child: PrintLrScreen(id: state.pathParameters['id']!),
                     ),
                   ),
                 ],
@@ -185,6 +181,17 @@ final routerProvider = Provider<GoRouter>((ref) {
                 onEnter: (ref) =>
                     ref.read(consignorsProvider.notifier).refresh(),
                 child: const ConsignorsScreen(),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/masters/customers',
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: RefreshGate(
+                onEnter: (ref) =>
+                    ref.read(customersProvider.notifier).refresh(),
+                child: const CustomersScreen(),
               ),
             ),
           ),
@@ -326,7 +333,9 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: 'audit',
                 pageBuilder: (context, state) => NoTransitionPage(
-                    key: state.pageKey, child: const AuditScreen()),
+                  key: state.pageKey,
+                  child: const AuditScreen(),
+                ),
               ),
               GoRoute(
                 path: 'settings',

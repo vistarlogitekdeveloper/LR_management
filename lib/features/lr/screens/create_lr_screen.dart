@@ -11,6 +11,7 @@ import '../../../core/utils/mime_types.dart';
 import '../../../shared/models/attachment.dart';
 import '../../../shared/models/consignee.dart';
 import '../../../shared/models/consignor.dart';
+import '../../../shared/models/customer.dart';
 import '../../../shared/models/driver.dart';
 import '../../../shared/models/lr_models.dart';
 import '../../../shared/models/lr_template.dart';
@@ -82,6 +83,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   final _formKey = GlobalKey<FormState>();
 
   Consignor? _consignor;
+  Customer? _customer;
   Consignee? _consignee;
   Vehicle? _vehicle;
   Transporter? _transporter;
@@ -108,6 +110,9 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   final _mathadiCtrl = TextEditingController(text: '0');
   final _remarksCtrl = TextEditingController();
   final _ewbCtrl = TextEditingController();
+
+  DateTime? _inDateTime;
+  DateTime? _outDateTime;
 
   bool _isEdit = false;
   bool _saving = false;
@@ -139,6 +144,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
   Future<void> _hydrate() async {
     final consignors = ref.read(consignorsProvider);
+    final customers = ref.read(customersProvider);
     final consignees = ref.read(consigneesProvider);
     final vehicles = ref.read(vehiclesProvider);
     final transporters = ref.read(transportersProvider);
@@ -193,8 +199,18 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         _mathadiCtrl.text = lr.freight.mathadi.toStringAsFixed(0);
         _remarksCtrl.text = lr.remarks ?? '';
         _customerCtrl.text = lr.customerName;
+        _customer = _customerCtrl.text.trim().isEmpty
+            ? null
+            : pick(
+                customers,
+                (c) =>
+                    c.name.trim().toLowerCase() ==
+                    _customerCtrl.text.trim().toLowerCase(),
+              );
         _orderNoCtrl.text = lr.orderNo;
         _ewbCtrl.text = lr.ewb?.number ?? '';
+        _inDateTime = lr.inDateTime;
+        _outDateTime = lr.outDateTime;
         _existingAttachments = List.of(lr.attachments);
       } catch (e) {
         if (mounted) MasterActions.showError(context, e);
@@ -203,6 +219,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       // New LR: start completely blank so the operator consciously picks each
       // value. (Use an LR Template at the top of the form to pre-fill defaults.)
       _consignor = null;
+      _customer = null;
       _consignee = null;
       _vehicle = null;
       _transporter = null;
@@ -428,6 +445,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       'customer_name': _customerCtrl.text.trim(),
       if (_orderNoCtrl.text.trim().isNotEmpty)
         'order_no': _orderNoCtrl.text.trim(),
+      if (_inDateTime != null) 'in_datetime': _isoWall(_inDateTime!),
+      if (_outDateTime != null) 'out_datetime': _isoWall(_outDateTime!),
       'consignor_id': _consignor!.id,
       'consignee_id': _consignee!.id,
       if (_vehicle != null) 'vehicle_id': _vehicle!.id,
@@ -580,6 +599,17 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     return null;
   }
 
+  /// Match a customer master record by (case-insensitive) name — used to
+  /// resolve the free-text customer_name back to a master row.
+  Customer? _byCustomerName(List<Customer> list, String name) {
+    final n = name.trim().toLowerCase();
+    if (n.isEmpty) return null;
+    for (final c in list) {
+      if (c.name.trim().toLowerCase() == n) return c;
+    }
+    return null;
+  }
+
   // ---- Vehicle selection / inline add --------------------------------------
 
   /// Selecting a vehicle auto-fills the driver + transporter it's linked to.
@@ -611,6 +641,53 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     if (r != null && r.baseRate > 0) {
       _freightCtrl.text = r.baseRate.toStringAsFixed(0);
     }
+  }
+
+  Future<void> _addCustomerInline() async {
+    await MasterFormDialog.show(
+      context: context,
+      title: 'New Customer',
+      subtitle: 'Adds to your customers and selects it on this LR',
+      fields: const [
+        FormFieldSpec(name: 'name', label: 'Customer Name', required: true),
+        FormFieldSpec(name: 'gst', label: 'GST Number', maxLength: 15),
+        FormFieldSpec(name: 'city', label: 'City'),
+        FormFieldSpec(
+          name: 'address',
+          label: 'Address',
+          type: FieldType.multiline,
+        ),
+        FormFieldSpec(name: 'contact', label: 'Contact Person'),
+        FormFieldSpec(name: 'mobile', label: 'Mobile', type: FieldType.number),
+        FormFieldSpec(name: 'email', label: 'Email', type: FieldType.email),
+      ],
+      onSave: (values) async {
+        try {
+          final created = await ref
+              .read(customersProvider.notifier)
+              .add(
+                Customer(
+                  id: const Uuid().v4(),
+                  name: values['name'] ?? '',
+                  gst: values['gst'] ?? '',
+                  city: values['city'] ?? '',
+                  address: values['address'] ?? '',
+                  contact: values['contact'] ?? '',
+                  mobile: values['mobile'] ?? '',
+                  email: values['email'] ?? '',
+                ),
+              );
+          setState(() {
+            _customer = created;
+            _customerCtrl.text = created.name;
+          });
+          return true;
+        } catch (e) {
+          MasterActions.showError(context, e);
+          return false;
+        }
+      },
+    );
   }
 
   Future<void> _addVehicleInline() async {
@@ -1038,6 +1115,157 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     context.go('/lrs/${result.id}');
   }
 
+  /// Best-effort preview of the number the server will assign. The real number
+  /// is reserved atomically on save — this just bumps the latest LR's trailing
+  /// sequence so the operator can see the likely number while filling the form.
+  String _previewLrNumber(List<LorryReceipt> lrs) {
+    if (lrs.isEmpty) return '';
+    int seqOf(String n) {
+      final m = RegExp(r'(\d+)\D*$').firstMatch(n);
+      return m == null ? 0 : (int.tryParse(m.group(1)!) ?? 0);
+    }
+
+    final sorted = [...lrs]
+      ..sort((a, b) {
+        final byDate = b.date.compareTo(a.date);
+        return byDate != 0
+            ? byDate
+            : seqOf(b.number).compareTo(seqOf(a.number));
+      });
+    final latest = sorted.first.number;
+    final m = RegExp(r'^(.*?)(\d+)(\D*)$').firstMatch(latest);
+    if (m == null) return '';
+    final prefix = m.group(1)!;
+    final digits = m.group(2)!;
+    final suffix = m.group(3)!;
+    final next = (int.parse(digits) + 1).toString().padLeft(digits.length, '0');
+    return '$prefix$next$suffix';
+  }
+
+  /// Banner shown at the top of the form with the (preview) LR number.
+  Widget _lrNumberBanner(String number) {
+    final showPreviewTag = !_isEdit && number.isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.plum.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.plum.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppColors.plum.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.confirmation_number_outlined,
+              color: AppColors.plum,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _isEdit ? 'LR Number' : 'LR Number (preview)',
+                  style: const TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  number.isEmpty ? 'Assigned automatically on save' : number,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: number.isEmpty ? AppColors.slate : AppColors.ink,
+                    fontWeight: FontWeight.w800,
+                    fontSize: number.isEmpty ? 13.5 : 18,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (showPreviewTag)
+            const Text(
+              'confirmed on save',
+              style: TextStyle(color: AppColors.slate, fontSize: 10.5),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // We store the picked wall-clock AS UTC so the In/Out time never shifts with
+  // the viewer's timezone — so format/serialise from the raw fields, no toLocal.
+  String _fmtDateTime(DateTime d) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(d.day)}/${two(d.month)}/${d.year % 100} · ${two(d.hour)}:${two(d.minute)}';
+  }
+
+  String _isoWall(DateTime d) =>
+      DateTime.utc(d.year, d.month, d.day, d.hour, d.minute).toIso8601String();
+
+  /// A tappable field that picks a date then a time, returning a DateTime.
+  Widget _dateTimeField({
+    required DateTime? value,
+    required ValueChanged<DateTime?> onChanged,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () async {
+        final now = DateTime.now();
+        final date = await showDatePicker(
+          context: context,
+          initialDate: value ?? now,
+          firstDate: DateTime(now.year - 1),
+          lastDate: DateTime(now.year + 1),
+        );
+        if (date == null || !mounted) return;
+        final time = await showTimePicker(
+          context: context,
+          initialTime: TimeOfDay.fromDateTime(value ?? now),
+        );
+        onChanged(
+          DateTime(
+            date.year,
+            date.month,
+            date.day,
+            time?.hour ?? 0,
+            time?.minute ?? 0,
+          ),
+        );
+      },
+      child: InputDecorator(
+        isEmpty: value == null,
+        decoration: const InputDecoration(
+          suffixIcon: Icon(
+            Icons.event_outlined,
+            color: AppColors.slate,
+            size: 20,
+          ),
+        ),
+        child: Text(
+          value == null ? 'Pick date & time' : _fmtDateTime(value),
+          style: TextStyle(
+            fontSize: 14,
+            color: value == null ? AppColors.slate : AppColors.ink,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final consignors = ref.watch(consignorsProvider);
@@ -1054,6 +1282,10 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     final advancePaidByList = lookupList(lookups, 'ADVANCE_PAID_BY');
     final tripLeadByList = lookupList(lookups, 'TRIP_LEAD_BY');
     final ewbLoadList = lookupList(lookups, 'EWB_LOAD_TYPE');
+
+    final previewNumber = _isEdit
+        ? (_editing?.number ?? '')
+        : _previewLrNumber(ref.watch(lrListProvider));
 
     return Scaffold(
       backgroundColor: AppColors.mist,
@@ -1096,6 +1328,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      _lrNumberBanner(previewNumber),
+                      const SizedBox(height: 16),
                       _templateBar(),
                       const SizedBox(height: 20),
                       _customerCard(),
@@ -1221,6 +1455,22 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                   dialogTitle: 'Select Route',
                                   onChanged: (v) =>
                                       setState(() => _selectRoute(v)),
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Vehicle In Date/Time',
+                                child: _dateTimeField(
+                                  value: _inDateTime,
+                                  onChanged: (v) =>
+                                      setState(() => _inDateTime = v),
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Vehicle Out Date/Time',
+                                child: _dateTimeField(
+                                  value: _outDateTime,
+                                  onChanged: (v) =>
+                                      setState(() => _outDateTime = v),
                                 ),
                               ),
                               LabeledField(
@@ -1415,19 +1665,55 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   }
 
   Widget _customerCard() {
+    final customers = ref.watch(customersProvider);
+    // _customerCtrl is the source of truth for customer_name. Show the matching
+    // master record if there is one; otherwise show the raw entered/saved name
+    // (e.g. an edit-loaded LR whose customer isn't in the master list yet).
+    final name = _customerCtrl.text.trim();
+    Customer? selected = _customer;
+    if (selected == null && name.isNotEmpty) {
+      selected =
+          _byCustomerName(customers, name) ??
+          Customer(
+            id: '',
+            name: _customerCtrl.text,
+            gst: '',
+            city: '',
+            address: '',
+            contact: '',
+            mobile: '',
+            email: '',
+          );
+    }
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SectionTitle(icon: Icons.person_outline, title: 'Customer'),
+          SectionTitle(
+            icon: Icons.person_outline,
+            title: 'Customer',
+            trailing: AppButton(
+              label: 'Add Customer',
+              icon: Icons.add_rounded,
+              kind: BtnKind.soft,
+              small: true,
+              onPressed: _addCustomerInline,
+            ),
+          ),
           LabeledField(
             label: 'Customer Name',
-            child: TextFormField(
-              controller: _customerCtrl,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                hintText: 'Billing / customer name',
-              ),
+            child: SearchableField<Customer>(
+              value: selected,
+              options: customers,
+              clearable: true,
+              labelOf: (c) => c.name,
+              subtitleOf: (c) => c.gst.isNotEmpty ? 'GST ${c.gst}' : c.city,
+              hintText: 'Billing / customer name',
+              dialogTitle: 'Select Customer',
+              onChanged: (c) => setState(() {
+                _customer = c;
+                _customerCtrl.text = c?.name ?? '';
+              }),
             ),
           ),
           LabeledField(
