@@ -72,10 +72,10 @@ class AppNav {
       title: 'Masters',
       items: [
         NavItem(
-          id: 'consignors',
-          label: 'Consignors',
+          id: 'parties',
+          label: 'Parties',
           icon: Icons.business_outlined,
-          path: '/masters/consignors',
+          path: '/masters/parties',
           canAccess: (u) => u.role != UserRole.accounts,
         ),
         NavItem(
@@ -83,13 +83,6 @@ class AppNav {
           label: 'Customers',
           icon: Icons.business_outlined,
           path: '/masters/customers',
-          canAccess: (u) => u.role != UserRole.accounts,
-        ),
-        NavItem(
-          id: 'consignees',
-          label: 'Consignees',
-          icon: Icons.people_outline,
-          path: '/masters/consignees',
           canAccess: (u) => u.role != UserRole.accounts,
         ),
         NavItem(

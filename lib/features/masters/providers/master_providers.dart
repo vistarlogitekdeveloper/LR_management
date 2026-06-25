@@ -5,12 +5,14 @@ import '../../../shared/models/consignee.dart';
 import '../../../shared/models/consignor.dart';
 import '../../../shared/models/customer.dart';
 import '../../../shared/models/driver.dart';
+import '../../../shared/models/party.dart';
 import '../../../shared/models/route_master.dart';
 import '../../../shared/models/transporter.dart';
 import '../../../shared/models/vehicle.dart';
 import '../data/consignees_repository.dart';
 import '../data/consignors_repository.dart';
 import '../data/customers_repository.dart';
+import '../data/parties_repository.dart';
 import '../data/drivers_repository.dart';
 import '../data/routes_repository.dart';
 import '../data/transporters_repository.dart';
@@ -41,6 +43,36 @@ class ConsignorsNotifier extends StateNotifier<List<Consignor>> {
 
   Future<void> update(Consignor c) async {
     final updated = await _repo.update(c);
+    state = [for (final x in state) x.id == updated.id ? updated : x];
+  }
+
+  Future<void> remove(String id) async {
+    await _repo.remove(id);
+    state = state.where((x) => x.id != id).toList();
+  }
+}
+
+class PartiesNotifier extends StateNotifier<List<Party>> {
+  PartiesNotifier(this._repo) : super(const []) {
+    refresh();
+  }
+  final PartiesRepository _repo;
+
+  Future<void> refresh() async {
+    try {
+      state = await _repo.list();
+    } catch (_) {
+      // A transient backend/DB error shouldn't crash the UI; keep prior state.
+    }
+  }
+
+  Future<void> add(Party p) async {
+    final created = await _repo.create(p);
+    state = [...state, created];
+  }
+
+  Future<void> update(Party p) async {
+    final updated = await _repo.update(p);
     state = [for (final x in state) x.id == updated.id ? updated : x];
   }
 
@@ -236,6 +268,9 @@ class RoutesNotifier extends StateNotifier<List<RouteMaster>> {
 final consignorsRepositoryProvider = Provider<ConsignorsRepository>(
   (ref) => ConsignorsRepository(ref.watch(apiClientProvider)),
 );
+final partiesRepositoryProvider = Provider<PartiesRepository>(
+  (ref) => PartiesRepository(ref.watch(apiClientProvider)),
+);
 final customersRepositoryProvider = Provider<CustomersRepository>(
   (ref) => CustomersRepository(ref.watch(apiClientProvider)),
 );
@@ -260,6 +295,10 @@ final consignorsProvider =
     StateNotifierProvider<ConsignorsNotifier, List<Consignor>>(
       (ref) => ConsignorsNotifier(ref.watch(consignorsRepositoryProvider)),
     );
+
+final partiesProvider = StateNotifierProvider<PartiesNotifier, List<Party>>(
+  (ref) => PartiesNotifier(ref.watch(partiesRepositoryProvider)),
+);
 
 final customersProvider =
     StateNotifierProvider<CustomersNotifier, List<Customer>>(

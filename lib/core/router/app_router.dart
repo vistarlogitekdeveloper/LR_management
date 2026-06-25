@@ -25,6 +25,7 @@ import '../../features/masters/screens/consignees_screen.dart';
 import '../../features/masters/screens/consignors_screen.dart';
 import '../../features/masters/screens/customers_screen.dart';
 import '../../features/masters/screens/drivers_screen.dart';
+import '../../features/masters/screens/parties_screen.dart';
 import '../../features/masters/screens/routes_screen.dart';
 import '../../features/masters/screens/transporters_screen.dart';
 import '../../features/masters/screens/vehicles_screen.dart';
@@ -181,6 +182,16 @@ final routerProvider = Provider<GoRouter>((ref) {
                 onEnter: (ref) =>
                     ref.read(consignorsProvider.notifier).refresh(),
                 child: const ConsignorsScreen(),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/masters/parties',
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: RefreshGate(
+                onEnter: (ref) => ref.read(partiesProvider.notifier).refresh(),
+                child: const PartiesScreen(),
               ),
             ),
           ),

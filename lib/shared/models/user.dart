@@ -79,6 +79,7 @@ class AppUser {
   // even if the frontend is deployed ahead of the backend).
   bool _canMaster(String code) => can(code) || can('MASTERS_MANAGE');
   bool get canManageConsignors => _canMaster('MASTER_CONSIGNOR_MANAGE');
+  bool get canManageParties => _canMaster('MASTER_CONSIGNOR_MANAGE');
   bool get canManageCustomers => _canMaster('MASTER_CUSTOMER_MANAGE');
   bool get canManageConsignees => _canMaster('MASTER_CONSIGNEE_MANAGE');
   bool get canManageVehicles => _canMaster('MASTER_VEHICLE_MANAGE');

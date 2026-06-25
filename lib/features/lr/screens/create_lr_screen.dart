@@ -9,12 +9,11 @@ import '../../../core/utils/file_opener.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/mime_types.dart';
 import '../../../shared/models/attachment.dart';
-import '../../../shared/models/consignee.dart';
-import '../../../shared/models/consignor.dart';
 import '../../../shared/models/customer.dart';
 import '../../../shared/models/driver.dart';
 import '../../../shared/models/lr_models.dart';
 import '../../../shared/models/lr_template.dart';
+import '../../../shared/models/party.dart';
 import '../../../shared/models/route_master.dart';
 import '../../../shared/models/transporter.dart';
 import '../../../shared/models/vehicle.dart';
@@ -82,9 +81,9 @@ class _InvoiceForm {
 class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  Consignor? _consignor;
+  Party? _consignor;
   Customer? _customer;
-  Consignee? _consignee;
+  Party? _consignee;
   Vehicle? _vehicle;
   Transporter? _transporter;
   Driver? _driver;
@@ -143,9 +142,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   }
 
   Future<void> _hydrate() async {
-    final consignors = ref.read(consignorsProvider);
+    final parties = ref.read(partiesProvider);
     final customers = ref.read(customersProvider);
-    final consignees = ref.read(consigneesProvider);
     final vehicles = ref.read(vehiclesProvider);
     final transporters = ref.read(transportersProvider);
     final drivers = ref.read(driversProvider);
@@ -162,10 +160,36 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
           return null;
         }
 
+        // Fall back to the LR's embedded party (cold-start edit before the
+        // parties list has loaded) so Sender/Receiver never render blank.
         _consignor =
-            pick(consignors, (c) => c.id == lr.consignor.id) ?? lr.consignor;
+            pick(parties, (p) => p.id == lr.consignor.id) ??
+            (lr.consignor.id.isNotEmpty
+                ? Party(
+                    id: lr.consignor.id,
+                    name: lr.consignor.name,
+                    gst: lr.consignor.gst,
+                    city: lr.consignor.city,
+                    address: lr.consignor.address,
+                    contact: lr.consignor.contact,
+                    mobile: lr.consignor.mobile,
+                    email: lr.consignor.email,
+                  )
+                : null);
         _consignee =
-            pick(consignees, (c) => c.id == lr.consignee.id) ?? lr.consignee;
+            pick(parties, (p) => p.id == lr.consignee.id) ??
+            (lr.consignee.id.isNotEmpty
+                ? Party(
+                    id: lr.consignee.id,
+                    name: lr.consignee.name,
+                    gst: lr.consignee.gst,
+                    city: lr.consignee.location,
+                    address: lr.consignee.address,
+                    contact: lr.consignee.contact,
+                    mobile: lr.consignee.mobile,
+                    email: '',
+                  )
+                : null);
         _vehicle =
             pick(vehicles, (v) => v.id == lr.vehicle.id) ??
             (lr.vehicle.id.isNotEmpty ? lr.vehicle : null);
@@ -789,8 +813,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
   void _applyTemplate(LrTemplate t) {
     final p = t.payload;
-    final consignors = ref.read(consignorsProvider);
-    final consignees = ref.read(consigneesProvider);
+    final parties = ref.read(partiesProvider);
     final vehicles = ref.read(vehiclesProvider);
     final transporters = ref.read(transportersProvider);
     final drivers = ref.read(driversProvider);
@@ -802,10 +825,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       _appliedTemplate = t;
       _customerCtrl.text = text('customer_name');
       _orderNoCtrl.text = text('order_no');
-      _consignor =
-          _byId(consignors, p['consignor_id'], (c) => c.id) ?? _consignor;
-      _consignee =
-          _byId(consignees, p['consignee_id'], (c) => c.id) ?? _consignee;
+      _consignor = _byId(parties, p['consignor_id'], (c) => c.id) ?? _consignor;
+      _consignee = _byId(parties, p['consignee_id'], (c) => c.id) ?? _consignee;
       _vehicle = _byId(vehicles, p['vehicle_id'], (v) => v.id);
       _driver = _byId(drivers, p['driver_id'], (d) => d.id);
       _transporter = _byId(transporters, p['transporter_id'], (t) => t.id);
@@ -1268,8 +1289,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final consignors = ref.watch(consignorsProvider);
-    final consignees = ref.watch(consigneesProvider);
+    final parties = ref.watch(partiesProvider);
     final vehicles = ref.watch(vehiclesProvider);
     final transporters = ref.watch(transportersProvider);
     final drivers = ref.watch(driversProvider);
@@ -1346,13 +1366,13 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                               LabeledField(
                                 label: 'Consignor/Sender',
                                 required: true,
-                                child: SearchableField<Consignor>(
+                                child: SearchableField<Party>(
                                   value: _consignor,
-                                  options: consignors,
-                                  labelOf: (c) => c.name,
-                                  subtitleOf: (c) => c.gst.isNotEmpty
-                                      ? 'GST ${c.gst}'
-                                      : c.city,
+                                  options: parties,
+                                  labelOf: (p) => p.name,
+                                  subtitleOf: (p) => p.gst.isNotEmpty
+                                      ? 'GST ${p.gst}'
+                                      : p.city,
                                   hintText: 'Select consignor',
                                   dialogTitle: 'Select Consignor',
                                   onChanged: (v) =>
@@ -1362,13 +1382,13 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                               LabeledField(
                                 label: 'Consignee/Receiver',
                                 required: true,
-                                child: SearchableField<Consignee>(
+                                child: SearchableField<Party>(
                                   value: _consignee,
-                                  options: consignees,
-                                  labelOf: (c) => c.name,
-                                  subtitleOf: (c) => c.gst.isNotEmpty
-                                      ? 'GST ${c.gst}'
-                                      : c.location,
+                                  options: parties,
+                                  labelOf: (p) => p.name,
+                                  subtitleOf: (p) => p.gst.isNotEmpty
+                                      ? 'GST ${p.gst}'
+                                      : p.city,
                                   hintText: 'Select consignee',
                                   dialogTitle: 'Select Consignee',
                                   onChanged: (v) =>
