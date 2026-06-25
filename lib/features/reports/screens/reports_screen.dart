@@ -67,8 +67,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
               labelColor: AppColors.plum,
               unselectedLabelColor: AppColors.slate,
               indicatorColor: AppColors.plum,
-              labelStyle:
-                  const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
+              labelStyle: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 13.5,
+              ),
               tabs: const [
                 Tab(text: 'Daily'),
                 Tab(text: 'Monthly'),
@@ -100,10 +102,12 @@ class _DailyTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final today = DateTime.now();
     final todays = lrs
-        .where((lr) =>
-            lr.date.year == today.year &&
-            lr.date.month == today.month &&
-            lr.date.day == today.day)
+        .where(
+          (lr) =>
+              lr.date.year == today.year &&
+              lr.date.month == today.month &&
+              lr.date.day == today.day,
+        )
         .toList();
     final routeWise = <String, int>{};
     final vehicleWise = <String, int>{};
@@ -112,26 +116,31 @@ class _DailyTab extends StatelessWidget {
       vehicleWise[lr.vehicle.number] =
           (vehicleWise[lr.vehicle.number] ?? 0) + 1;
     }
+    final mobile = MediaQuery.of(context).size.width < 600;
+    final pad = mobile ? 14.0 : 28.0;
+    final gap = mobile ? 10.0 : 20.0;
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(28),
+      padding: EdgeInsets.all(pad),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _StatRow(items: [
-            ('LRs Today', '${todays.length}'),
-            ('Total LRs', '${lrs.length}'),
-            ('In Transit',
-                '${lrs.where((l) => l.status == LrStatus.inTransit).length}'),
-          ]),
-          const SizedBox(height: 20),
+          _StatRow(
+            items: [
+              ('LRs Today', '${todays.length}'),
+              ('Total LRs', '${lrs.length}'),
+              (
+                'In Transit',
+                '${lrs.where((l) => l.status == LrStatus.inTransit).length}',
+              ),
+            ],
+          ),
+          SizedBox(height: gap),
           _BreakdownCard(
             title: 'Route-wise dispatch',
             icon: Icons.alt_route_rounded,
-            items: routeWise.entries
-                .map((e) => (e.key, '${e.value}'))
-                .toList(),
+            items: routeWise.entries.map((e) => (e.key, '${e.value}')).toList(),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: mobile ? 10 : 16),
           _BreakdownCard(
             title: 'Vehicle-wise dispatch',
             icon: Icons.local_shipping_outlined,
@@ -162,19 +171,24 @@ class _MonthlyTab extends StatelessWidget {
       vehicleUtilization[lr.vehicle.number] =
           (vehicleUtilization[lr.vehicle.number] ?? 0) + 1;
     }
-    final totalFreight =
-        lrs.fold<double>(0, (s, l) => s + l.freight.total);
+    final totalFreight = lrs.fold<double>(0, (s, l) => s + l.freight.total);
+    final mobile = MediaQuery.of(context).size.width < 600;
+    final pad = mobile ? 14.0 : 28.0;
+    final gap = mobile ? 10.0 : 20.0;
+    final gap2 = mobile ? 10.0 : 16.0;
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(28),
+      padding: EdgeInsets.all(pad),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _StatRow(items: [
-            ('Total Freight', inr(totalFreight)),
-            ('Customers Active', '${customerCount.length}'),
-            ('Vehicles Used', '${vehicleUtilization.length}'),
-          ]),
-          const SizedBox(height: 20),
+          _StatRow(
+            items: [
+              ('Total Freight', inr(totalFreight)),
+              ('Customers Active', '${customerCount.length}'),
+              ('Vehicles Used', '${vehicleUtilization.length}'),
+            ],
+          ),
+          SizedBox(height: gap),
           _BreakdownCard(
             title: 'Customer-wise LR count',
             icon: Icons.people_outline,
@@ -182,8 +196,9 @@ class _MonthlyTab extends StatelessWidget {
                 .map((e) => (e.key, '${e.value}'))
                 .toList(),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: gap2),
           AppCard(
+            padding: EdgeInsets.all(mobile ? 12 : 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -193,18 +208,21 @@ class _MonthlyTab extends StatelessWidget {
                 ),
                 for (final entry in customerFreight.entries)
                   Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    padding: EdgeInsets.symmetric(vertical: mobile ? 4 : 6),
                     child: Row(
                       children: [
                         Expanded(
                           child: Text(
                             entry.key,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: AppColors.ink,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
+                        const SizedBox(width: 8),
                         Text(
                           inr(entry.value),
                           style: const TextStyle(
@@ -218,7 +236,7 @@ class _MonthlyTab extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: gap2),
           _BreakdownCard(
             title: 'Vehicle utilization',
             icon: Icons.local_shipping_outlined,
@@ -238,25 +256,29 @@ class _AccountsTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final totalAdvance =
-        lrs.fold<double>(0, (s, l) => s + l.freight.advance);
+    final totalAdvance = lrs.fold<double>(0, (s, l) => s + l.freight.advance);
     final totalPending = lrs
         .where((l) => l.freight.balance > 0)
         .fold<double>(0, (s, l) => s + l.freight.balance);
-    final margin =
-        lrs.fold<double>(0, (s, l) => s + l.freight.vistarMargin);
+    final margin = lrs.fold<double>(0, (s, l) => s + l.freight.vistarMargin);
+    final mobile = MediaQuery.of(context).size.width < 600;
+    final pad = mobile ? 14.0 : 28.0;
+    final gap = mobile ? 10.0 : 20.0;
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(28),
+      padding: EdgeInsets.all(pad),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _StatRow(items: [
-            ('Advance Received', inr(totalAdvance)),
-            ('Pending Freight', inr(totalPending)),
-            ('Margin (MTD)', inr(margin)),
-          ]),
-          const SizedBox(height: 20),
+          _StatRow(
+            items: [
+              ('Advance Received', inr(totalAdvance)),
+              ('Pending Freight', inr(totalPending)),
+              ('Margin (MTD)', inr(margin)),
+            ],
+          ),
+          SizedBox(height: gap),
           AppCard(
+            padding: EdgeInsets.all(mobile ? 12 : 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -270,7 +292,9 @@ class _AccountsTab extends ConsumerWidget {
                       child: Text(
                         'Export per-customer freight ledger for accounting.',
                         style: const TextStyle(
-                            color: AppColors.slate, fontSize: 13),
+                          color: AppColors.slate,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -284,7 +308,8 @@ class _AccountsTab extends ConsumerWidget {
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                              content: Text('Tally-format file generated')),
+                            content: Text('Tally-format file generated'),
+                          ),
                         );
                       },
                     ),
@@ -307,35 +332,45 @@ class _StatRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, c) {
-        final cols = c.maxWidth >= 700 ? items.length : 1;
+        final mobile = c.maxWidth < 600;
+        // Fit all items in one row on mobile too (compact stat tiles).
+        final cols = items.length;
+        final spacing = mobile ? 8.0 : 16.0;
         return Wrap(
-          spacing: 16,
-          runSpacing: 16,
+          spacing: spacing,
+          runSpacing: spacing,
           children: [
             for (final s in items)
               SizedBox(
-                width: (c.maxWidth - 16 * (cols - 1)) / cols,
+                width: (c.maxWidth - spacing * (cols - 1)) / cols,
                 child: AppCard(
+                  padding: EdgeInsets.all(mobile ? 11 : 20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         s.$1,
-                        style: const TextStyle(
+                        maxLines: mobile ? 2 : 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
                           color: AppColors.slate,
                           fontWeight: FontWeight.w700,
-                          fontSize: 12.5,
+                          fontSize: mobile ? 11 : 12.5,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        s.$2,
-                        style: const TextStyle(
-                          color: AppColors.ink,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 22,
-                          letterSpacing: -0.4,
+                      SizedBox(height: mobile ? 3 : 4),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          s.$2,
+                          style: TextStyle(
+                            color: AppColors.ink,
+                            fontWeight: FontWeight.w800,
+                            fontSize: mobile ? 18 : 22,
+                            letterSpacing: -0.4,
+                          ),
                         ),
                       ),
                     ],
@@ -362,27 +397,35 @@ class _BreakdownCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mobile = MediaQuery.of(context).size.width < 600;
     return AppCard(
+      padding: EdgeInsets.all(mobile ? 12 : 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SectionTitle(icon: icon, title: title),
           for (final item in items)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 5),
+              padding: EdgeInsets.symmetric(vertical: mobile ? 4 : 5),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(
                       item.$1,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                          color: AppColors.ink,
-                          fontWeight: FontWeight.w600),
+                        color: AppColors.ink,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 3),
+                      horizontal: 10,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.plum.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(999),

@@ -27,37 +27,40 @@ class DashboardScreen extends ConsumerWidget {
 
     final flow = user == null ? null : RoleFlows.flows[user.role];
     final canCreate = user?.canCreateLr ?? false;
+    // Vistar margin is an internal profit figure — hide it from operators.
+    final showMargin = user?.role != UserRole.operator;
 
     final today = lrs.take(6).toList();
     final pendingFreightLocal = lrs
         .where((lr) => lr.freight.balance > 0)
         .fold<double>(0, (sum, lr) => sum + lr.freight.balance);
-    final inTransitLocal =
-        lrs.where((lr) => lr.status == LrStatus.inTransit).length;
-    final dispatched =
-        lrs.where((lr) => lr.status != LrStatus.booked).length;
+    final inTransitLocal = lrs
+        .where((lr) => lr.status == LrStatus.inTransit)
+        .length;
+    final dispatched = lrs.where((lr) => lr.status != LrStatus.booked).length;
 
     // Prefer server-side aggregates when the summary has loaded; otherwise fall
     // back to values computed from the live LR list.
     final pendingFreight = summary?.outstanding ?? pendingFreightLocal;
-    final inTransit =
-        summary == null ? inTransitLocal : (summary.byStatus['IN_TRANSIT'] ?? 0);
+    final inTransit = summary == null
+        ? inTransitLocal
+        : (summary.byStatus['IN_TRANSIT'] ?? 0);
     final totalLrCount = summary?.count ?? lrs.length;
     final todayCount = summary?.count ?? today.length;
-    final marginMtd =
-        lrs.fold<double>(0, (sum, lr) => sum + lr.freight.vistarMargin);
+    final marginMtd = lrs.fold<double>(
+      0,
+      (sum, lr) => sum + lr.freight.vistarMargin,
+    );
 
     final customerTotals = <String, double>{};
     for (final lr in lrs) {
       final key = lr.consignor.name;
-      customerTotals[key] =
-          (customerTotals[key] ?? 0) + lr.freight.total;
+      customerTotals[key] = (customerTotals[key] ?? 0) + lr.freight.total;
     }
     final topCustomers = customerTotals.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     final topFour = topCustomers.take(4).toList();
-    final maxCust =
-        topFour.isEmpty ? 1.0 : topFour.first.value;
+    final maxCust = topFour.isEmpty ? 1.0 : topFour.first.value;
 
     return Scaffold(
       backgroundColor: AppColors.mist,
@@ -79,7 +82,9 @@ class DashboardScreen extends ConsumerWidget {
           ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(28),
+              padding: EdgeInsets.all(
+                MediaQuery.of(context).size.width < 600 ? 16 : 28,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -89,11 +94,10 @@ class DashboardScreen extends ConsumerWidget {
                   ],
                   LayoutBuilder(
                     builder: (context, c) {
-                      final cols = c.maxWidth >= 1100
-                          ? 4
-                          : c.maxWidth >= 700
-                              ? 2
-                              : 1;
+                      // Phones show all four KPIs in one compact row.
+                      final mobile = c.maxWidth < 600;
+                      final cols = mobile ? 4 : (c.maxWidth >= 1100 ? 4 : 2);
+                      final spacing = mobile ? 8.0 : 16.0;
                       final stats = <_StatTile>[
                         _StatTile(
                           icon: Icons.description_outlined,
@@ -101,6 +105,7 @@ class DashboardScreen extends ConsumerWidget {
                           label: 'Today\'s LR',
                           value: '$todayCount',
                           sub: '$totalLrCount total in system',
+                          compact: mobile,
                         ),
                         _StatTile(
                           icon: Icons.local_shipping_outlined,
@@ -108,6 +113,7 @@ class DashboardScreen extends ConsumerWidget {
                           label: 'Vehicles Dispatched',
                           value: '$dispatched',
                           sub: '$inTransit in transit',
+                          compact: mobile,
                         ),
                         _StatTile(
                           icon: Icons.schedule_rounded,
@@ -115,6 +121,7 @@ class DashboardScreen extends ConsumerWidget {
                           label: 'Pending Delivery',
                           value: '$inTransit',
                           sub: 'On the road',
+                          compact: mobile,
                         ),
                         _StatTile(
                           icon: Icons.account_balance_wallet_outlined,
@@ -122,15 +129,16 @@ class DashboardScreen extends ConsumerWidget {
                           label: 'Pending Freight',
                           value: inr(pendingFreight),
                           sub: 'across open LRs',
+                          compact: mobile,
                         ),
                       ];
                       return Wrap(
-                        spacing: 16,
-                        runSpacing: 16,
+                        spacing: spacing,
+                        runSpacing: spacing,
                         children: [
                           for (final s in stats)
                             SizedBox(
-                              width: (c.maxWidth - 16 * (cols - 1)) / cols,
+                              width: (c.maxWidth - spacing * (cols - 1)) / cols,
                               child: s,
                             ),
                         ],
@@ -161,8 +169,7 @@ class DashboardScreen extends ConsumerWidget {
                         children: [
                           AppCard(
                             child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const SectionTitle(
                                   icon: Icons.trending_up_rounded,
@@ -174,11 +181,13 @@ class DashboardScreen extends ConsumerWidget {
                                     value: entry.value,
                                     max: maxCust,
                                   ),
-                                const SizedBox(height: 16),
-                                _MarginCard(
-                                  margin: marginMtd,
-                                  consignments: lrs.length,
-                                ),
+                                if (showMargin) ...[
+                                  const SizedBox(height: 16),
+                                  _MarginCard(
+                                    margin: marginMtd,
+                                    consignments: lrs.length,
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -195,11 +204,7 @@ class DashboardScreen extends ConsumerWidget {
                         );
                       }
                       return Column(
-                        children: [
-                          left,
-                          const SizedBox(height: 16),
-                          right,
-                        ],
+                        children: [left, const SizedBox(height: 16), right],
                       );
                     },
                   ),
@@ -229,14 +234,35 @@ class _RoleFlowStrip extends StatelessWidget {
           ),
           LayoutBuilder(
             builder: (context, c) {
+              // Mobile: ALL steps in a single equal-width row (no chevrons) so
+              // the workflow takes minimal vertical space and never scrolls.
+              if (c.maxWidth < 600) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var i = 0; i < flow.steps.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 6),
+                      Expanded(
+                        child: _FlowStepCard(
+                          step: flow.steps[i],
+                          index: i + 1,
+                          compact: true,
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+              }
+              // Wider screens keep the roomy cards with chevrons between.
               return Wrap(
                 spacing: 10,
                 runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   for (var i = 0; i < flow.steps.length; i++) ...[
-                    _FlowStepCard(
-                      step: flow.steps[i],
-                      index: i + 1,
+                    SizedBox(
+                      width: 170,
+                      child: _FlowStepCard(step: flow.steps[i], index: i + 1),
                     ),
                     if (i < flow.steps.length - 1)
                       const Padding(
@@ -261,83 +287,159 @@ class _RoleFlowStrip extends StatelessWidget {
 class _FlowStepCard extends StatelessWidget {
   final FlowStep step;
   final int index;
-  const _FlowStepCard({required this.step, required this.index});
+  final bool compact;
+  const _FlowStepCard({
+    required this.step,
+    required this.index,
+    this.compact = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 170,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: () => context.go(step.path),
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: AppColors.line),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 22,
-                      height: 22,
-                      decoration: BoxDecoration(
-                        color: step.tint,
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '$index',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: step.tint.withValues(alpha: 0.11),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      alignment: Alignment.center,
-                      child: Icon(step.icon, size: 18, color: step.tint),
-                    ),
-                  ],
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(compact ? 12 : 14),
+        onTap: () => context.go(step.path),
+        child: Container(
+          padding: EdgeInsets.all(compact ? 6 : 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border.all(color: AppColors.line),
+            borderRadius: BorderRadius.circular(compact ? 12 : 14),
+          ),
+          child: compact ? _compact() : _full(),
+        ),
+      ),
+    );
+  }
+
+  // Tiny card for phones: icon + step-number badge over a 2-line title.
+  Widget _compact() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 32,
+          height: 32,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Center(
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: step.tint.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(step.icon, size: 15, color: step.tint),
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  step.title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.ink,
-                    fontSize: 14.5,
+              ),
+              Positioned(
+                top: -2,
+                right: -2,
+                child: Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: step.tint,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '$index',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  step.desc,
-                  style: const TextStyle(
-                    color: AppColors.slate,
-                    fontSize: 12.5,
-                    height: 1.4,
-                  ),
-                ),
-              ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 5),
+        SizedBox(
+          height: 24,
+          child: Center(
+            child: Text(
+              step.title,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: AppColors.ink,
+                fontSize: 9.5,
+                height: 1.1,
+              ),
             ),
           ),
         ),
-      ),
+      ],
+    );
+  }
+
+  Widget _full() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: step.tint,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                '$index',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: step.tint.withValues(alpha: 0.11),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              alignment: Alignment.center,
+              child: Icon(step.icon, size: 18, color: step.tint),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          step.title,
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            color: AppColors.ink,
+            fontSize: 14.5,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          step.desc,
+          style: const TextStyle(
+            color: AppColors.slate,
+            fontSize: 12.5,
+            height: 1.4,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -348,6 +450,7 @@ class _StatTile extends StatelessWidget {
   final String label;
   final String value;
   final String sub;
+  final bool compact;
 
   const _StatTile({
     required this.icon,
@@ -355,10 +458,12 @@ class _StatTile extends StatelessWidget {
     required this.label,
     required this.value,
     required this.sub,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (compact) return _compactTile();
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -402,6 +507,68 @@ class _StatTile extends StatelessWidget {
       ),
     );
   }
+
+  // Phones: a tiny tile so four fit in one row. The value auto-scales so long
+  // money figures (e.g. ₹1,23,456) still fit the narrow width.
+  Widget _compactTile() {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: tint.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, color: tint, size: 15),
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            width: double.infinity,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                maxLines: 1,
+                style: const TextStyle(
+                  color: AppColors.ink,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17,
+                  letterSpacing: -0.4,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 2),
+          SizedBox(
+            height: 24,
+            child: Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.slate,
+                fontWeight: FontWeight.w600,
+                fontSize: 9,
+                height: 1.1,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _RecentLrRow extends StatelessWidget {
@@ -410,12 +577,14 @@ class _RecentLrRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cleared = lr.freight.balance <= 0;
     return InkWell(
       borderRadius: BorderRadius.circular(10),
       onTap: () => context.go('/lrs/${lr.id}'),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Container(
               width: 36,
@@ -425,53 +594,69 @@ class _RecentLrRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
               ),
               alignment: Alignment.center,
-              child: const Icon(Icons.description_outlined,
-                  size: 18, color: AppColors.plum),
+              child: const Icon(
+                Icons.description_outlined,
+                size: 18,
+                color: AppColors.plum,
+              ),
             ),
             const SizedBox(width: 12),
+            // Left zone flexes: number / parties / date stacked so the number
+            // never gets crushed into a one-character-per-line column.
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     lr.number,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontWeight: FontWeight.w800,
                       color: AppColors.ink,
                       fontSize: 13.5,
                     ),
                   ),
+                  const SizedBox(height: 2),
                   Text(
-                    '${lr.consignor.name}  →  ${lr.consignee.name}',
+                    '${lr.consignor.name} → ${lr.consignee.name}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: AppColors.slate,
-                      fontSize: 12.5,
+                      fontSize: 12,
                     ),
-                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    formatDate(lr.date),
+                    style: const TextStyle(
+                      color: AppColors.slate,
+                      fontSize: 11.5,
+                    ),
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 10),
-            Text(
-              formatDate(lr.date),
-              style:
-                  const TextStyle(color: AppColors.slate, fontSize: 12.5),
-            ),
-            const SizedBox(width: 16),
-            StatusPill(status: lr.status),
-            const SizedBox(width: 10),
-            Text(
-              lr.freight.balance > 0
-                  ? inr(lr.freight.balance)
-                  : 'Cleared',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color: lr.freight.balance > 0
-                    ? AppColors.red
-                    : AppColors.ok,
-                fontSize: 12.5,
-              ),
+            // Right zone stays compact: status over the balance.
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                StatusPill(status: lr.status),
+                const SizedBox(height: 6),
+                Text(
+                  cleared ? 'Cleared' : inr(lr.freight.balance),
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: cleared ? AppColors.ok : AppColors.red,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -484,8 +669,11 @@ class _TopCustomerRow extends StatelessWidget {
   final String name;
   final double value;
   final double max;
-  const _TopCustomerRow(
-      {required this.name, required this.value, required this.max});
+  const _TopCustomerRow({
+    required this.name,
+    required this.value,
+    required this.max,
+  });
 
   @override
   Widget build(BuildContext context) {

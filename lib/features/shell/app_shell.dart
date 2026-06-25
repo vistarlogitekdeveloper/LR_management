@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../shared/widgets/brand_logo.dart';
 import 'widgets/app_sidebar.dart';
 
 class AppShell extends ConsumerWidget {
@@ -30,21 +31,13 @@ class AppShell extends ConsumerWidget {
               backgroundColor: AppColors.white,
               foregroundColor: AppColors.ink,
               elevation: 0,
-              shape: const Border(
-                  bottom: BorderSide(color: AppColors.line)),
-              title: const Text(
-                'Vistar Logitek',
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
+              shape: const Border(bottom: BorderSide(color: AppColors.line)),
+              title: const BrandLogo(height: 30),
             ),
       body: Row(
         children: [
           if (isWide) AppSidebar(currentLocation: location),
-          Expanded(
-            child: ClipRect(child: child),
-          ),
+          Expanded(child: ClipRect(child: child)),
         ],
       ),
     );

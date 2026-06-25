@@ -19,15 +19,16 @@ enum _PayFilter { all, awaitingAdvance, awaitingBalance, paid }
 
 extension on _PayFilter {
   String get label => switch (this) {
-        _PayFilter.all => 'All',
-        _PayFilter.awaitingAdvance => 'Awaiting Advance',
-        _PayFilter.awaitingBalance => 'Awaiting Balance',
-        _PayFilter.paid => 'Paid',
-      };
+    _PayFilter.all => 'All',
+    _PayFilter.awaitingAdvance => 'Awaiting Advance',
+    _PayFilter.awaitingBalance => 'Awaiting Balance',
+    _PayFilter.paid => 'Paid',
+  };
 }
 
-final _accountsFilterProvider =
-    StateProvider<_PayFilter>((ref) => _PayFilter.all);
+final _accountsFilterProvider = StateProvider<_PayFilter>(
+  (ref) => _PayFilter.all,
+);
 
 class AccountsScreen extends ConsumerWidget {
   const AccountsScreen({super.key});
@@ -51,10 +52,10 @@ class AccountsScreen extends ConsumerWidget {
       }
     }).toList();
 
-    final totalAdvance =
-        lrs.fold<double>(0, (s, l) => s + l.freight.advance);
-    final totalPending =
-        lrs.fold<double>(0, (s, l) => s + l.freight.balance);
+    final totalAdvance = lrs.fold<double>(0, (s, l) => s + l.freight.advance);
+    final totalPending = lrs.fold<double>(0, (s, l) => s + l.freight.balance);
+
+    final isMobile = MediaQuery.of(context).size.width < 600;
 
     return Scaffold(
       backgroundColor: AppColors.mist,
@@ -66,43 +67,52 @@ class AccountsScreen extends ConsumerWidget {
           ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(28),
+              padding: EdgeInsets.all(isMobile ? 14 : 28),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   LayoutBuilder(
                     builder: (context, c) {
-                      final cols = c.maxWidth >= 700 ? 2 : 1;
+                      final mobile = c.maxWidth < 600;
+                      // Two compact tiles per row on phones, full grid otherwise.
+                      final cols = c.maxWidth >= 700
+                          ? 2
+                          : mobile
+                          ? 2
+                          : 1;
+                      final gap = mobile ? 10.0 : 16.0;
                       final tiles = <Widget>[
                         _MiniTile(
                           label: 'Advance Received',
                           value: inr(totalAdvance),
                           icon: Icons.savings_outlined,
                           color: AppColors.ok,
+                          compact: mobile,
                         ),
                         _MiniTile(
                           label: 'Pending Balance',
                           value: inr(totalPending),
                           icon: Icons.pending_actions_outlined,
                           color: AppColors.red,
+                          compact: mobile,
                         ),
                       ];
                       return Wrap(
-                        spacing: 16,
-                        runSpacing: 16,
+                        spacing: gap,
+                        runSpacing: gap,
                         children: [
                           for (final t in tiles)
                             SizedBox(
-                              width:
-                                  (c.maxWidth - 16 * (cols - 1)) / cols,
+                              width: (c.maxWidth - gap * (cols - 1)) / cols,
                               child: t,
                             ),
                         ],
                       );
                     },
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: isMobile ? 12 : 20),
                   AppCard(
+                    padding: EdgeInsets.all(isMobile ? 12 : 20),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -118,13 +128,17 @@ class AccountsScreen extends ConsumerWidget {
                               _FilterChip(
                                 label: f.label,
                                 selected: filter == f,
-                                onTap: () => ref
-                                    .read(_accountsFilterProvider.notifier)
-                                    .state = f,
+                                onTap: () =>
+                                    ref
+                                            .read(
+                                              _accountsFilterProvider.notifier,
+                                            )
+                                            .state =
+                                        f,
                               ),
                           ],
                         ),
-                        const SizedBox(height: 16),
+                        SizedBox(height: isMobile ? 12 : 16),
                         if (filtered.isEmpty)
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 32),
@@ -132,8 +146,9 @@ class AccountsScreen extends ConsumerWidget {
                               child: Text(
                                 'No LRs in this view',
                                 style: TextStyle(
-                                  color: AppColors.slate
-                                      .withValues(alpha: 0.85),
+                                  color: AppColors.slate.withValues(
+                                    alpha: 0.85,
+                                  ),
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -144,7 +159,9 @@ class AccountsScreen extends ConsumerWidget {
                             children: [
                               for (final lr in filtered)
                                 Padding(
-                                  padding: const EdgeInsets.only(bottom: 12),
+                                  padding: EdgeInsets.only(
+                                    bottom: isMobile ? 8 : 12,
+                                  ),
                                   child: _LrPaymentCard(lr: lr),
                                 ),
                             ],
@@ -178,8 +195,9 @@ class _LrPaymentCard extends ConsumerWidget {
         .where((t) => t.id == lr.transporter.id)
         .firstOrNull;
 
+    final mobile = MediaQuery.of(context).size.width < 600;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(mobile ? 12 : 16),
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(14),
@@ -191,7 +209,10 @@ class _LrPaymentCard extends ConsumerWidget {
           final header = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Text(
                     lr.number,
@@ -201,14 +222,9 @@ class _LrPaymentCard extends ConsumerWidget {
                       fontSize: 15,
                     ),
                   ),
-                  const SizedBox(width: 10),
                   StatusPill(status: lr.status),
-                  const SizedBox(width: 6),
                   if (fullyPaid)
-                    const _BadgePill(
-                      text: 'Paid',
-                      fg: AppColors.ok,
-                    )
+                    const _BadgePill(text: 'Paid', fg: AppColors.ok)
                   else if (!hasAdvance)
                     const _BadgePill(
                       text: 'Awaiting Advance',
@@ -224,6 +240,8 @@ class _LrPaymentCard extends ConsumerWidget {
               const SizedBox(height: 4),
               Text(
                 '${lr.consignor.name} → ${lr.consignee.name}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: AppColors.slate,
                   fontWeight: FontWeight.w600,
@@ -232,10 +250,9 @@ class _LrPaymentCard extends ConsumerWidget {
               ),
               Text(
                 '${formatDate(lr.date)} · ${lr.route}',
-                style: const TextStyle(
-                  color: AppColors.slate,
-                  fontSize: 12,
-                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: AppColors.slate, fontSize: 12),
               ),
             ],
           );
@@ -289,10 +306,7 @@ class _LrPaymentCard extends ConsumerWidget {
                   onPressed: () => _completePayment(context, ref),
                 ),
               if (fullyPaid)
-                const _BadgePill(
-                  text: 'Settled',
-                  fg: AppColors.ok,
-                ),
+                const _BadgePill(text: 'Settled', fg: AppColors.ok),
             ],
           );
 
@@ -344,16 +358,20 @@ class _LrPaymentCard extends ConsumerWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.account_balance_outlined,
-                  size: 16, color: AppColors.plum),
+              const Icon(
+                Icons.account_balance_outlined,
+                size: 16,
+                color: AppColors.plum,
+              ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   'Pay to: ${t.name}',
                   style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.ink,
-                      fontSize: 13),
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.ink,
+                    fontSize: 13,
+                  ),
                 ),
               ),
               if (t.hasDocument)
@@ -400,8 +418,9 @@ class _LrPaymentCard extends ConsumerWidget {
         t.ifscMatchesOcr() != null || t.accountMatchesOcr() != null;
     if (!mismatch && !anyChecked) return const SizedBox.shrink();
     final color = mismatch ? AppColors.red : AppColors.ok;
-    final icon =
-        mismatch ? Icons.warning_amber_rounded : Icons.verified_outlined;
+    final icon = mismatch
+        ? Icons.warning_amber_rounded
+        : Icons.verified_outlined;
     final text = mismatch
         ? 'Cheque OCR mismatch — verify bank details before paying'
         : 'Bank details match the uploaded cheque';
@@ -412,11 +431,14 @@ class _LrPaymentCard extends ConsumerWidget {
           Icon(icon, size: 14, color: color),
           const SizedBox(width: 6),
           Expanded(
-            child: Text(text,
-                style: TextStyle(
-                    color: color,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600)),
+            child: Text(
+              text,
+              style: TextStyle(
+                color: color,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
@@ -427,29 +449,42 @@ class _LrPaymentCard extends ConsumerWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('$k: ',
-            style: const TextStyle(
-                color: AppColors.slate,
-                fontWeight: FontWeight.w700,
-                fontSize: 11.5)),
-        Text(v,
-            style: const TextStyle(
-                color: AppColors.ink,
-                fontWeight: FontWeight.w700,
-                fontSize: 11.5)),
+        Text(
+          '$k: ',
+          style: const TextStyle(
+            color: AppColors.slate,
+            fontWeight: FontWeight.w700,
+            fontSize: 11.5,
+          ),
+        ),
+        Text(
+          v,
+          style: const TextStyle(
+            color: AppColors.ink,
+            fontWeight: FontWeight.w700,
+            fontSize: 11.5,
+          ),
+        ),
       ],
     );
   }
 
   Future<void> _viewCheque(
-      BuildContext context, WidgetRef ref, Transporter t) async {
+    BuildContext context,
+    WidgetRef ref,
+    Transporter t,
+  ) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final bytes =
-          await ref.read(transportersRepositoryProvider).downloadDocument(t.id);
+      final bytes = await ref
+          .read(transportersRepositoryProvider)
+          .downloadDocument(t.id);
       final name = t.chequeFileName;
       openFileInBrowser(
-          bytes, _mimeForName(name), name.isEmpty ? 'cheque' : name);
+        bytes,
+        _mimeForName(name),
+        name.isEmpty ? 'cheque' : name,
+      );
     } catch (_) {
       messenger.showSnackBar(
         const SnackBar(content: Text('Could not open the document')),
@@ -486,28 +521,32 @@ class _LrPaymentCard extends ConsumerWidget {
       confirmLabel: 'Record Advance',
     );
     if (amount == null || amount <= 0) return;
-    final newAdvance =
-        (lr.freight.advance + amount).clamp(0, lr.freight.total).toDouble();
+    final newAdvance = (lr.freight.advance + amount)
+        .clamp(0, lr.freight.total)
+        .toDouble();
     try {
-      await ref
-          .read(lrListProvider.notifier)
-          .updateLr(lr.id, lr.version, {'advance': newAdvance});
+      await ref.read(lrListProvider.notifier).updateLr(lr.id, lr.version, {
+        'advance': newAdvance,
+      });
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not record advance: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not record advance: $e')));
       return;
     }
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Advance ${inr(amount)} recorded for ${lr.number}')),
+      SnackBar(
+        content: Text('Advance ${inr(amount)} recorded for ${lr.number}'),
+      ),
     );
   }
 
   Future<void> _completePayment(BuildContext context, WidgetRef ref) async {
     final remaining = lr.freight.balance;
-    final ok = await showDialog<bool>(
+    final ok =
+        await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: Text('Complete payment for ${lr.number}?'),
@@ -531,20 +570,20 @@ class _LrPaymentCard extends ConsumerWidget {
     if (!ok) return;
     final newAdvance = lr.freight.total;
     try {
-      await ref
-          .read(lrListProvider.notifier)
-          .updateLr(lr.id, lr.version, {'advance': newAdvance});
+      await ref.read(lrListProvider.notifier).updateLr(lr.id, lr.version, {
+        'advance': newAdvance,
+      });
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not complete payment: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not complete payment: $e')));
       return;
     }
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${lr.number} settled in full')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${lr.number} settled in full')));
   }
 }
 
@@ -570,17 +609,15 @@ Future<double?> _showAmountDialog({
             children: [
               Text(
                 message,
-                style: const TextStyle(
-                  color: AppColors.slate,
-                  fontSize: 13,
-                ),
+                style: const TextStyle(color: AppColors.slate, fontSize: 13),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: controller,
                 autofocus: true,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
                 ],
@@ -734,30 +771,34 @@ class _MiniTile extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
+  final bool compact;
 
   const _MiniTile({
     required this.label,
     required this.value,
     required this.icon,
     required this.color,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final box = compact ? 36.0 : 44.0;
     return AppCard(
+      padding: EdgeInsets.all(compact ? 12 : 20),
       child: Row(
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: box,
+            height: box,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
             alignment: Alignment.center,
-            child: Icon(icon, color: color, size: 22),
+            child: Icon(icon, color: color, size: compact ? 18 : 22),
           ),
-          const SizedBox(width: 14),
+          SizedBox(width: compact ? 10 : 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -765,20 +806,26 @@ class _MiniTile extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
                     color: AppColors.slate,
                     fontWeight: FontWeight.w700,
-                    fontSize: 12.5,
+                    fontSize: compact ? 11.5 : 12.5,
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: AppColors.ink,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 20,
-                    letterSpacing: -0.3,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    style: TextStyle(
+                      color: AppColors.ink,
+                      fontWeight: FontWeight.w800,
+                      fontSize: compact ? 16 : 20,
+                      letterSpacing: -0.3,
+                    ),
                   ),
                 ),
               ],

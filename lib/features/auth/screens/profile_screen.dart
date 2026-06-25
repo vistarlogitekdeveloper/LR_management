@@ -19,6 +19,9 @@ class ProfileScreen extends ConsumerWidget {
     if (user == null) {
       return const Scaffold(body: Center(child: Text('Not signed in')));
     }
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    final cardPad = EdgeInsets.all(isMobile ? 12 : 20);
+    final gap = isMobile ? 10.0 : 20.0;
     return Scaffold(
       backgroundColor: AppColors.mist,
       body: Column(
@@ -40,37 +43,41 @@ class ProfileScreen extends ConsumerWidget {
           ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(28),
+              padding: EdgeInsets.all(isMobile ? 14 : 28),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   AppCard(
+                    padding: cardPad,
                     child: Row(
                       children: [
                         CircleAvatar(
-                          radius: 36,
-                          backgroundColor:
-                              AppColors.plum.withValues(alpha: 0.12),
+                          radius: isMobile ? 28 : 36,
+                          backgroundColor: AppColors.plum.withValues(
+                            alpha: 0.12,
+                          ),
                           child: Text(
                             user.name.isEmpty
                                 ? '?'
                                 : user.name.substring(0, 1).toUpperCase(),
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: AppColors.plum,
-                              fontSize: 26,
+                              fontSize: isMobile ? 20 : 26,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 20),
+                        SizedBox(width: isMobile ? 12 : 20),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 user.name,
-                                style: const TextStyle(
-                                  fontSize: 22,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: isMobile ? 18 : 22,
                                   fontWeight: FontWeight.w800,
                                   color: AppColors.ink,
                                 ),
@@ -78,6 +85,8 @@ class ProfileScreen extends ConsumerWidget {
                               const SizedBox(height: 4),
                               Text(
                                 '@${user.username}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   color: AppColors.slate,
                                   fontSize: 13.5,
@@ -86,7 +95,9 @@ class ProfileScreen extends ConsumerWidget {
                               const SizedBox(height: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 4),
+                                  horizontal: 12,
+                                  vertical: 4,
+                                ),
                                 decoration: BoxDecoration(
                                   color: AppColors.plum.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(999),
@@ -106,8 +117,9 @@ class ProfileScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: gap),
                   AppCard(
+                    padding: cardPad,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -123,8 +135,9 @@ class ProfileScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: gap),
                   AppCard(
+                    padding: cardPad,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -136,10 +149,7 @@ class ProfileScreen extends ConsumerWidget {
                           label: 'Create LR',
                           granted: user.canCreateLr,
                         ),
-                        _AccessRow(
-                          label: 'Edit LR',
-                          granted: user.canEditLr,
-                        ),
+                        _AccessRow(label: 'Edit LR', granted: user.canEditLr),
                         _AccessRow(
                           label: 'Delete LR',
                           granted: user.canDeleteLr,
@@ -173,8 +183,11 @@ class _ActionRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  const _ActionRow(
-      {required this.icon, required this.label, required this.onTap});
+  const _ActionRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {

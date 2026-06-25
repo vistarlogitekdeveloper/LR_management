@@ -12,6 +12,10 @@ class AppButton extends StatelessWidget {
   final bool small;
   final bool expanded;
 
+  /// When true the button shows a spinner in place of its icon and ignores
+  /// taps — use it while an async action triggered by the button is running.
+  final bool loading;
+
   const AppButton({
     super.key,
     required this.label,
@@ -20,6 +24,7 @@ class AppButton extends StatelessWidget {
     this.kind = BtnKind.primary,
     this.small = false,
     this.expanded = false,
+    this.loading = false,
   });
 
   @override
@@ -64,7 +69,7 @@ class AppButton extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: onPressed,
+        onTap: loading ? null : onPressed,
         child: Container(
           padding: padding,
           decoration: BoxDecoration(
@@ -77,7 +82,17 @@ class AppButton extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (icon != null) ...[
+              if (loading) ...[
+                SizedBox(
+                  width: small ? 15 : 17,
+                  height: small ? 15 : 17,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(fg),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ] else if (icon != null) ...[
                 Icon(icon, size: small ? 15 : 17, color: fg),
                 const SizedBox(width: 8),
               ],

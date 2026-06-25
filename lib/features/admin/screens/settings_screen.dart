@@ -14,6 +14,9 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cfg = ref.watch(systemConfigProvider);
     final notifier = ref.read(systemConfigProvider.notifier);
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    final cardPad = EdgeInsets.all(isMobile ? 12 : 20);
+    final gap = isMobile ? 10.0 : 20.0;
 
     return Scaffold(
       backgroundColor: AppColors.mist,
@@ -25,11 +28,12 @@ class SettingsScreen extends ConsumerWidget {
           ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(28),
+              padding: EdgeInsets.all(isMobile ? 14 : 28),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   AppCard(
+                    padding: cardPad,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -40,21 +44,27 @@ class SettingsScreen extends ConsumerWidget {
                         SwitchListTile(
                           contentPadding: EdgeInsets.zero,
                           value: cfg.dailyBackup,
-                          onChanged: (v) => notifier
-                              .update(cfg.copyWith(dailyBackup: v)),
-                          title: const Text('Daily backup',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.ink)),
-                          subtitle: Text('Scheduled at ${cfg.backupTime}',
-                              style: const TextStyle(color: AppColors.slate)),
+                          onChanged: (v) =>
+                              notifier.update(cfg.copyWith(dailyBackup: v)),
+                          title: const Text(
+                            'Daily backup',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.ink,
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Scheduled at ${cfg.backupTime}',
+                            style: const TextStyle(color: AppColors.slate),
+                          ),
                           activeThumbColor: AppColors.plum,
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: gap),
                   AppCard(
+                    padding: cardPad,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -65,21 +75,24 @@ class SettingsScreen extends ConsumerWidget {
                         SwitchListTile(
                           contentPadding: EdgeInsets.zero,
                           value: cfg.auditTrail,
-                          onChanged: (v) => notifier
-                              .update(cfg.copyWith(auditTrail: v)),
-                          title: const Text('Audit trail',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.ink)),
+                          onChanged: (v) =>
+                              notifier.update(cfg.copyWith(auditTrail: v)),
+                          title: const Text(
+                            'Audit trail',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.ink,
+                            ),
+                          ),
                           subtitle: const Text(
-                              'Log all create / update / delete events',
-                              style: TextStyle(color: AppColors.slate)),
+                            'Log all create / update / delete events',
+                            style: TextStyle(color: AppColors.slate),
+                          ),
                           activeThumbColor: AppColors.plum,
                         ),
                         const Divider(),
                         Padding(
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 8),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
                           child: Row(
                             children: [
                               const Expanded(
@@ -91,11 +104,15 @@ class SettingsScreen extends ConsumerWidget {
                                   ),
                                 ),
                               ),
-                              Text(
-                                cfg.passwordPolicy,
-                                style: const TextStyle(
-                                  color: AppColors.slate,
-                                  fontWeight: FontWeight.w600,
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  cfg.passwordPolicy,
+                                  textAlign: TextAlign.end,
+                                  style: const TextStyle(
+                                    color: AppColors.slate,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                             ],
@@ -104,8 +121,9 @@ class SettingsScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: gap),
                   AppCard(
+                    padding: cardPad,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: const [
@@ -113,14 +131,15 @@ class SettingsScreen extends ConsumerWidget {
                           icon: Icons.dns_outlined,
                           title: 'Environment',
                         ),
+                        _ConfigRow(label: 'App version', value: '1.0.0'),
                         _ConfigRow(
-                            label: 'App version', value: '1.0.0'),
+                          label: 'Database',
+                          value: 'PostgreSQL (live API)',
+                        ),
                         _ConfigRow(
-                            label: 'Database',
-                            value: 'PostgreSQL (live API)'),
-                        _ConfigRow(
-                            label: 'Hosting target',
-                            value: 'Web · Windows · Android'),
+                          label: 'Hosting target',
+                          value: 'Web · Windows · Android',
+                        ),
                       ],
                     ),
                   ),
@@ -155,12 +174,16 @@ class _ConfigRow extends StatelessWidget {
               ),
             ),
           ),
-          Text(
-            value,
-            style: const TextStyle(
-              color: AppColors.ink,
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: const TextStyle(
+                color: AppColors.ink,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
             ),
           ),
         ],

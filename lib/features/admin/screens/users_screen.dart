@@ -27,8 +27,11 @@ class UsersAdminScreen extends ConsumerWidget {
     return e.toString();
   }
 
-  Future<void> _openForm(BuildContext context, WidgetRef ref,
-      {AppUser? existing}) async {
+  Future<void> _openForm(
+    BuildContext context,
+    WidgetRef ref, {
+    AppUser? existing,
+  }) async {
     final currentUser = ref.read(currentUserProvider);
     final isSuper = currentUser?.isSuperAdmin ?? false;
     final roles = ref.read(rolesProvider).valueOrNull ?? const <RoleInfo>[];
@@ -39,9 +42,10 @@ class UsersAdminScreen extends ConsumerWidget {
     // Only pre-select a region the dropdown actually offers — otherwise the
     // DropdownButtonFormField would assert on an unknown value.
     final existingRegionName =
-        (existing?.regionName != null && regionNames.contains(existing!.regionName))
-            ? existing.regionName
-            : null;
+        (existing?.regionName != null &&
+            regionNames.contains(existing!.regionName))
+        ? existing.regionName
+        : null;
 
     String? initialRoleName;
     if (existing != null) {
@@ -59,45 +63,52 @@ class UsersAdminScreen extends ConsumerWidget {
       subtitle: 'System login credentials',
       fields: [
         FormFieldSpec(
-            name: 'name',
-            label: 'Full Name',
-            required: true,
-            initialValue: existing?.name),
+          name: 'name',
+          label: 'Full Name',
+          required: true,
+          initialValue: existing?.name,
+        ),
         FormFieldSpec(
-            name: 'username',
-            label: 'Username',
-            required: true,
-            initialValue: existing?.username),
+          name: 'username',
+          label: 'Username',
+          required: true,
+          initialValue: existing?.username,
+        ),
         FormFieldSpec(
-            name: 'email',
-            label: 'Email',
-            type: FieldType.email,
-            initialValue: existing?.email),
+          name: 'email',
+          label: 'Email',
+          type: FieldType.email,
+          initialValue: existing?.email,
+        ),
         FormFieldSpec(
-            name: 'mobile',
-            label: 'Mobile',
-            initialValue: existing?.mobile),
+          name: 'mobile',
+          label: 'Mobile',
+          initialValue: existing?.mobile,
+        ),
         FormFieldSpec(
-            name: 'role',
-            label: 'Role',
-            type: FieldType.dropdown,
-            required: true,
-            options: roleNames,
-            initialValue: initialRoleName),
+          name: 'role',
+          label: 'Role',
+          type: FieldType.dropdown,
+          required: true,
+          options: roleNames,
+          initialValue: initialRoleName,
+        ),
         // Region is assignable only by a super admin. Region admins create
         // users inside their own region automatically (set by the backend).
         if (isSuper)
           FormFieldSpec(
-              name: 'region',
-              label: 'Region (leave blank for super admins)',
-              type: FieldType.dropdown,
-              options: regionNames,
-              initialValue: existingRegionName),
+            name: 'region',
+            label: 'Region (leave blank for super admins)',
+            type: FieldType.dropdown,
+            options: regionNames,
+            initialValue: existingRegionName,
+          ),
         FormFieldSpec(
-            name: 'password',
-            label: existing == null ? 'Password' : 'Reset Password (optional)',
-            required: existing == null,
-            initialValue: ''),
+          name: 'password',
+          label: existing == null ? 'Password' : 'Reset Password (optional)',
+          required: existing == null,
+          initialValue: '',
+        ),
       ],
       initial: existing == null
           ? const {}
@@ -134,7 +145,9 @@ class UsersAdminScreen extends ConsumerWidget {
           final makingSuperAdmin = role.code == 'SUPER_ADMIN';
           if (!makingSuperAdmin && regionId == null) {
             messenger.showSnackBar(
-              const SnackBar(content: Text('Please pick a region for this user.')),
+              const SnackBar(
+                content: Text('Please pick a region for this user.'),
+              ),
             );
             return false;
           }
@@ -164,9 +177,7 @@ class UsersAdminScreen extends ConsumerWidget {
           }
           return true;
         } catch (e) {
-          messenger.showSnackBar(
-            SnackBar(content: Text(_errorMessage(e))),
-          );
+          messenger.showSnackBar(SnackBar(content: Text(_errorMessage(e))));
           return false;
         }
       },
@@ -180,6 +191,142 @@ class UsersAdminScreen extends ConsumerWidget {
     // toggle set is built around). Super admins and region admins may both
     // manage them; the backend enforces region scope.
     return row.role == UserRole.operator || row.role == UserRole.accounts;
+  }
+
+  Widget _userActions(
+    BuildContext context,
+    WidgetRef ref,
+    AppUser? currentUser,
+    AppUser u,
+  ) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_canManagePermissions(currentUser, u))
+          IconButton(
+            tooltip: 'Access',
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(
+              Icons.tune_rounded,
+              color: AppColors.orange,
+              size: 18,
+            ),
+            onPressed: () => UserPermissionsDialog.show(context, u),
+          ),
+        IconButton(
+          tooltip: 'Edit',
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(
+            Icons.edit_outlined,
+            color: AppColors.plum,
+            size: 18,
+          ),
+          onPressed: () => _openForm(context, ref, existing: u),
+        ),
+        IconButton(
+          tooltip: 'Delete',
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(
+            Icons.delete_outline,
+            color: AppColors.danger,
+            size: 18,
+          ),
+          onPressed: () => _deleteUser(context, ref, currentUser, u),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _deleteUser(
+    BuildContext context,
+    WidgetRef ref,
+    AppUser? currentUser,
+    AppUser u,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (currentUser != null && currentUser.id == u.id) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('You cannot delete your own account.')),
+      );
+      return;
+    }
+    final ok = await showConfirmDialog(
+      context: context,
+      title: 'Delete user ${u.username}?',
+      message: 'They will lose access to the system immediately.',
+    );
+    if (!ok) return;
+    try {
+      await ref.read(usersProvider.notifier).remove(u.id);
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(_errorMessage(e))));
+    }
+  }
+
+  Widget _userMobileCard(
+    BuildContext context,
+    WidgetRef ref,
+    AppUser? currentUser,
+    AppUser u,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  u.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.ink,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              _RoleBadge(role: u.role),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '@${u.username}',
+            style: const TextStyle(color: AppColors.slate, fontSize: 12.5),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Text(
+                'Region: ',
+                style: TextStyle(color: AppColors.slate, fontSize: 12),
+              ),
+              Text(
+                u.regionName ?? '—',
+                style: TextStyle(
+                  color: u.regionName == null ? AppColors.slate : AppColors.ink,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerRight,
+            child: _userActions(context, ref, currentUser, u),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -209,93 +356,80 @@ class UsersAdminScreen extends ConsumerWidget {
           ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(28),
+              padding: EdgeInsets.all(
+                MediaQuery.of(context).size.width < 600 ? 14 : 28,
+              ),
               child: AppCard(
                 padding: const EdgeInsets.all(16),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    headingRowColor: WidgetStatePropertyAll(
-                      AppColors.plum.withValues(alpha: 0.05),
-                    ),
-                    columnSpacing: 28,
-                    columns: const [
-                      DataColumn(label: Text('Name')),
-                      DataColumn(label: Text('Username')),
-                      DataColumn(label: Text('Role')),
-                      DataColumn(label: Text('Region')),
-                      DataColumn(label: Text('')),
-                    ],
-                    rows: [
-                      for (final u in users)
-                        DataRow(cells: [
-                          DataCell(Text(u.name,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w700))),
-                          DataCell(Text(u.username)),
-                          DataCell(_RoleBadge(role: u.role)),
-                          DataCell(Text(u.regionName ?? '—',
-                              style: TextStyle(
-                                  color: u.regionName == null
-                                      ? AppColors.slate
-                                      : AppColors.ink))),
-                          DataCell(Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (_canManagePermissions(currentUser, u))
-                                IconButton(
-                                  tooltip: 'Access',
-                                  icon: const Icon(Icons.tune_rounded,
-                                      color: AppColors.orange, size: 18),
-                                  onPressed: () =>
-                                      UserPermissionsDialog.show(context, u),
+                child: LayoutBuilder(
+                  builder: (context, c) {
+                    if (users.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 28),
+                        child: Center(
+                          child: Text(
+                            'No users',
+                            style: TextStyle(color: AppColors.slate),
+                          ),
+                        ),
+                      );
+                    }
+                    // Phones: stacked cards. Wider: the data table.
+                    if (c.maxWidth < 640) {
+                      return Column(
+                        children: [
+                          for (final u in users)
+                            _userMobileCard(context, ref, currentUser, u),
+                        ],
+                      );
+                    }
+                    return SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        headingRowColor: WidgetStatePropertyAll(
+                          AppColors.plum.withValues(alpha: 0.05),
+                        ),
+                        columnSpacing: 28,
+                        columns: const [
+                          DataColumn(label: Text('Name')),
+                          DataColumn(label: Text('Username')),
+                          DataColumn(label: Text('Role')),
+                          DataColumn(label: Text('Region')),
+                          DataColumn(label: Text('')),
+                        ],
+                        rows: [
+                          for (final u in users)
+                            DataRow(
+                              cells: [
+                                DataCell(
+                                  Text(
+                                    u.name,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                                 ),
-                              IconButton(
-                                tooltip: 'Edit',
-                                icon: const Icon(Icons.edit_outlined,
-                                    color: AppColors.plum, size: 18),
-                                onPressed: () =>
-                                    _openForm(context, ref, existing: u),
-                              ),
-                              IconButton(
-                                tooltip: 'Delete',
-                                icon: const Icon(Icons.delete_outline,
-                                    color: AppColors.danger, size: 18),
-                                onPressed: () async {
-                                  final messenger =
-                                      ScaffoldMessenger.of(context);
-                                  if (currentUser != null &&
-                                      currentUser.id == u.id) {
-                                    messenger.showSnackBar(
-                                      const SnackBar(
-                                          content: Text(
-                                              'You cannot delete your own account.')),
-                                    );
-                                    return;
-                                  }
-                                  final ok = await showConfirmDialog(
-                                    context: context,
-                                    title: 'Delete user ${u.username}?',
-                                    message:
-                                        'They will lose access to the system immediately.',
-                                  );
-                                  if (!ok) return;
-                                  try {
-                                    await ref
-                                        .read(usersProvider.notifier)
-                                        .remove(u.id);
-                                  } catch (e) {
-                                    messenger.showSnackBar(
-                                      SnackBar(content: Text(_errorMessage(e))),
-                                    );
-                                  }
-                                },
-                              ),
-                            ],
-                          )),
-                        ]),
-                    ],
-                  ),
+                                DataCell(Text(u.username)),
+                                DataCell(_RoleBadge(role: u.role)),
+                                DataCell(
+                                  Text(
+                                    u.regionName ?? '—',
+                                    style: TextStyle(
+                                      color: u.regionName == null
+                                          ? AppColors.slate
+                                          : AppColors.ink,
+                                    ),
+                                  ),
+                                ),
+                                DataCell(
+                                  _userActions(context, ref, currentUser, u),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ),
             ),

@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required for all network access (login + API). Without this in the MAIN
+         manifest, release APKs have no internet and fail with "Failed host
+         lookup" — even though debug builds work (debug manifest grants it). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="lr_management"
         android:name="${applicationName}"

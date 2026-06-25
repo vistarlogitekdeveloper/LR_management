@@ -22,6 +22,7 @@ import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/form_field_spec.dart';
 import '../../../shared/widgets/labeled_field.dart';
 import '../../../shared/widgets/master_form_dialog.dart';
+import '../../../shared/widgets/searchable_field.dart';
 import '../../../shared/widgets/section_title.dart';
 import '../../lookups/data/lookup_value.dart';
 import '../../lookups/providers/lookups_provider.dart';
@@ -47,6 +48,7 @@ class _PartLineForm {
   final packages = TextEditingController(text: '0');
   final quantity = TextEditingController(text: '0');
   final weight = TextEditingController(text: '0');
+  final chargeableWeight = TextEditingController(text: '0');
   final value = TextEditingController(text: '0');
   LookupValue? packageType;
 
@@ -56,6 +58,7 @@ class _PartLineForm {
     packages.dispose();
     quantity.dispose();
     weight.dispose();
+    chargeableWeight.dispose();
     value.dispose();
   }
 }
@@ -92,6 +95,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   LookupValue? _ewbLoad;
 
   final _customerCtrl = TextEditingController();
+  final _orderNoCtrl = TextEditingController();
 
   // Invoice & Goods: one or more invoices, each with one or more part lines.
   final List<_InvoiceForm> _invoices = [_InvoiceForm()];
@@ -156,19 +160,27 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
             pick(consignors, (c) => c.id == lr.consignor.id) ?? lr.consignor;
         _consignee =
             pick(consignees, (c) => c.id == lr.consignee.id) ?? lr.consignee;
-        _vehicle = pick(vehicles, (v) => v.id == lr.vehicle.id) ??
+        _vehicle =
+            pick(vehicles, (v) => v.id == lr.vehicle.id) ??
             (lr.vehicle.id.isNotEmpty ? lr.vehicle : null);
-        _transporter = pick(transporters, (t) => t.id == lr.transporter.id) ??
+        _transporter =
+            pick(transporters, (t) => t.id == lr.transporter.id) ??
             (lr.transporter.id.isNotEmpty ? lr.transporter : null);
         _driver = pick(drivers, (d) => d.id == lr.driverId);
         _route = pick(routes, (r) => r.id == lr.routeId);
 
         _payType = _byCode('PAY_TYPE', lr.payType.code);
         _deliveryType = _byCode('DELIVERY_TYPE', lr.deliveryType.code);
-        _advancePaidBy =
-            lookupById(_lookups, 'ADVANCE_PAID_BY', lr.freight.advancePaidById);
-        _tripLeadBy =
-            lookupById(_lookups, 'TRIP_LEAD_BY', lr.freight.tripLeadById);
+        _advancePaidBy = lookupById(
+          _lookups,
+          'ADVANCE_PAID_BY',
+          lr.freight.advancePaidById,
+        );
+        _tripLeadBy = lookupById(
+          _lookups,
+          'TRIP_LEAD_BY',
+          lr.freight.tripLeadById,
+        );
         _ewbLoad = lookupById(_lookups, 'EWB_LOAD_TYPE', lr.ewb?.loadTypeId);
 
         _rebuildInvoicesFromItems(lr.items);
@@ -181,6 +193,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         _mathadiCtrl.text = lr.freight.mathadi.toStringAsFixed(0);
         _remarksCtrl.text = lr.remarks ?? '';
         _customerCtrl.text = lr.customerName;
+        _orderNoCtrl.text = lr.orderNo;
         _ewbCtrl.text = lr.ewb?.number ?? '';
         _existingAttachments = List.of(lr.attachments);
       } catch (e) {
@@ -215,6 +228,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   void dispose() {
     for (final c in [
       _customerCtrl,
+      _orderNoCtrl,
       _freightCtrl,
       _doorCtrl,
       _handlingCtrl,
@@ -262,6 +276,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       pl.packages.text = '${it.packages}';
       pl.quantity.text = '${it.quantity}';
       pl.weight.text = it.weight.toStringAsFixed(0);
+      pl.chargeableWeight.text = it.chargeableWeight.toStringAsFixed(0);
       pl.value.text = it.grossValue.toStringAsFixed(0);
       pl.packageType = lookupById(_lookups, 'PACKAGE_TYPE', it.packageTypeId);
       f.parts.add(pl);
@@ -297,9 +312,14 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
           pl.packages.text = (pm['packages'] ?? '0').toString();
           pl.quantity.text = (pm['quantity'] ?? '0').toString();
           pl.weight.text = (pm['weight_kg'] ?? '0').toString();
+          pl.chargeableWeight.text = (pm['chargeable_weight_kg'] ?? '0')
+              .toString();
           pl.value.text = (pm['gross_value'] ?? '0').toString();
-          pl.packageType =
-              lookupById(_lookups, 'PACKAGE_TYPE', pm['package_type_id'] as String?);
+          pl.packageType = lookupById(
+            _lookups,
+            'PACKAGE_TYPE',
+            pm['package_type_id'] as String?,
+          );
           f.parts.add(pl);
         }
       }
@@ -314,7 +334,9 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
   double get _gst {
     final base =
-        _toDouble(_freightCtrl) + _toDouble(_doorCtrl) + _toDouble(_handlingCtrl);
+        _toDouble(_freightCtrl) +
+        _toDouble(_doorCtrl) +
+        _toDouble(_handlingCtrl);
     return (base * 0.12).roundToDouble();
   }
 
@@ -340,8 +362,17 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       allowMultiple: true,
       type: FileType.custom,
       allowedExtensions: const [
-        'pdf', 'jpg', 'jpeg', 'png', 'webp', 'heic',
-        'xls', 'xlsx', 'doc', 'docx', 'csv',
+        'pdf',
+        'jpg',
+        'jpeg',
+        'png',
+        'webp',
+        'heic',
+        'xls',
+        'xlsx',
+        'doc',
+        'docx',
+        'csv',
       ],
       withData: true,
     );
@@ -351,11 +382,12 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
   Future<void> _removeExistingAttachment(Attachment a) async {
     try {
-      await ref
-          .read(lrRepositoryProvider)
-          .deleteAttachment(_editing!.id, a.id);
-      setState(() =>
-          _existingAttachments = _existingAttachments.where((x) => x.id != a.id).toList());
+      await ref.read(lrRepositoryProvider).deleteAttachment(_editing!.id, a.id);
+      setState(
+        () => _existingAttachments = _existingAttachments
+            .where((x) => x.id != a.id)
+            .toList(),
+      );
     } catch (e) {
       if (mounted) MasterActions.showError(context, e);
     }
@@ -394,6 +426,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     return {
       'lr_date': date.toIso8601String().substring(0, 10),
       'customer_name': _customerCtrl.text.trim(),
+      if (_orderNoCtrl.text.trim().isNotEmpty)
+        'order_no': _orderNoCtrl.text.trim(),
       'consignor_id': _consignor!.id,
       'consignee_id': _consignee!.id,
       if (_vehicle != null) 'vehicle_id': _vehicle!.id,
@@ -413,7 +447,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       'vistar_margin': _vistarMargin,
       if (_advancePaidBy != null) 'advance_paid_by_id': _advancePaidBy!.id,
       if (_tripLeadBy != null) 'trip_lead_by_id': _tripLeadBy!.id,
-      if (_remarksCtrl.text.trim().isNotEmpty) 'remarks': _remarksCtrl.text.trim(),
+      if (_remarksCtrl.text.trim().isNotEmpty)
+        'remarks': _remarksCtrl.text.trim(),
       'invoice_items': _buildInvoiceItems(date),
     };
   }
@@ -434,14 +469,17 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         final packages = parseInt(p.packages.text);
         final qty = parseInt(p.quantity.text);
         final weight = parseDbl(p.weight.text);
+        final chargeable = parseDbl(p.chargeableWeight.text);
         final value = parseDbl(p.value.text);
-        final hasData = invNo.isNotEmpty ||
+        final hasData =
+            invNo.isNotEmpty ||
             asn.isNotEmpty ||
             desc.isNotEmpty ||
             nature.isNotEmpty ||
             packages > 0 ||
             qty > 0 ||
             weight > 0 ||
+            chargeable > 0 ||
             value > 0 ||
             p.packageType != null;
         if (!hasData) continue;
@@ -452,6 +490,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
           if (desc.isNotEmpty) 'part_description': desc,
           'quantity': qty,
           'weight_kg': weight,
+          'chargeable_weight_kg': chargeable,
           'gross_value': value,
           'packages': packages,
           if (p.packageType != null) 'package_type_id': p.packageType!.id,
@@ -490,46 +529,48 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
   /// A full snapshot of the current form, stored as a template payload.
   Map<String, dynamic> _formSnapshot() => {
-        'customer_name': _customerCtrl.text,
-        'consignor_id': _consignor?.id,
-        'consignee_id': _consignee?.id,
-        'vehicle_id': _vehicle?.id,
-        'driver_id': _driver?.id,
-        'transporter_id': _transporter?.id,
-        'route_id': _route?.id,
-        'pay_type_id': _payType?.id,
-        'delivery_type_id': _deliveryType?.id,
-        'advance_paid_by_id': _advancePaidBy?.id,
-        'trip_lead_by_id': _tripLeadBy?.id,
-        'ewb_load_type_id': _ewbLoad?.id,
-        'ewb_number': _ewbCtrl.text,
-        'invoices': [
-          for (final inv in _invoices)
-            {
-              'invoice_no': inv.invoiceNo.text,
-              'asn': inv.asn.text,
-              'parts': [
-                for (final p in inv.parts)
-                  {
-                    'part_description': p.partDescription.text,
-                    'nature_of_goods': p.nature.text,
-                    'packages': p.packages.text,
-                    'quantity': p.quantity.text,
-                    'weight_kg': p.weight.text,
-                    'gross_value': p.value.text,
-                    'package_type_id': p.packageType?.id,
-                  }
-              ],
-            }
-        ],
-        'freight': _freightCtrl.text,
-        'door_delivery': _doorCtrl.text,
-        'handling': _handlingCtrl.text,
-        'insurance': _insuranceCtrl.text,
-        'advance': _advanceCtrl.text,
-        'mathadi': _mathadiCtrl.text,
-        'remarks': _remarksCtrl.text,
-      };
+    'customer_name': _customerCtrl.text,
+    'order_no': _orderNoCtrl.text,
+    'consignor_id': _consignor?.id,
+    'consignee_id': _consignee?.id,
+    'vehicle_id': _vehicle?.id,
+    'driver_id': _driver?.id,
+    'transporter_id': _transporter?.id,
+    'route_id': _route?.id,
+    'pay_type_id': _payType?.id,
+    'delivery_type_id': _deliveryType?.id,
+    'advance_paid_by_id': _advancePaidBy?.id,
+    'trip_lead_by_id': _tripLeadBy?.id,
+    'ewb_load_type_id': _ewbLoad?.id,
+    'ewb_number': _ewbCtrl.text,
+    'invoices': [
+      for (final inv in _invoices)
+        {
+          'invoice_no': inv.invoiceNo.text,
+          'asn': inv.asn.text,
+          'parts': [
+            for (final p in inv.parts)
+              {
+                'part_description': p.partDescription.text,
+                'nature_of_goods': p.nature.text,
+                'packages': p.packages.text,
+                'quantity': p.quantity.text,
+                'weight_kg': p.weight.text,
+                'chargeable_weight_kg': p.chargeableWeight.text,
+                'gross_value': p.value.text,
+                'package_type_id': p.packageType?.id,
+              },
+          ],
+        },
+    ],
+    'freight': _freightCtrl.text,
+    'door_delivery': _doorCtrl.text,
+    'handling': _handlingCtrl.text,
+    'insurance': _insuranceCtrl.text,
+    'advance': _advanceCtrl.text,
+    'mathadi': _mathadiCtrl.text,
+    'remarks': _remarksCtrl.text,
+  };
 
   T? _byId<T>(List<T> list, dynamic id, String Function(T) idOf) {
     if (id == null) return null;
@@ -584,10 +625,11 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       subtitle: 'Adds to your fleet and selects it on this LR',
       fields: [
         const FormFieldSpec(
-            name: 'number',
-            label: 'Vehicle Number',
-            required: true,
-            uppercase: true),
+          name: 'number',
+          label: 'Vehicle Number',
+          required: true,
+          uppercase: true,
+        ),
         FormFieldSpec(
           name: 'type',
           label: 'Vehicle Type',
@@ -596,7 +638,10 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
           options: vehicleTypes.map((e) => e.label).toList(),
         ),
         const FormFieldSpec(
-            name: 'capacity', label: 'Capacity (MT)', type: FieldType.number),
+          name: 'capacity',
+          label: 'Capacity (MT)',
+          type: FieldType.number,
+        ),
         FormFieldSpec(
           name: 'driver',
           label: 'Assigned Driver',
@@ -624,33 +669,36 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
           final driver = (dName == null || dName == none)
               ? null
               : drivers
-                  .where((d) => d.name == dName)
-                  .cast<Driver?>()
-                  .firstWhere((_) => true, orElse: () => null);
+                    .where((d) => d.name == dName)
+                    .cast<Driver?>()
+                    .firstWhere((_) => true, orElse: () => null);
           final tName = values['transporter'];
           final transporter = (tName == null || tName == none)
               ? null
               : transporters
-                  .where((t) => t.name == tName)
-                  .cast<Transporter?>()
-                  .firstWhere((_) => true, orElse: () => null);
-          final created =
-              await ref.read(vehiclesProvider.notifier).add(Vehicle(
-                    id: const Uuid().v4(),
-                    number: values['number'] ?? '',
-                    typeId: typeId ?? '',
-                    type: typeLabel,
-                    capacityMt: double.tryParse(values['capacity'] ?? '') ?? 0,
-                    transporterId: transporter?.id,
-                    transporterName: transporter?.name ?? '',
-                    currentDriverId: driver?.id,
-                    driver: driver?.name ?? '',
-                    driverMobile: driver?.mobile ?? '',
-                  ));
+                    .where((t) => t.name == tName)
+                    .cast<Transporter?>()
+                    .firstWhere((_) => true, orElse: () => null);
+          final created = await ref
+              .read(vehiclesProvider.notifier)
+              .add(
+                Vehicle(
+                  id: const Uuid().v4(),
+                  number: values['number'] ?? '',
+                  typeId: typeId ?? '',
+                  type: typeLabel,
+                  capacityMt: double.tryParse(values['capacity'] ?? '') ?? 0,
+                  transporterId: transporter?.id,
+                  transporterName: transporter?.name ?? '',
+                  currentDriverId: driver?.id,
+                  driver: driver?.name ?? '',
+                  driverMobile: driver?.mobile ?? '',
+                ),
+              );
           // Re-fetch so the new vehicle carries its nested type/driver/transporter.
           await ref.read(vehiclesProvider.notifier).refresh();
-          final full = _byId(
-                  ref.read(vehiclesProvider), created.id, (x) => x.id) ??
+          final full =
+              _byId(ref.read(vehiclesProvider), created.id, (x) => x.id) ??
               created;
           setState(() => _onVehicleSelected(full));
           return true;
@@ -676,6 +724,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     setState(() {
       _appliedTemplate = t;
       _customerCtrl.text = text('customer_name');
+      _orderNoCtrl.text = text('order_no');
       _consignor =
           _byId(consignors, p['consignor_id'], (c) => c.id) ?? _consignor;
       _consignee =
@@ -684,20 +733,24 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       _driver = _byId(drivers, p['driver_id'], (d) => d.id);
       _transporter = _byId(transporters, p['transporter_id'], (t) => t.id);
       _route = _byId(routes, p['route_id'], (r) => r.id);
-      _payType = lookupById(lk, 'PAY_TYPE', p['pay_type_id'] as String?) ??
-          _payType;
+      _payType =
+          lookupById(lk, 'PAY_TYPE', p['pay_type_id'] as String?) ?? _payType;
       _deliveryType =
           lookupById(lk, 'DELIVERY_TYPE', p['delivery_type_id'] as String?) ??
-              _deliveryType;
-      _advancePaidBy = lookupById(
-              lk, 'ADVANCE_PAID_BY', p['advance_paid_by_id'] as String?) ??
+          _deliveryType;
+      _advancePaidBy =
+          lookupById(
+            lk,
+            'ADVANCE_PAID_BY',
+            p['advance_paid_by_id'] as String?,
+          ) ??
           _advancePaidBy;
       _tripLeadBy =
           lookupById(lk, 'TRIP_LEAD_BY', p['trip_lead_by_id'] as String?) ??
-              _tripLeadBy;
+          _tripLeadBy;
       _ewbLoad =
           lookupById(lk, 'EWB_LOAD_TYPE', p['ewb_load_type_id'] as String?) ??
-              _ewbLoad;
+          _ewbLoad;
       _ewbCtrl.text = text('ewb_number');
       _applyInvoicesSnapshot(p['invoices']);
       _freightCtrl.text = text('freight');
@@ -721,12 +774,15 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
           controller: ctrl,
           autofocus: true,
           decoration: const InputDecoration(
-              labelText: 'Template title',
-              hintText: 'e.g. Pune → Chakan · TBB'),
+            labelText: 'Template title',
+            hintText: 'e.g. Pune → Chakan · TBB',
+          ),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () {
               final v = ctrl.text.trim();
@@ -739,9 +795,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     );
     if (title == null || !mounted) return;
     try {
-      await ref
-          .read(templatesProvider.notifier)
-          .create(title, _formSnapshot());
+      await ref.read(templatesProvider.notifier).create(title, _formSnapshot());
       _showResult('Template "$title" saved');
     } catch (e) {
       if (mounted) MasterActions.showError(context, e);
@@ -776,22 +830,29 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                               children: [
                                 IconButton(
                                   tooltip: 'Rename',
-                                  icon: const Icon(Icons.edit_outlined,
-                                      size: 18),
+                                  icon: const Icon(
+                                    Icons.edit_outlined,
+                                    size: 18,
+                                  ),
                                   onPressed: () => _renameTemplate(t),
                                 ),
                                 IconButton(
                                   tooltip: 'Update with current form',
-                                  icon: const Icon(Icons.sync_outlined,
-                                      size: 18),
+                                  icon: const Icon(
+                                    Icons.sync_outlined,
+                                    size: 18,
+                                  ),
                                   onPressed: () async {
                                     try {
                                       await dialogRef
                                           .read(templatesProvider.notifier)
-                                          .update(t.id,
-                                              payload: _formSnapshot());
+                                          .update(
+                                            t.id,
+                                            payload: _formSnapshot(),
+                                          );
                                       _showResult(
-                                          'Template "${t.title}" updated');
+                                        'Template "${t.title}" updated',
+                                      );
                                     } catch (e) {
                                       if (mounted) {
                                         MasterActions.showError(context, e);
@@ -801,8 +862,11 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                 ),
                                 IconButton(
                                   tooltip: 'Delete',
-                                  icon: const Icon(Icons.delete_outline,
-                                      size: 18, color: AppColors.danger),
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    size: 18,
+                                    color: AppColors.danger,
+                                  ),
                                   onPressed: () async {
                                     try {
                                       await dialogRef
@@ -823,8 +887,9 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
             ),
             actions: [
               TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Close')),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Close'),
+              ),
             ],
           );
         },
@@ -841,7 +906,9 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         content: TextField(controller: ctrl, autofocus: true),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () {
               final v = ctrl.text.trim();
@@ -864,27 +931,32 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(SnackBar(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor:
-            warning ? Colors.orange.shade800 : Colors.green.shade700,
-        duration: const Duration(seconds: 3),
-        content: Row(
-          children: [
-            Icon(
-              warning
-                  ? Icons.warning_amber_rounded
-                  : Icons.check_circle_outline,
-              color: Colors.white,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(message,
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
-            ),
-          ],
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: warning
+              ? Colors.orange.shade800
+              : Colors.green.shade700,
+          duration: const Duration(seconds: 3),
+          content: Row(
+            children: [
+              Icon(
+                warning
+                    ? Icons.warning_amber_rounded
+                    : Icons.check_circle_outline,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
         ),
-      ));
+      );
   }
 
   Future<void> _save() async {
@@ -945,18 +1017,23 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
     if (!mounted) return;
     final verb = _isEdit ? 'updated' : 'created';
-    final aboveBase = _route != null &&
+    final aboveBase =
+        _route != null &&
         _route!.baseRate > 0 &&
         _toDouble(_freightCtrl) > _route!.baseRate;
-    final note =
-        aboveBase ? ' · Freight above base rate — supervisor alerted' : '';
+    final note = aboveBase
+        ? ' · Freight above base rate — supervisor alerted'
+        : '';
     if (attachError == null) {
-      _showResult('LR ${result.number} $verb successfully$note',
-          warning: aboveBase);
+      _showResult(
+        'LR ${result.number} $verb successfully$note',
+        warning: aboveBase,
+      );
     } else {
       _showResult(
-          'LR ${result.number} $verb, but an attachment failed: $attachError',
-          warning: true);
+        'LR ${result.number} $verb, but an attachment failed: $attachError',
+        warning: true,
+      );
     }
     context.go('/lrs/${result.id}');
   }
@@ -1008,13 +1085,14 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
               ],
             ),
             if (_loading)
-              const Expanded(
-                child: Center(child: CircularProgressIndicator()),
-              )
+              const Expanded(child: Center(child: CircularProgressIndicator()))
             else
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(28),
+                  // Tighter padding on phones to reclaim horizontal space.
+                  padding: EdgeInsets.all(
+                    MediaQuery.of(context).size.width < 600 ? 14 : 28,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -1034,15 +1112,15 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                               LabeledField(
                                 label: 'Consignor/Sender',
                                 required: true,
-                                child: DropdownButtonFormField<Consignor>(
-                                  initialValue: _consignor,
-                                  isExpanded: true,
-                                  hint: const Text('Select consignor'),
-                                  items: [
-                                    for (final c in consignors)
-                                      DropdownMenuItem(
-                                          value: c, child: Text(c.name)),
-                                  ],
+                                child: SearchableField<Consignor>(
+                                  value: _consignor,
+                                  options: consignors,
+                                  labelOf: (c) => c.name,
+                                  subtitleOf: (c) => c.gst.isNotEmpty
+                                      ? 'GST ${c.gst}'
+                                      : c.city,
+                                  hintText: 'Select consignor',
+                                  dialogTitle: 'Select Consignor',
                                   onChanged: (v) =>
                                       setState(() => _consignor = v),
                                 ),
@@ -1050,15 +1128,15 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                               LabeledField(
                                 label: 'Consignee/Receiver',
                                 required: true,
-                                child: DropdownButtonFormField<Consignee>(
-                                  initialValue: _consignee,
-                                  isExpanded: true,
-                                  hint: const Text('Select consignee'),
-                                  items: [
-                                    for (final c in consignees)
-                                      DropdownMenuItem(
-                                          value: c, child: Text(c.name)),
-                                  ],
+                                child: SearchableField<Consignee>(
+                                  value: _consignee,
+                                  options: consignees,
+                                  labelOf: (c) => c.name,
+                                  subtitleOf: (c) => c.gst.isNotEmpty
+                                      ? 'GST ${c.gst}'
+                                      : c.location,
+                                  hintText: 'Select consignee',
+                                  dialogTitle: 'Select Consignee',
                                   onChanged: (v) =>
                                       setState(() => _consignee = v),
                                 ),
@@ -1092,67 +1170,55 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                             _grid(2, [
                               LabeledField(
                                 label: 'Vehicle',
-                                child: DropdownButtonFormField<Vehicle?>(
-                                  initialValue: _vehicle,
-                                  isExpanded: true,
-                                  items: [
-                                    const DropdownMenuItem(
-                                        value: null, child: Text('—')),
-                                    for (final v in vehicles)
-                                      DropdownMenuItem(
-                                        value: v,
-                                        child: Text(v.type.isEmpty
-                                            ? v.number
-                                            : '${v.number} · ${v.type}'),
-                                      ),
-                                  ],
+                                child: SearchableField<Vehicle>(
+                                  value: _vehicle,
+                                  options: vehicles,
+                                  clearable: true,
+                                  labelOf: (v) => v.type.isEmpty
+                                      ? v.number
+                                      : '${v.number} · ${v.type}',
+                                  hintText: 'Select vehicle',
+                                  dialogTitle: 'Select Vehicle',
                                   onChanged: (v) =>
                                       setState(() => _onVehicleSelected(v)),
                                 ),
                               ),
                               LabeledField(
                                 label: 'Driver',
-                                child: DropdownButtonFormField<Driver?>(
-                                  initialValue: _driver,
-                                  isExpanded: true,
-                                  items: [
-                                    const DropdownMenuItem(
-                                        value: null, child: Text('—')),
-                                    for (final d in drivers)
-                                      DropdownMenuItem(
-                                          value: d, child: Text(d.name)),
-                                  ],
+                                child: SearchableField<Driver>(
+                                  value: _driver,
+                                  options: drivers,
+                                  clearable: true,
+                                  labelOf: (d) => d.name,
+                                  subtitleOf: (d) => d.mobile,
+                                  hintText: 'Select driver',
+                                  dialogTitle: 'Select Driver',
                                   onChanged: (v) => setState(() => _driver = v),
                                 ),
                               ),
                               LabeledField(
                                 label: 'Transporter',
-                                child: DropdownButtonFormField<Transporter?>(
-                                  initialValue: _transporter,
-                                  isExpanded: true,
-                                  items: [
-                                    const DropdownMenuItem(
-                                        value: null, child: Text('—')),
-                                    for (final t in transporters)
-                                      DropdownMenuItem(
-                                          value: t, child: Text(t.name)),
-                                  ],
+                                child: SearchableField<Transporter>(
+                                  value: _transporter,
+                                  options: transporters,
+                                  clearable: true,
+                                  labelOf: (t) => t.name,
+                                  subtitleOf: (t) => t.pan,
+                                  hintText: 'Select transporter',
+                                  dialogTitle: 'Select Transporter',
                                   onChanged: (v) =>
                                       setState(() => _transporter = v),
                                 ),
                               ),
                               LabeledField(
                                 label: 'Route',
-                                child: DropdownButtonFormField<RouteMaster?>(
-                                  initialValue: _route,
-                                  isExpanded: true,
-                                  items: [
-                                    const DropdownMenuItem(
-                                        value: null, child: Text('—')),
-                                    for (final r in routes)
-                                      DropdownMenuItem(
-                                          value: r, child: Text(r.name)),
-                                  ],
+                                child: SearchableField<RouteMaster>(
+                                  value: _route,
+                                  options: routes,
+                                  clearable: true,
+                                  labelOf: (r) => r.name,
+                                  hintText: 'Select route',
+                                  dialogTitle: 'Select Route',
                                   onChanged: (v) =>
                                       setState(() => _selectRoute(v)),
                                 ),
@@ -1200,7 +1266,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                 child: _lookupDropdown(
                                   value: _ewbLoad,
                                   options: ewbLoadList,
-                                  onChanged: (v) => setState(() => _ewbLoad = v),
+                                  onChanged: (v) =>
+                                      setState(() => _ewbLoad = v),
                                 ),
                               ),
                             ]),
@@ -1290,7 +1357,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                 child: _lookupDropdown(
                                   value: _payType,
                                   options: payTypes,
-                                  onChanged: (v) => setState(() => _payType = v),
+                                  onChanged: (v) =>
+                                      setState(() => _payType = v),
                                 ),
                               ),
                             ]),
@@ -1301,7 +1369,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                 controller: _remarksCtrl,
                                 maxLines: 2,
                                 decoration: const InputDecoration(
-                                    hintText: 'Optional notes'),
+                                  hintText: 'Optional notes',
+                                ),
                               ),
                             ),
                             const SizedBox(height: 12),
@@ -1314,12 +1383,21 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                               child: Column(
                                 children: [
                                   _summaryRow('GST (12%)', inr(_gst)),
-                                  _summaryRow('Vistar Margin (auto)',
-                                      inr(_vistarMargin)),
-                                  _summaryRow('Total', inr(_total),
-                                      emphasis: true),
-                                  _summaryRow('Balance', inr(_balance),
-                                      emphasis: true, color: AppColors.red),
+                                  _summaryRow(
+                                    'Vistar Margin (auto)',
+                                    inr(_vistarMargin),
+                                  ),
+                                  _summaryRow(
+                                    'Total',
+                                    inr(_total),
+                                    emphasis: true,
+                                  ),
+                                  _summaryRow(
+                                    'Balance',
+                                    inr(_balance),
+                                    emphasis: true,
+                                    color: AppColors.red,
+                                  ),
                                 ],
                               ),
                             ),
@@ -1347,8 +1425,18 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
             child: TextFormField(
               controller: _customerCtrl,
               textCapitalization: TextCapitalization.words,
-              decoration:
-                  const InputDecoration(hintText: 'Billing / customer name'),
+              decoration: const InputDecoration(
+                hintText: 'Billing / customer name',
+              ),
+            ),
+          ),
+          LabeledField(
+            label: 'Order No. (Ord. by Mr.)',
+            child: TextFormField(
+              controller: _orderNoCtrl,
+              decoration: const InputDecoration(
+                hintText: 'Customer order / reference no.',
+              ),
             ),
           ),
         ],
@@ -1380,24 +1468,15 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   SizedBox(
+                    // Fixed 340 only when there's room; otherwise fill width
+                    // so it can't overflow a narrow phone.
                     width: c.maxWidth >= 620 ? 340 : c.maxWidth,
-                    child: DropdownButtonFormField<LrTemplate>(
-                      initialValue: selected,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Select a template to pre-fill',
-                        prefixIcon:
-                            Icon(Icons.bookmark_added_outlined, size: 18),
-                      ),
-                      hint: const Text('Select a template'),
-                      items: [
-                        for (final t in templates)
-                          DropdownMenuItem(
-                            value: t,
-                            child:
-                                Text(t.title, overflow: TextOverflow.ellipsis),
-                          ),
-                      ],
+                    child: SearchableField<LrTemplate>(
+                      value: selected,
+                      options: templates,
+                      labelOf: (t) => t.title,
+                      hintText: 'Select a template to pre-fill',
+                      dialogTitle: 'Select Template',
                       onChanged: (t) {
                         if (t != null) _applyTemplate(t);
                       },
@@ -1438,14 +1517,11 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     required List<LookupValue> options,
     required ValueChanged<LookupValue?> onChanged,
   }) {
-    return DropdownButtonFormField<LookupValue>(
-      initialValue: value,
-      isExpanded: true,
-      hint: const Text('Select'),
-      items: [
-        for (final v in options)
-          DropdownMenuItem(value: v, child: Text(v.label)),
-      ],
+    return SearchableField<LookupValue>(
+      value: value,
+      options: options,
+      labelOf: (v) => v.label,
+      hintText: 'Select',
       onChanged: onChanged,
     );
   }
@@ -1487,15 +1563,22 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         children: [
           Row(
             children: [
-              Text('Invoice ${i + 1}',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w800, color: AppColors.ink)),
+              Text(
+                'Invoice ${i + 1}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.ink,
+                ),
+              ),
               const Spacer(),
               if (_invoices.length > 1)
                 IconButton(
                   tooltip: 'Remove invoice',
-                  icon: const Icon(Icons.delete_outline,
-                      size: 18, color: AppColors.danger),
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    size: 18,
+                    color: AppColors.danger,
+                  ),
                   onPressed: () => setState(() {
                     _invoices[i].dispose();
                     _invoices.removeAt(i);
@@ -1545,17 +1628,23 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         children: [
           Row(
             children: [
-              Text('Part ${j + 1}',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.slate,
-                      fontSize: 12.5)),
+              Text(
+                'Part ${j + 1}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.slate,
+                  fontSize: 12.5,
+                ),
+              ),
               const Spacer(),
               if (inv.parts.length > 1)
                 IconButton(
                   tooltip: 'Remove part',
-                  icon: const Icon(Icons.close_rounded,
-                      size: 18, color: AppColors.slate),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    size: 18,
+                    color: AppColors.slate,
+                  ),
                   onPressed: () => setState(() {
                     inv.parts[j].dispose();
                     inv.parts.removeAt(j);
@@ -1602,6 +1691,13 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
               ),
             ),
             LabeledField(
+              label: 'Chargeable Wt (kg)',
+              child: TextFormField(
+                controller: p.chargeableWeight,
+                keyboardType: TextInputType.number,
+              ),
+            ),
+            LabeledField(
               label: 'Gross Value',
               child: TextFormField(
                 controller: p.value,
@@ -1633,8 +1729,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
           ),
           if (!hasAny)
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
               decoration: BoxDecoration(
                 color: AppColors.mist,
                 border: Border.all(color: AppColors.line),
@@ -1642,8 +1737,11 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.cloud_upload_outlined,
-                      color: AppColors.slate, size: 18),
+                  Icon(
+                    Icons.cloud_upload_outlined,
+                    color: AppColors.slate,
+                    size: 18,
+                  ),
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -1694,37 +1792,53 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.insert_drive_file_outlined,
-              size: 18, color: AppColors.plum),
+          const Icon(
+            Icons.insert_drive_file_outlined,
+            size: 18,
+            color: AppColors.plum,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(title,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        color: AppColors.ink,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13)),
-                Text(subtitle,
-                    style: const TextStyle(
-                        color: AppColors.slate, fontSize: 11.5)),
+                Text(
+                  title,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.ink,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 11.5,
+                  ),
+                ),
               ],
             ),
           ),
           if (onView != null)
             IconButton(
               tooltip: 'View',
-              icon: const Icon(Icons.visibility_outlined,
-                  size: 18, color: AppColors.plum),
+              icon: const Icon(
+                Icons.visibility_outlined,
+                size: 18,
+                color: AppColors.plum,
+              ),
               onPressed: onView,
             ),
           IconButton(
             tooltip: 'Remove',
-            icon: const Icon(Icons.close_rounded,
-                size: 18, color: AppColors.slate),
+            icon: const Icon(
+              Icons.close_rounded,
+              size: 18,
+              color: AppColors.slate,
+            ),
             onPressed: onRemove,
           ),
         ],
@@ -1746,6 +1860,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
           Expanded(
             child: Text(
               text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: AppColors.plum,
                 fontSize: 12.5,
@@ -1761,8 +1877,9 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   Widget _grid(int cols, List<Widget> children) {
     return LayoutBuilder(
       builder: (context, c) {
-        final actualCols =
-            c.maxWidth >= 700 ? cols : (c.maxWidth >= 480 ? 2 : 1);
+        final actualCols = c.maxWidth >= 700
+            ? cols
+            : (c.maxWidth >= 480 ? 2 : 1);
         const spacing = 14.0;
         return Wrap(
           spacing: spacing,
@@ -1779,8 +1896,12 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     );
   }
 
-  Widget _summaryRow(String label, String value,
-      {bool emphasis = false, Color? color}) {
+  Widget _summaryRow(
+    String label,
+    String value, {
+    bool emphasis = false,
+    Color? color,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(

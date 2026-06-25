@@ -5,6 +5,7 @@ import '../../core/theme/app_colors.dart';
 import 'app_button.dart';
 import 'form_field_spec.dart';
 import 'labeled_field.dart';
+import './searchable_field.dart';
 
 class MasterFormDialog extends StatefulWidget {
   final String title;
@@ -59,7 +60,9 @@ class _UpperCaseTextFormatter extends TextInputFormatter {
 
   @override
   TextEditingValue formatEditUpdate(
-      TextEditingValue oldValue, TextEditingValue newValue) {
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
     return TextEditingValue(
       text: newValue.text.toUpperCase(),
       selection: newValue.selection,
@@ -79,11 +82,11 @@ class _MasterFormDialogState extends State<MasterFormDialog> {
     _ctrls = {};
     _dropdownValues = {};
     for (final f in widget.fields) {
-      final initial =
-          widget.initial[f.name] ?? f.initialValue ?? '';
+      final initial = widget.initial[f.name] ?? f.initialValue ?? '';
       if (f.type == FieldType.dropdown) {
-        _dropdownValues[f.name] =
-            initial.isNotEmpty ? initial : f.options?.firstOrNull;
+        _dropdownValues[f.name] = initial.isNotEmpty
+            ? initial
+            : f.options?.firstOrNull;
       } else {
         _ctrls[f.name] = TextEditingController(text: initial);
       }
@@ -143,7 +146,9 @@ class _MasterFormDialogState extends State<MasterFormDialog> {
                       Text(
                         widget.subtitle!,
                         style: const TextStyle(
-                            color: AppColors.slate, fontSize: 12.5),
+                          color: AppColors.slate,
+                          fontSize: 12.5,
+                        ),
                       ),
                     ],
                   ],
@@ -214,18 +219,14 @@ class _MasterFormDialogState extends State<MasterFormDialog> {
       return LabeledField(
         label: f.label,
         required: f.required,
-        child: DropdownButtonFormField<String>(
-          initialValue: _dropdownValues[f.name],
-          isExpanded: true,
-          items: [
-            for (final opt in f.options ?? const <String>[])
-              DropdownMenuItem(value: opt, child: Text(opt)),
-          ],
-          onChanged: (v) =>
-              setState(() => _dropdownValues[f.name] = v),
-          validator: f.required
-              ? (v) => (v == null || v.isEmpty) ? 'Required' : null
-              : null,
+        child: SearchableField<String>(
+          value: _dropdownValues[f.name],
+          options: f.options ?? const <String>[],
+          labelOf: (o) => o,
+          hintText: f.hint ?? 'Select ${f.label}',
+          dialogTitle: 'Select ${f.label}',
+          clearable: !f.required,
+          onChanged: (v) => setState(() => _dropdownValues[f.name] = v),
         ),
       );
     }
@@ -241,10 +242,10 @@ class _MasterFormDialogState extends State<MasterFormDialog> {
           FieldType.multiline => TextInputType.multiline,
           _ => TextInputType.text,
         },
-        textCapitalization:
-            f.uppercase ? TextCapitalization.characters : TextCapitalization.none,
-        inputFormatters:
-            f.uppercase ? const [_UpperCaseTextFormatter()] : null,
+        textCapitalization: f.uppercase
+            ? TextCapitalization.characters
+            : TextCapitalization.none,
+        inputFormatters: f.uppercase ? const [_UpperCaseTextFormatter()] : null,
         maxLines: f.type == FieldType.multiline ? 3 : 1,
         maxLength: f.maxLength,
         decoration: InputDecoration(

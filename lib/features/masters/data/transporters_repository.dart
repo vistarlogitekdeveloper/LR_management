@@ -21,13 +21,35 @@ class TransportersRepository {
   }
 
   Future<Transporter> update(Transporter t) async {
-    final res = await _api.dio.patch(
-      '/transporters/${t.id}',
-      data: t.toJson(),
-      options: Options(headers: {'If-Match': t.version.toString()}),
-    );
-    return Transporter.fromJson(
-        (res.data['data'] as Map).cast<String, dynamic>());
+    Future<Transporter> patch(int version) async {
+      final res = await _api.dio.patch(
+        '/transporters/${t.id}',
+        data: t.toJson(),
+        options: Options(headers: {'If-Match': version.toString()}),
+      );
+      return Transporter.fromJson(
+          (res.data['data'] as Map).cast<String, dynamic>());
+    }
+
+    try {
+      return await patch(t.version);
+    } on DioException catch (e) {
+      // A transporter's version moves out-of-band when its cheque/passbook
+      // document is uploaded or removed (those bump the version), so the form's
+      // loaded version can be behind by the time the user saves. The 412 body
+      // carries the server's current version — retry once against it so a
+      // self-inflicted conflict doesn't reject the user's edit. The backend
+      // deep-merges bank_account, so the stored document/OCR data survives.
+      final data = e.response?.data;
+      final raw = data is Map ? data['current_version'] : null;
+      final current = raw is num
+          ? raw.toInt()
+          : (raw is String ? int.tryParse(raw) : null);
+      if (e.response?.statusCode == 412 && current != null) {
+        return patch(current);
+      }
+      rethrow;
+    }
   }
 
   Future<void> remove(String id) async {

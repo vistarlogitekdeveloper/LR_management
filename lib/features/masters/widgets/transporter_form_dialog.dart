@@ -7,6 +7,7 @@ import '../../../core/utils/file_opener.dart';
 import '../../../shared/models/transporter.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/labeled_field.dart';
+import '../../../shared/widgets/searchable_field.dart';
 import '../providers/master_providers.dart';
 import 'master_actions.dart';
 
@@ -85,13 +86,19 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
   Future<void> _viewExisting() async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final bytes =
-          await ref.read(transportersRepositoryProvider).downloadDocument(_existing!.id);
+      final bytes = await ref
+          .read(transportersRepositoryProvider)
+          .downloadDocument(_existing!.id);
       final name = _existing!.chequeFileName;
-      openFileInBrowser(bytes, _mimeForName(name), name.isEmpty ? 'document' : name);
+      openFileInBrowser(
+        bytes,
+        _mimeForName(name),
+        name.isEmpty ? 'document' : name,
+      );
     } catch (e) {
       messenger.showSnackBar(
-          SnackBar(content: Text(MasterActions.messageFor(e))));
+        SnackBar(content: Text(MasterActions.messageFor(e))),
+      );
     }
   }
 
@@ -104,26 +111,30 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
       final repo = ref.read(transportersRepositoryProvider);
       Transporter t;
       if (_existing == null) {
-        t = await repo.create(Transporter(
-          id: '',
-          name: _name.text.trim(),
-          pan: _pan.text.trim(),
-          tds: _tds,
-          bankName: _bank.text.trim(),
-          accountHolder: _holder.text.trim(),
-          accountNo: _accNo.text.trim(),
-          ifsc: _ifsc.text.trim(),
-        ));
+        t = await repo.create(
+          Transporter(
+            id: '',
+            name: _name.text.trim(),
+            pan: _pan.text.trim(),
+            tds: _tds,
+            bankName: _bank.text.trim(),
+            accountHolder: _holder.text.trim(),
+            accountNo: _accNo.text.trim(),
+            ifsc: _ifsc.text.trim(),
+          ),
+        );
       } else {
-        t = await repo.update(_existing!.copyWith(
-          name: _name.text.trim(),
-          pan: _pan.text.trim(),
-          tds: _tds,
-          bankName: _bank.text.trim(),
-          accountHolder: _holder.text.trim(),
-          accountNo: _accNo.text.trim(),
-          ifsc: _ifsc.text.trim(),
-        ));
+        t = await repo.update(
+          _existing!.copyWith(
+            name: _name.text.trim(),
+            pan: _pan.text.trim(),
+            tds: _tds,
+            bankName: _bank.text.trim(),
+            accountHolder: _holder.text.trim(),
+            accountNo: _accNo.text.trim(),
+            ifsc: _ifsc.text.trim(),
+          ),
+        );
       }
       if (_picked != null) {
         t = await repo.uploadDocument(
@@ -140,7 +151,8 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
       if (!mounted) return;
       setState(() => _saving = false);
       messenger.showSnackBar(
-          SnackBar(content: Text(MasterActions.messageFor(e))));
+        SnackBar(content: Text(MasterActions.messageFor(e))),
+      );
     }
   }
 
@@ -155,33 +167,45 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
             padding: const EdgeInsets.all(20),
             child: Form(
               key: _formKey,
-              child: LayoutBuilder(builder: (context, c) {
-                final cols = c.maxWidth >= 560 ? 2 : 1;
-                const spacing = 14.0;
-                final w = (c.maxWidth - spacing * (cols - 1)) / cols;
-                return Wrap(
-                  spacing: spacing,
-                  runSpacing: 14,
-                  children: [
-                    SizedBox(
+              child: LayoutBuilder(
+                builder: (context, c) {
+                  final cols = c.maxWidth >= 560 ? 2 : 1;
+                  const spacing = 14.0;
+                  final w = (c.maxWidth - spacing * (cols - 1)) / cols;
+                  return Wrap(
+                    spacing: spacing,
+                    runSpacing: 14,
+                    children: [
+                      SizedBox(
                         width: w,
-                        child: _text(_name, 'Transporter Name', required: true)),
-                    SizedBox(
+                        child: _text(_name, 'Transporter Name', required: true),
+                      ),
+                      SizedBox(
                         width: w,
-                        child: _text(_pan, 'PAN', required: true, maxLength: 10, upper: true)),
-                    SizedBox(width: w, child: _tdsField()),
-                    SizedBox(width: w, child: _text(_bank, 'Bank Name')),
-                    SizedBox(
+                        child: _text(
+                          _pan,
+                          'PAN',
+                          required: true,
+                          maxLength: 10,
+                          upper: true,
+                        ),
+                      ),
+                      SizedBox(width: w, child: _tdsField()),
+                      SizedBox(width: w, child: _text(_bank, 'Bank Name')),
+                      SizedBox(
                         width: w,
-                        child: _text(_holder, 'Account Holder Name')),
-                    SizedBox(width: w, child: _text(_accNo, 'Account No')),
-                    SizedBox(
+                        child: _text(_holder, 'Account Holder Name'),
+                      ),
+                      SizedBox(width: w, child: _text(_accNo, 'Account No')),
+                      SizedBox(
                         width: w,
-                        child: _text(_ifsc, 'IFSC Code', upper: true)),
-                    SizedBox(width: c.maxWidth, child: _chequeField()),
-                  ],
-                );
-              }),
+                        child: _text(_ifsc, 'IFSC Code', upper: true),
+                      ),
+                      SizedBox(width: c.maxWidth, child: _chequeField()),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -191,39 +215,46 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
   }
 
   Widget _header() => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: AppColors.line)),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                _existing == null ? 'New Transporter' : 'Edit Transporter',
-                style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.ink),
-              ),
+    padding: const EdgeInsets.all(20),
+    decoration: const BoxDecoration(
+      border: Border(bottom: BorderSide(color: AppColors.line)),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            _existing == null ? 'New Transporter' : 'Edit Transporter',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: AppColors.ink,
             ),
-            IconButton(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.close_rounded, color: AppColors.slate),
-            ),
-          ],
+          ),
         ),
-      );
+        IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.close_rounded, color: AppColors.slate),
+        ),
+      ],
+    ),
+  );
 
-  Widget _text(TextEditingController c, String label,
-      {bool required = false, int? maxLength, bool upper = false}) {
+  Widget _text(
+    TextEditingController c,
+    String label, {
+    bool required = false,
+    int? maxLength,
+    bool upper = false,
+  }) {
     return LabeledField(
       label: label,
       required: required,
       child: TextFormField(
         controller: c,
         maxLength: maxLength,
-        textCapitalization:
-            upper ? TextCapitalization.characters : TextCapitalization.none,
+        textCapitalization: upper
+            ? TextCapitalization.characters
+            : TextCapitalization.none,
         decoration: const InputDecoration(counterText: ''),
         validator: required
             ? (v) => (v == null || v.trim().isEmpty) ? 'Required' : null
@@ -233,17 +264,15 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
   }
 
   Widget _tdsField() => LabeledField(
-        label: 'TDS Applicable',
-        child: DropdownButtonFormField<String>(
-          initialValue: _tds,
-          isExpanded: true,
-          items: const [
-            DropdownMenuItem(value: 'Yes', child: Text('Yes')),
-            DropdownMenuItem(value: 'No', child: Text('No')),
-          ],
-          onChanged: (v) => setState(() => _tds = v ?? 'Yes'),
-        ),
-      );
+    label: 'TDS Applicable',
+    child: SearchableField<String>(
+      value: _tds,
+      options: const ['Yes', 'No'],
+      labelOf: (o) => o,
+      hintText: 'Select',
+      onChanged: (v) => setState(() => _tds = v ?? 'Yes'),
+    ),
+  );
 
   Widget _chequeField() {
     final picked = _picked;
@@ -269,12 +298,15 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
                   picked != null
                       ? picked.name
                       : hasExisting
-                          ? _existing!.chequeFileName.isEmpty
-                              ? 'Document on file'
-                              : _existing!.chequeFileName
-                          : 'JPG, PNG, WEBP or PDF',
+                      ? _existing!.chequeFileName.isEmpty
+                            ? 'Document on file'
+                            : _existing!.chequeFileName
+                      : 'JPG, PNG, WEBP or PDF',
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppColors.slate, fontSize: 12.5),
+                  style: const TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 12.5,
+                  ),
                 ),
               ),
               if (picked == null && hasExisting)
@@ -286,9 +318,14 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
               if (picked != null)
                 IconButton(
                   tooltip: 'Remove selection',
-                  onPressed: _saving ? null : () => setState(() => _picked = null),
-                  icon: const Icon(Icons.close_rounded,
-                      color: AppColors.slate, size: 18),
+                  onPressed: _saving
+                      ? null
+                      : () => setState(() => _picked = null),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: AppColors.slate,
+                    size: 18,
+                  ),
                 ),
             ],
           ),
@@ -320,20 +357,29 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
             children: [
               const Row(
                 children: [
-                  Icon(Icons.document_scanner_outlined,
-                      size: 15, color: AppColors.plum),
+                  Icon(
+                    Icons.document_scanner_outlined,
+                    size: 15,
+                    color: AppColors.plum,
+                  ),
                   SizedBox(width: 6),
-                  Text('Cheque OCR check',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 12,
-                          color: AppColors.ink)),
+                  Text(
+                    'Cheque OCR check',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                      color: AppColors.ink,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 4),
               _ocrLine('IFSC', t.ocrIfsc, t.ifscMatchesOcr(_ifsc.text)),
-              _ocrLine('Account No', t.ocrAccountNo,
-                  t.accountMatchesOcr(_accNo.text)),
+              _ocrLine(
+                'Account No',
+                t.ocrAccountNo,
+                t.accountMatchesOcr(_accNo.text),
+              ),
             ],
           ),
         );
@@ -345,25 +391,27 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
     if (ocrValue.isEmpty) {
       return Padding(
         padding: const EdgeInsets.only(top: 2),
-        child: Text('$label not detected on the cheque image',
-            style: const TextStyle(color: AppColors.slate, fontSize: 11.5)),
+        child: Text(
+          '$label not detected on the cheque image',
+          style: const TextStyle(color: AppColors.slate, fontSize: 11.5),
+        ),
       );
     }
     final color = match == true
         ? AppColors.ok
         : match == false
-            ? AppColors.orange
-            : AppColors.slate;
+        ? AppColors.orange
+        : AppColors.slate;
     final icon = match == true
         ? Icons.check_circle_outline
         : match == false
-            ? Icons.warning_amber_rounded
-            : Icons.remove_circle_outline;
+        ? Icons.warning_amber_rounded
+        : Icons.remove_circle_outline;
     final msg = match == true
         ? '$label matches the cheque'
         : match == false
-            ? '$label differs — cheque shows $ocrValue'
-            : '$label on cheque: $ocrValue';
+        ? '$label differs — cheque shows $ocrValue'
+        : '$label on cheque: $ocrValue';
     return Padding(
       padding: const EdgeInsets.only(top: 2),
       child: Row(
@@ -379,27 +427,27 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
   }
 
   Widget _footer() => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: AppColors.line)),
+    padding: const EdgeInsets.all(20),
+    decoration: const BoxDecoration(
+      border: Border(top: BorderSide(color: AppColors.line)),
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        AppButton(
+          label: 'Cancel',
+          kind: BtnKind.ghost,
+          onPressed: () => Navigator.pop(context),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            AppButton(
-              label: 'Cancel',
-              kind: BtnKind.ghost,
-              onPressed: () => Navigator.pop(context),
-            ),
-            const SizedBox(width: 10),
-            AppButton(
-              label: _saving ? 'Saving…' : 'Save',
-              icon: Icons.save_outlined,
-              onPressed: _saving ? null : _save,
-            ),
-          ],
+        const SizedBox(width: 10),
+        AppButton(
+          label: _saving ? 'Saving…' : 'Save',
+          icon: Icons.save_outlined,
+          onPressed: _saving ? null : _save,
         ),
-      );
+      ],
+    ),
+  );
 }
 
 String _mimeForName(String name) {

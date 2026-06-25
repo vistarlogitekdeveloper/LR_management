@@ -19,12 +19,14 @@ class EwbScreen extends ConsumerStatefulWidget {
 
 class _EwbScreenState extends ConsumerState<EwbScreen> {
   final _validateCtrl = TextEditingController();
+  final _tableScrollCtrl = ScrollController();
   String? _validateMessage;
   bool _validateOk = false;
 
   @override
   void dispose() {
     _validateCtrl.dispose();
+    _tableScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -61,6 +63,11 @@ class _EwbScreenState extends ConsumerState<EwbScreen> {
   Widget build(BuildContext context) {
     final ewbAsync = ref.watch(ewbListProvider);
     final now = DateTime.now();
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    final cardPad = isMobile
+        ? const EdgeInsets.all(12)
+        : const EdgeInsets.all(20);
+    final gap = isMobile ? 10.0 : 20.0;
 
     return Scaffold(
       backgroundColor: AppColors.mist,
@@ -72,11 +79,12 @@ class _EwbScreenState extends ConsumerState<EwbScreen> {
           ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(28),
+              padding: EdgeInsets.all(isMobile ? 14 : 28),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   AppCard(
+                    padding: cardPad,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -93,8 +101,10 @@ class _EwbScreenState extends ConsumerState<EwbScreen> {
                                 maxLength: 12,
                                 decoration: const InputDecoration(
                                   hintText: '12-digit EWB number',
-                                  prefixIcon: Icon(Icons.qr_code_2_rounded,
-                                      color: AppColors.slate),
+                                  prefixIcon: Icon(
+                                    Icons.qr_code_2_rounded,
+                                    color: AppColors.slate,
+                                  ),
                                   counterText: '',
                                 ),
                                 onChanged: (_) => setState(() {
@@ -114,10 +124,11 @@ class _EwbScreenState extends ConsumerState<EwbScreen> {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: (_validateOk
-                                      ? AppColors.ok
-                                      : AppColors.danger)
-                                  .withValues(alpha: 0.1),
+                              color:
+                                  (_validateOk
+                                          ? AppColors.ok
+                                          : AppColors.danger)
+                                      .withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Row(
@@ -151,7 +162,7 @@ class _EwbScreenState extends ConsumerState<EwbScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: gap),
                   ewbAsync.when(
                     loading: () => const Padding(
                       padding: EdgeInsets.symmetric(vertical: 48),
@@ -185,43 +196,52 @@ class _EwbScreenState extends ConsumerState<EwbScreen> {
                         children: [
                           LayoutBuilder(
                             builder: (context, c) {
-                              final cols = c.maxWidth >= 900 ? 3 : 1;
+                              // mobile: 3 compact tiles in one row; wide: 3 across
+                              final cols = c.maxWidth >= 900
+                                  ? 3
+                                  : (isMobile ? 3 : 1);
+                              final spacing = isMobile ? 8.0 : 16.0;
                               final tiles = <_EwbStat>[
                                 _EwbStat(
                                   icon: Icons.list_alt,
                                   label: 'EWBs Issued',
                                   value: '${records.length}',
                                   tint: AppColors.plum,
+                                  compact: isMobile,
                                 ),
                                 _EwbStat(
                                   icon: Icons.warning_amber_rounded,
                                   label: 'Expiring ≤ 3 days',
                                   value: '${expiringSoon.length}',
                                   tint: AppColors.warn,
+                                  compact: isMobile,
                                 ),
                                 _EwbStat(
                                   icon: Icons.error_outline,
                                   label: 'Expired',
                                   value: '${expired.length}',
                                   tint: AppColors.danger,
+                                  compact: isMobile,
                                 ),
                               ];
                               return Wrap(
-                                spacing: 16,
-                                runSpacing: 16,
+                                spacing: spacing,
+                                runSpacing: spacing,
                                 children: [
                                   for (final t in tiles)
                                     SizedBox(
                                       width:
-                                          (c.maxWidth - 16 * (cols - 1)) / cols,
+                                          (c.maxWidth - spacing * (cols - 1)) /
+                                          cols,
                                       child: t,
                                     ),
                                 ],
                               );
                             },
                           ),
-                          const SizedBox(height: 20),
+                          SizedBox(height: gap),
                           AppCard(
+                            padding: cardPad,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -229,52 +249,68 @@ class _EwbScreenState extends ConsumerState<EwbScreen> {
                                   icon: Icons.qr_code_2_rounded,
                                   title: 'All EWBs',
                                 ),
-                                SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: DataTable(
-                                    headingRowColor: WidgetStatePropertyAll(
-                                      AppColors.plum.withValues(alpha: 0.05),
+                                Scrollbar(
+                                  controller: _tableScrollCtrl,
+                                  thumbVisibility: isMobile,
+                                  child: SingleChildScrollView(
+                                    controller: _tableScrollCtrl,
+                                    scrollDirection: Axis.horizontal,
+                                    child: DataTable(
+                                      headingRowColor: WidgetStatePropertyAll(
+                                        AppColors.plum.withValues(alpha: 0.05),
+                                      ),
+                                      columnSpacing: isMobile ? 16 : 24,
+                                      columns: const [
+                                        DataColumn(label: Text('LR No')),
+                                        DataColumn(label: Text('EWB Number')),
+                                        DataColumn(label: Text('Load Type')),
+                                        DataColumn(label: Text('Expiry')),
+                                        DataColumn(label: Text('Status')),
+                                        DataColumn(label: Text('')),
+                                      ],
+                                      rows: [
+                                        for (final rec in records)
+                                          DataRow(
+                                            cells: [
+                                              DataCell(
+                                                Text(
+                                                  rec.lrNumber,
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                              ),
+                                              DataCell(Text(rec.number)),
+                                              DataCell(Text(rec.loadType)),
+                                              DataCell(
+                                                Text(
+                                                  rec.expiry == null
+                                                      ? '—'
+                                                      : formatDate(rec.expiry!),
+                                                ),
+                                              ),
+                                              DataCell(_expiryBadge(rec, now)),
+                                              DataCell(
+                                                IconButton(
+                                                  tooltip: 'Open LR',
+                                                  icon: const Icon(
+                                                    Icons.arrow_forward_rounded,
+                                                    color: AppColors.plum,
+                                                    size: 18,
+                                                  ),
+                                                  onPressed:
+                                                      (rec.lrId != null &&
+                                                          rec.lrId!.isNotEmpty)
+                                                      ? () => context.go(
+                                                          '/lrs/${rec.lrId}',
+                                                        )
+                                                      : null,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                      ],
                                     ),
-                                    columnSpacing: 24,
-                                    columns: const [
-                                      DataColumn(label: Text('LR No')),
-                                      DataColumn(label: Text('EWB Number')),
-                                      DataColumn(label: Text('Load Type')),
-                                      DataColumn(label: Text('Expiry')),
-                                      DataColumn(label: Text('Status')),
-                                      DataColumn(label: Text('')),
-                                    ],
-                                    rows: [
-                                      for (final rec in records)
-                                        DataRow(cells: [
-                                          DataCell(Text(
-                                            rec.lrNumber,
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.w700),
-                                          )),
-                                          DataCell(Text(rec.number)),
-                                          DataCell(Text(rec.loadType)),
-                                          DataCell(Text(
-                                            rec.expiry == null
-                                                ? '—'
-                                                : formatDate(rec.expiry!),
-                                          )),
-                                          DataCell(_expiryBadge(rec, now)),
-                                          DataCell(IconButton(
-                                            tooltip: 'Open LR',
-                                            icon: const Icon(
-                                              Icons.arrow_forward_rounded,
-                                              color: AppColors.plum,
-                                              size: 18,
-                                            ),
-                                            onPressed: (rec.lrId != null &&
-                                                    rec.lrId!.isNotEmpty)
-                                                ? () => context
-                                                    .go('/lrs/${rec.lrId}')
-                                                : null,
-                                          )),
-                                        ]),
-                                    ],
                                   ),
                                 ),
                               ],
@@ -345,15 +381,55 @@ class _EwbStat extends StatelessWidget {
   final String label;
   final String value;
   final Color tint;
+  final bool compact;
   const _EwbStat({
     required this.icon,
     required this.label,
     required this.value,
     required this.tint,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (compact) {
+      // narrow 3-across mobile tile: icon + value + label stacked
+      return AppCard(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: tint, size: 20),
+            const SizedBox(height: 6),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                style: const TextStyle(
+                  color: AppColors.ink,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 20,
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.slate,
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+                height: 1.15,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return AppCard(
       child: Row(
         children: [
@@ -381,12 +457,16 @@ class _EwbStat extends StatelessWidget {
                     fontSize: 12.5,
                   ),
                 ),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: AppColors.ink,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 22,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    style: const TextStyle(
+                      color: AppColors.ink,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 22,
+                    ),
                   ),
                 ),
               ],

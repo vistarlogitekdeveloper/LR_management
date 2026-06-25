@@ -11,13 +11,20 @@ import '../../shell/widgets/app_topbar.dart';
 import '../providers/lr_providers.dart';
 import '../widgets/lr_slip_pdf.dart';
 
-class PrintLrScreen extends ConsumerWidget {
+class PrintLrScreen extends ConsumerStatefulWidget {
   final String id;
   const PrintLrScreen({super.key, required this.id});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final asyncLr = ref.watch(lrDetailProvider(id));
+  ConsumerState<PrintLrScreen> createState() => _PrintLrScreenState();
+}
+
+class _PrintLrScreenState extends ConsumerState<PrintLrScreen> {
+  bool _printing = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final asyncLr = ref.watch(lrDetailProvider(widget.id));
     final cfg = ref.watch(systemConfigProvider);
 
     final company = LrSlipCompany(
@@ -52,6 +59,8 @@ class PrintLrScreen extends ConsumerWidget {
       ),
       data: (lr) {
         Future<void> doPrint() async {
+          if (_printing) return;
+          setState(() => _printing = true);
           final messenger = ScaffoldMessenger.of(context);
           try {
             await Printing.layoutPdf(
@@ -63,6 +72,8 @@ class PrintLrScreen extends ConsumerWidget {
             messenger.showSnackBar(
               SnackBar(content: Text(MasterActions.messageFor(e))),
             );
+          } finally {
+            if (mounted) setState(() => _printing = false);
           }
         }
 
@@ -72,7 +83,7 @@ class PrintLrScreen extends ConsumerWidget {
             children: [
               AppTopbar(
                 title: 'Print LR ${lr.number}',
-                subtitle: 'Goods Consignment Note · 4 copies',
+                subtitle: 'Goods Consignment Note',
                 actions: [
                   AppButton(
                     label: 'Back',
@@ -81,23 +92,30 @@ class PrintLrScreen extends ConsumerWidget {
                     onPressed: () => context.go('/lrs/${lr.id}'),
                   ),
                   AppButton(
-                    label: 'Print',
+                    label: _printing ? 'Preparing…' : 'Print',
                     icon: Icons.print_outlined,
+                    loading: _printing,
                     onPressed: doPrint,
                   ),
                 ],
               ),
               Expanded(
                 child: PdfPreview(
-                  build: (format) =>
-                      buildLrSlipPdf(lr: lr, company: company, pageFormat: format),
+                  build: (format) => buildLrSlipPdf(
+                    lr: lr,
+                    company: company,
+                    pageFormat: format,
+                  ),
                   useActions: false,
                   canChangeOrientation: false,
                   canChangePageFormat: false,
                   canDebug: false,
-                  scrollViewDecoration:
-                      const BoxDecoration(color: AppColors.mist),
-                  loadingWidget: const Center(child: CircularProgressIndicator()),
+                  scrollViewDecoration: const BoxDecoration(
+                    color: AppColors.mist,
+                  ),
+                  loadingWidget: const Center(
+                    child: CircularProgressIndicator(),
+                  ),
                 ),
               ),
             ],

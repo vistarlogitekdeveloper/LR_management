@@ -49,11 +49,16 @@ class LrDetailScreen extends ConsumerWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.error_outline,
-                        size: 48, color: AppColors.slate),
+                    const Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: AppColors.slate,
+                    ),
                     const SizedBox(height: 12),
-                    Text(MasterActions.messageFor(e),
-                        style: const TextStyle(color: AppColors.slate)),
+                    Text(
+                      MasterActions.messageFor(e),
+                      style: const TextStyle(color: AppColors.slate),
+                    ),
                     const SizedBox(height: 16),
                     AppButton(
                       label: 'Back to list',
@@ -71,8 +76,13 @@ class LrDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildLoaded(BuildContext context, WidgetRef ref, LorryReceipt lr,
-      bool canEdit, bool canDelete) {
+  Widget _buildLoaded(
+    BuildContext context,
+    WidgetRef ref,
+    LorryReceipt lr,
+    bool canEdit,
+    bool canDelete,
+  ) {
     return Scaffold(
       backgroundColor: AppColors.mist,
       body: Column(
@@ -116,29 +126,33 @@ class LrDetailScreen extends ConsumerWidget {
             ],
           ),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(28),
-              child: LayoutBuilder(
-                builder: (context, c) {
-                  final wide = c.maxWidth >= 1000;
-                  final left = _LeftColumn(lr: lr);
-                  final right = _RightColumn(lr: lr);
-                  if (wide) {
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(flex: 3, child: left),
-                        const SizedBox(width: 20),
-                        Expanded(flex: 2, child: right),
-                      ],
-                    );
-                  }
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [left, const SizedBox(height: 20), right],
-                  );
-                },
-              ),
+            child: LayoutBuilder(
+              builder: (context, c) {
+                final wide = c.maxWidth >= 1000;
+                final mobile = c.maxWidth < 600;
+                final left = _LeftColumn(lr: lr, mobile: mobile);
+                final right = _RightColumn(lr: lr, mobile: mobile);
+                return SingleChildScrollView(
+                  padding: EdgeInsets.all(mobile ? 14 : 28),
+                  child: wide
+                      ? Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(flex: 3, child: left),
+                            const SizedBox(width: 20),
+                            Expanded(flex: 2, child: right),
+                          ],
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            left,
+                            SizedBox(height: mobile ? 12 : 20),
+                            right,
+                          ],
+                        ),
+                );
+              },
             ),
           ),
         ],
@@ -147,7 +161,10 @@ class LrDetailScreen extends ConsumerWidget {
   }
 
   Future<void> _changeStatus(
-      BuildContext context, WidgetRef ref, LorryReceipt lr) async {
+    BuildContext context,
+    WidgetRef ref,
+    LorryReceipt lr,
+  ) async {
     final next = await showDialog<LrStatus>(
       context: context,
       builder: (ctx) => SimpleDialog(
@@ -203,7 +220,9 @@ class LrDetailScreen extends ConsumerWidget {
         content: TextField(
           controller: ctrl,
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'Why is this LR cancelled?'),
+          decoration: const InputDecoration(
+            hintText: 'Why is this LR cancelled?',
+          ),
         ),
         actions: [
           TextButton(
@@ -224,7 +243,10 @@ class LrDetailScreen extends ConsumerWidget {
   }
 
   Future<void> _delete(
-      BuildContext context, WidgetRef ref, LorryReceipt lr) async {
+    BuildContext context,
+    WidgetRef ref,
+    LorryReceipt lr,
+  ) async {
     final ok = await showConfirmDialog(
       context: context,
       title: 'Delete LR ${lr.number}?',
@@ -244,61 +266,75 @@ class LrDetailScreen extends ConsumerWidget {
 
 class _LeftColumn extends StatelessWidget {
   final LorryReceipt lr;
-  const _LeftColumn({required this.lr});
+  final bool mobile;
+  const _LeftColumn({required this.lr, this.mobile = false});
 
   @override
   Widget build(BuildContext context) {
+    final cardPad = EdgeInsets.all(mobile ? 12 : 20);
+    final gap = SizedBox(height: mobile ? 12 : 20);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         AppCard(
+          padding: cardPad,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SectionTitle(
+              _SectionHeader(
                 icon: Icons.swap_horiz_rounded,
                 title: 'Parties',
+                mobile: mobile,
               ),
-              _KeyValueGrid(items: [
-                if (lr.customerName.isNotEmpty) ('Customer', lr.customerName),
-                ('Consignor', lr.consignor.name),
-                ('GST', lr.consignor.gst),
-                ('Address', lr.consignor.address),
-                ('Consignee', lr.consignee.name),
-                ('GST', lr.consignee.gst),
-                ('Delivery', lr.consignee.location),
-              ]),
+              _KeyValueGrid(
+                items: [
+                  if (lr.customerName.isNotEmpty) ('Customer', lr.customerName),
+                  ('Consignor', lr.consignor.name),
+                  ('GST', lr.consignor.gst),
+                  ('Address', lr.consignor.address),
+                  ('Consignee', lr.consignee.name),
+                  ('GST', lr.consignee.gst),
+                  ('Delivery', lr.consignee.location),
+                ],
+                mobile: mobile,
+              ),
             ],
           ),
         ),
-        const SizedBox(height: 20),
+        gap,
         AppCard(
+          padding: cardPad,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SectionTitle(
+              _SectionHeader(
                 icon: Icons.inventory_2_outlined,
                 title: 'Invoice & Goods',
+                mobile: mobile,
               ),
               if (lr.items.isEmpty)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text('No invoice items',
-                      style: TextStyle(color: AppColors.slate)),
+                  child: Text(
+                    'No invoice items',
+                    style: TextStyle(color: AppColors.slate),
+                  ),
                 ),
-              for (final item in lr.items) _ItemRow(item: item),
+              for (final item in lr.items) _ItemRow(item: item, mobile: mobile),
             ],
           ),
         ),
         if (lr.attachments.isNotEmpty) ...[
-          const SizedBox(height: 20),
+          gap,
           AppCard(
+            padding: cardPad,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SectionTitle(
+                _SectionHeader(
                   icon: Icons.attach_file_rounded,
                   title: 'Invoice Attachments (${lr.attachments.length})',
+                  mobile: mobile,
                 ),
                 for (final a in lr.attachments)
                   _AttachmentTile(lrId: lr.id, attachment: a),
@@ -306,22 +342,30 @@ class _LeftColumn extends StatelessWidget {
             ),
           ),
         ],
-        const SizedBox(height: 20),
+        gap,
         AppCard(
+          padding: cardPad,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SectionTitle(
+              _SectionHeader(
                 icon: Icons.local_shipping_outlined,
                 title: 'Vehicle & Route',
+                mobile: mobile,
               ),
-              _KeyValueGrid(items: [
-                ('Vehicle', '${lr.vehicle.number} · ${lr.vehicle.type}'),
-                ('Driver', '${lr.vehicle.driver} (${lr.vehicle.driverMobile})'),
-                ('Capacity', lr.vehicle.capacity),
-                ('Route', lr.route),
-                ('Transporter', lr.transporter.name),
-              ]),
+              _KeyValueGrid(
+                items: [
+                  ('Vehicle', '${lr.vehicle.number} · ${lr.vehicle.type}'),
+                  (
+                    'Driver',
+                    '${lr.vehicle.driver} (${lr.vehicle.driverMobile})',
+                  ),
+                  ('Capacity', lr.vehicle.capacity),
+                  ('Route', lr.route),
+                  ('Transporter', lr.transporter.name),
+                ],
+                mobile: mobile,
+              ),
             ],
           ),
         ),
@@ -332,20 +376,24 @@ class _LeftColumn extends StatelessWidget {
 
 class _RightColumn extends StatelessWidget {
   final LorryReceipt lr;
-  const _RightColumn({required this.lr});
+  final bool mobile;
+  const _RightColumn({required this.lr, this.mobile = false});
 
   @override
   Widget build(BuildContext context) {
+    final cardPad = EdgeInsets.all(mobile ? 12 : 20);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         AppCard(
+          padding: cardPad,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SectionTitle(
+              _SectionHeader(
                 icon: Icons.flag_outlined,
                 title: 'Status',
+                mobile: mobile,
               ),
               Row(
                 children: [
@@ -355,33 +403,43 @@ class _RightColumn extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              _KeyValueGrid(items: [
-                ('Delivery Type', lr.deliveryType.label),
-                if (lr.ewb != null) ('EWB', lr.ewb!.number),
-                if (lr.ewb?.expiry != null)
-                  ('EWB Expiry', formatDate(lr.ewb!.expiry!)),
-              ]),
+              _KeyValueGrid(
+                items: [
+                  ('Delivery Type', lr.deliveryType.label),
+                  if (lr.ewb != null) ('EWB', lr.ewb!.number),
+                  if (lr.ewb?.expiry != null)
+                    ('EWB Expiry', formatDate(lr.ewb!.expiry!)),
+                ],
+                mobile: mobile,
+              ),
             ],
           ),
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: mobile ? 12 : 20),
         AppCard(
+          padding: cardPad,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SectionTitle(
+              _SectionHeader(
                 icon: Icons.calculate_outlined,
                 title: 'Freight',
+                mobile: mobile,
               ),
               _FreightRow(label: 'Freight', value: lr.freight.freight),
               _FreightRow(
-                  label: 'Door Delivery', value: lr.freight.doorDelivery),
+                label: 'Door Delivery',
+                value: lr.freight.doorDelivery,
+              ),
               _FreightRow(label: 'Handling', value: lr.freight.handling),
               _FreightRow(label: 'Insurance', value: lr.freight.insurance),
               _FreightRow(label: 'GST', value: lr.freight.gst),
               const Divider(),
               _FreightRow(
-                  label: 'Total', value: lr.freight.total, emphasis: true),
+                label: 'Total',
+                value: lr.freight.total,
+                emphasis: true,
+              ),
               _FreightRow(label: 'Advance', value: lr.freight.advance),
               _FreightRow(
                 label: 'Balance',
@@ -391,7 +449,7 @@ class _RightColumn extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.all(14),
+                padding: EdgeInsets.all(mobile ? 12 : 14),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   gradient: const LinearGradient(
@@ -412,25 +470,35 @@ class _RightColumn extends StatelessWidget {
                         ),
                       ),
                     ),
-                    Text(
-                      inr(lr.freight.vistarMargin),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18,
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          inr(lr.freight.vistarMargin),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 18,
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 10),
-              _KeyValueGrid(items: [
-                ('Mathadi', inr(lr.freight.mathadi)),
-                if (lr.freight.advancePaidBy.isNotEmpty)
-                  ('Advance Paid By', lr.freight.advancePaidBy),
-                if (lr.freight.tripLeadBy.isNotEmpty)
-                  ('Trip Lead By', lr.freight.tripLeadBy),
-              ]),
+              _KeyValueGrid(
+                items: [
+                  ('Mathadi', inr(lr.freight.mathadi)),
+                  if (lr.freight.advancePaidBy.isNotEmpty)
+                    ('Advance Paid By', lr.freight.advancePaidBy),
+                  if (lr.freight.tripLeadBy.isNotEmpty)
+                    ('Trip Lead By', lr.freight.tripLeadBy),
+                ],
+                mobile: mobile,
+              ),
             ],
           ),
         ),
@@ -439,9 +507,56 @@ class _RightColumn extends StatelessWidget {
   }
 }
 
+// Compact section header; on mobile shrinks the icon badge and title.
+class _SectionHeader extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final bool mobile;
+  const _SectionHeader({
+    required this.icon,
+    required this.title,
+    this.mobile = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!mobile) return SectionTitle(icon: icon, title: title);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              color: AppColors.plum.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, size: 15, color: AppColors.plum),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: AppColors.ink,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _KeyValueGrid extends StatelessWidget {
   final List<(String, String)> items;
-  const _KeyValueGrid({required this.items});
+  final bool mobile;
+  const _KeyValueGrid({required this.items, this.mobile = false});
 
   @override
   Widget build(BuildContext context) {
@@ -450,7 +565,7 @@ class _KeyValueGrid extends StatelessWidget {
         final cols = c.maxWidth >= 500 ? 2 : 1;
         return Wrap(
           spacing: 16,
-          runSpacing: 12,
+          runSpacing: mobile ? 8 : 12,
           children: [
             for (final item in items)
               SizedBox(
@@ -470,10 +585,10 @@ class _KeyValueGrid extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       item.$2,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.ink,
                         fontWeight: FontWeight.w600,
-                        fontSize: 13.5,
+                        fontSize: mobile ? 13 : 13.5,
                       ),
                     ),
                   ],
@@ -488,13 +603,14 @@ class _KeyValueGrid extends StatelessWidget {
 
 class _ItemRow extends StatelessWidget {
   final InvoiceItem item;
-  const _ItemRow({required this.item});
+  final bool mobile;
+  const _ItemRow({required this.item, this.mobile = false});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
+      margin: EdgeInsets.only(bottom: mobile ? 8 : 10),
+      padding: EdgeInsets.all(mobile ? 10 : 12),
       decoration: BoxDecoration(
         border: Border.all(color: AppColors.line),
         borderRadius: BorderRadius.circular(12),
@@ -507,12 +623,14 @@ class _ItemRow extends StatelessWidget {
               Expanded(
                 child: Text(
                   item.invoiceNo,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontWeight: FontWeight.w800,
                     color: AppColors.ink,
                   ),
                 ),
               ),
+              const SizedBox(width: 8),
               Text(
                 formatDate(item.invoiceDate),
                 style: const TextStyle(color: AppColors.slate, fontSize: 12.5),
@@ -524,7 +642,7 @@ class _ItemRow extends StatelessWidget {
             item.partDescription,
             style: const TextStyle(color: AppColors.slate, fontSize: 13),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: mobile ? 8 : 10),
           Wrap(
             spacing: 16,
             runSpacing: 6,
@@ -545,13 +663,18 @@ class _ItemRow extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('$label: ',
-            style: const TextStyle(color: AppColors.slate, fontSize: 12.5)),
-        Text(value,
-            style: const TextStyle(
-                color: AppColors.ink,
-                fontWeight: FontWeight.w700,
-                fontSize: 12.5)),
+        Text(
+          '$label: ',
+          style: const TextStyle(color: AppColors.slate, fontSize: 12.5),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            color: AppColors.ink,
+            fontWeight: FontWeight.w700,
+            fontSize: 12.5,
+          ),
+        ),
       ],
     );
   }
@@ -639,8 +762,11 @@ class _AttachmentTileState extends ConsumerState<_AttachmentTile> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.insert_drive_file_outlined,
-              size: 18, color: AppColors.plum),
+          const Icon(
+            Icons.insert_drive_file_outlined,
+            size: 18,
+            color: AppColors.plum,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(

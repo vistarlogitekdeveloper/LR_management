@@ -43,15 +43,16 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
       return;
     }
     if (_newCtrl.text != _confirmCtrl.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Passwords do not match')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Passwords do not match')));
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
-            'Password change accepted — wire to backend in production'),
+          'Password change accepted — wire to backend in production',
+        ),
       ),
     );
     context.go('/profile');
@@ -59,6 +60,8 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    final gap = isMobile ? 10.0 : 14.0;
     return Scaffold(
       backgroundColor: AppColors.mist,
       body: Column(
@@ -77,11 +80,12 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
           ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(28),
+              padding: EdgeInsets.all(isMobile ? 14 : 28),
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 520),
                   child: AppCard(
+                    padding: EdgeInsets.all(isMobile ? 12 : 20),
                     child: Form(
                       key: _formKey,
                       child: Column(
@@ -102,7 +106,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                                   (v?.isEmpty ?? true) ? 'Required' : null,
                             ),
                           ),
-                          const SizedBox(height: 14),
+                          SizedBox(height: gap),
                           LabeledField(
                             label: 'New password',
                             required: true,
@@ -120,7 +124,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                               },
                             ),
                           ),
-                          const SizedBox(height: 14),
+                          SizedBox(height: gap),
                           LabeledField(
                             label: 'Confirm new password',
                             required: true,
@@ -131,7 +135,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                                   (v?.isEmpty ?? true) ? 'Required' : null,
                             ),
                           ),
-                          const SizedBox(height: 22),
+                          SizedBox(height: isMobile ? 16 : 22),
                           AppButton(
                             label: 'Update password',
                             icon: Icons.save_outlined,

@@ -16,68 +16,68 @@ enum LrStatus { booked, inTransit, delivered, cancelled }
 
 extension LrStatusX on LrStatus {
   String get label => switch (this) {
-        LrStatus.booked => 'Booked',
-        LrStatus.inTransit => 'In Transit',
-        LrStatus.delivered => 'Delivered',
-        LrStatus.cancelled => 'Cancelled',
-      };
+    LrStatus.booked => 'Booked',
+    LrStatus.inTransit => 'In Transit',
+    LrStatus.delivered => 'Delivered',
+    LrStatus.cancelled => 'Cancelled',
+  };
 
   String get code => switch (this) {
-        LrStatus.booked => 'BOOKED',
-        LrStatus.inTransit => 'IN_TRANSIT',
-        LrStatus.delivered => 'DELIVERED',
-        LrStatus.cancelled => 'CANCELLED',
-      };
+    LrStatus.booked => 'BOOKED',
+    LrStatus.inTransit => 'IN_TRANSIT',
+    LrStatus.delivered => 'DELIVERED',
+    LrStatus.cancelled => 'CANCELLED',
+  };
 
   static LrStatus fromLabel(String s) => LrStatus.values.firstWhere(
-        (e) => e.label == s,
-        orElse: () => LrStatus.booked,
-      );
+    (e) => e.label == s,
+    orElse: () => LrStatus.booked,
+  );
 
   static LrStatus fromCode(String? s) => LrStatus.values.firstWhere(
-        (e) => e.code == (s ?? '').toUpperCase(),
-        orElse: () => LrStatus.booked,
-      );
+    (e) => e.code == (s ?? '').toUpperCase(),
+    orElse: () => LrStatus.booked,
+  );
 }
 
 enum PayType { tbb, paid, tbr }
 
 extension PayTypeX on PayType {
   String get label => switch (this) {
-        PayType.tbb => 'To Be Billed',
-        PayType.paid => 'Paid',
-        PayType.tbr => 'To Be Received',
-      };
+    PayType.tbb => 'To Be Billed',
+    PayType.paid => 'Paid',
+    PayType.tbr => 'To Be Received',
+  };
 
   String get code => switch (this) {
-        PayType.tbb => 'TBB',
-        PayType.paid => 'PAID',
-        PayType.tbr => 'TBR',
-      };
+    PayType.tbb => 'TBB',
+    PayType.paid => 'PAID',
+    PayType.tbr => 'TBR',
+  };
 
   static PayType fromCode(String? s) => PayType.values.firstWhere(
-        (e) => e.code == (s ?? '').toUpperCase(),
-        orElse: () => PayType.tbb,
-      );
+    (e) => e.code == (s ?? '').toUpperCase(),
+    orElse: () => PayType.tbb,
+  );
 }
 
 enum DeliveryType { doorDelivery, godownDelivery }
 
 extension DeliveryTypeX on DeliveryType {
   String get label => switch (this) {
-        DeliveryType.doorDelivery => 'Door Delivery',
-        DeliveryType.godownDelivery => 'Godown Delivery',
-      };
+    DeliveryType.doorDelivery => 'Door Delivery',
+    DeliveryType.godownDelivery => 'Godown Delivery',
+  };
 
   String get code => switch (this) {
-        DeliveryType.doorDelivery => 'DOOR',
-        DeliveryType.godownDelivery => 'GODOWN',
-      };
+    DeliveryType.doorDelivery => 'DOOR',
+    DeliveryType.godownDelivery => 'GODOWN',
+  };
 
   static DeliveryType fromCode(String? s) => DeliveryType.values.firstWhere(
-        (e) => e.code == (s ?? '').toUpperCase(),
-        orElse: () => DeliveryType.doorDelivery,
-      );
+    (e) => e.code == (s ?? '').toUpperCase(),
+    orElse: () => DeliveryType.doorDelivery,
+  );
 }
 
 class InvoiceItem {
@@ -87,6 +87,7 @@ class InvoiceItem {
   final String partDescription;
   final int quantity;
   final double weight;
+  final double chargeableWeight;
   final double grossValue;
   final int packages;
   final String packageTypeId;
@@ -100,6 +101,7 @@ class InvoiceItem {
     required this.partDescription,
     required this.quantity,
     required this.weight,
+    this.chargeableWeight = 0,
     required this.grossValue,
     required this.packages,
     this.packageTypeId = '',
@@ -120,12 +122,14 @@ class InvoiceItem {
     if (pkgLabel.isEmpty) pkgLabel = resolveLookup('PACKAGE_TYPE', pkgId);
     return InvoiceItem(
       invoiceNo: (json['invoice_no'] as String?) ?? '',
-      invoiceDate: DateTime.tryParse(json['invoice_date']?.toString() ?? '') ??
+      invoiceDate:
+          DateTime.tryParse(json['invoice_date']?.toString() ?? '') ??
           DateTime.now(),
       asn: (json['asn'] as String?) ?? '',
       partDescription: (json['part_description'] as String?) ?? '',
       quantity: asInt(json['quantity']),
       weight: asDouble(json['weight_kg']),
+      chargeableWeight: asDouble(json['chargeable_weight_kg']),
       grossValue: asDouble(json['gross_value']),
       packages: asInt(json['packages']),
       packageTypeId: pkgId ?? '',
@@ -135,17 +139,18 @@ class InvoiceItem {
   }
 
   Map<String, dynamic> toJson() => {
-        if (invoiceNo.isNotEmpty) 'invoice_no': invoiceNo,
-        'invoice_date': invoiceDate.toIso8601String(),
-        if (asn.isNotEmpty) 'asn': asn,
-        if (partDescription.isNotEmpty) 'part_description': partDescription,
-        'quantity': quantity,
-        'weight_kg': weight,
-        'gross_value': grossValue,
-        'packages': packages,
-        if (packageTypeId.isNotEmpty) 'package_type_id': packageTypeId,
-        if (natureOfGoods.isNotEmpty) 'nature_of_goods': natureOfGoods,
-      };
+    if (invoiceNo.isNotEmpty) 'invoice_no': invoiceNo,
+    'invoice_date': invoiceDate.toIso8601String(),
+    if (asn.isNotEmpty) 'asn': asn,
+    if (partDescription.isNotEmpty) 'part_description': partDescription,
+    'quantity': quantity,
+    'weight_kg': weight,
+    'chargeable_weight_kg': chargeableWeight,
+    'gross_value': grossValue,
+    'packages': packages,
+    if (packageTypeId.isNotEmpty) 'package_type_id': packageTypeId,
+    if (natureOfGoods.isNotEmpty) 'nature_of_goods': natureOfGoods,
+  };
 }
 
 class FreightDetails {
@@ -181,8 +186,8 @@ class FreightDetails {
     this.tripLeadBy = '',
     double? total,
     double? balance,
-  })  : _total = total,
-        _balance = balance;
+  }) : _total = total,
+       _balance = balance;
 
   double get total =>
       _total ?? (freight + doorDelivery + handling + gst + insurance);
@@ -291,6 +296,7 @@ class LorryReceipt {
   final String enteredByName;
   final int version;
   final String customerName;
+  final String orderNo;
   final Consignor consignor;
   final Consignee consignee;
   final Vehicle vehicle;
@@ -320,6 +326,7 @@ class LorryReceipt {
     this.enteredByName = '',
     this.version = 0,
     this.customerName = '',
+    this.orderNo = '',
     required this.consignor,
     required this.consignee,
     required this.vehicle,
@@ -344,7 +351,8 @@ class LorryReceipt {
 
   int get totalPackages => items.fold(0, (sum, item) => sum + item.packages);
   double get totalWeight => items.fold(0.0, (sum, item) => sum + item.weight);
-  double get totalValue => items.fold(0.0, (sum, item) => sum + item.grossValue);
+  double get totalValue =>
+      items.fold(0.0, (sum, item) => sum + item.grossValue);
 
   factory LorryReceipt.fromJson(
     Map<String, dynamic> json, {
@@ -355,8 +363,7 @@ class LorryReceipt {
       return v is Map ? v.cast<String, dynamic>() : null;
     }
 
-    String codeOf(String key) =>
-        (nested(key)?['code'] as String?) ?? '';
+    String codeOf(String key) => (nested(key)?['code'] as String?) ?? '';
 
     final consignorJson = nested('consignor');
     final consigneeJson = nested('consignee');
@@ -365,14 +372,17 @@ class LorryReceipt {
     final routeJson = nested('route');
     final driverJson = nested('driver');
 
-    final fromCity = (json['from_city'] as String?) ??
+    final fromCity =
+        (json['from_city'] as String?) ??
         (routeJson?['from_city'] as String?) ??
         '';
-    final toCity = (json['to_city'] as String?) ??
+    final toCity =
+        (json['to_city'] as String?) ??
         (routeJson?['to_city'] as String?) ??
         '';
 
-    final itemsJson = (json['invoiceItems'] as List?) ??
+    final itemsJson =
+        (json['invoiceItems'] as List?) ??
         (json['invoice_items'] as List?) ??
         const [];
     final attachJson = (json['attachments'] as List?) ?? const [];
@@ -381,12 +391,14 @@ class LorryReceipt {
     return LorryReceipt(
       id: json['id'] as String,
       number: (json['number'] as String?) ?? '',
-      date: DateTime.tryParse(json['lr_date']?.toString() ?? '') ??
+      date:
+          DateTime.tryParse(json['lr_date']?.toString() ?? '') ??
           DateTime.now(),
       enteredBy: (json['entered_by'] as String?) ?? '',
       enteredByName: (nested('enteredBy')?['name'] as String?) ?? '',
       version: asInt(json['version']),
       customerName: (json['customer_name'] as String?) ?? '',
+      orderNo: (json['order_no'] as String?) ?? '',
       consignor: consignorJson != null
           ? Consignor.fromJson(consignorJson)
           : Consignor(
@@ -397,7 +409,8 @@ class LorryReceipt {
               address: '',
               contact: '',
               mobile: '',
-              email: ''),
+              email: '',
+            ),
       consignee: consigneeJson != null
           ? Consignee.fromJson(consigneeJson)
           : Consignee(
@@ -407,7 +420,8 @@ class LorryReceipt {
               location: '',
               address: '',
               contact: '',
-              mobile: ''),
+              mobile: '',
+            ),
       vehicle: vehicleJson != null
           ? Vehicle.fromJson(vehicleJson)
           : Vehicle(id: (json['vehicle_id'] as String?) ?? '', number: ''),
@@ -417,7 +431,8 @@ class LorryReceipt {
               id: (json['transporter_id'] as String?) ?? '',
               name: '',
               pan: '',
-              tds: 'No'),
+              tds: 'No',
+            ),
       driverId: json['driver_id'] as String? ?? driverJson?['id'] as String?,
       routeId: json['route_id'] as String?,
       route: (fromCity.isNotEmpty || toCity.isNotEmpty)
@@ -465,6 +480,7 @@ class LorryReceipt {
       enteredByName: enteredByName,
       version: version ?? this.version,
       customerName: customerName,
+      orderNo: orderNo,
       consignor: consignor,
       consignee: consignee,
       vehicle: vehicle,
