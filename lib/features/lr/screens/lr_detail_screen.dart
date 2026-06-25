@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/file_opener.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/utils/mime_types.dart';
+import '../../../shared/models/attachment.dart';
 import '../../../shared/models/lr_models.dart';
-import '../../../shared/models/user.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/confirm_dialog.dart';
@@ -24,8 +26,8 @@ class LrDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncLr = ref.watch(lrDetailProvider(id));
     final user = ref.watch(currentUserProvider);
-    final canEdit = user?.role.canEdit ?? false;
-    final canDelete = user?.role.canDelete ?? false;
+    final canEdit = user?.canEditLr ?? false;
+    final canDelete = user?.canDeleteLr ?? false;
 
     return asyncLr.when(
       loading: () => const Scaffold(
@@ -258,6 +260,7 @@ class _LeftColumn extends StatelessWidget {
                 title: 'Parties',
               ),
               _KeyValueGrid(items: [
+                if (lr.customerName.isNotEmpty) ('Customer', lr.customerName),
                 ('Consignor', lr.consignor.name),
                 ('GST', lr.consignor.gst),
                 ('Address', lr.consignor.address),
@@ -298,46 +301,7 @@ class _LeftColumn extends StatelessWidget {
                   title: 'Invoice Attachments (${lr.attachments.length})',
                 ),
                 for (final a in lr.attachments)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: AppColors.line),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.insert_drive_file_outlined,
-                            size: 18, color: AppColors.plum),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                a.name,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: AppColors.ink,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              Text(
-                                '${a.sizeLabel} · ${formatDate(a.uploadedAt)}',
-                                style: const TextStyle(
-                                  color: AppColors.slate,
-                                  fontSize: 11.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  _AttachmentTile(lrId: lr.id, attachment: a),
               ],
             ),
           ),
@@ -630,6 +594,96 @@ class _FreightRow extends StatelessWidget {
               fontSize: 14,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AttachmentTile extends ConsumerStatefulWidget {
+  final String lrId;
+  final Attachment attachment;
+  const _AttachmentTile({required this.lrId, required this.attachment});
+
+  @override
+  ConsumerState<_AttachmentTile> createState() => _AttachmentTileState();
+}
+
+class _AttachmentTileState extends ConsumerState<_AttachmentTile> {
+  bool _loading = false;
+
+  Future<void> _view() async {
+    setState(() => _loading = true);
+    try {
+      final a = widget.attachment;
+      final bytes = await ref
+          .read(lrRepositoryProvider)
+          .downloadAttachmentBytes(widget.lrId, a.id);
+      openFileInBrowser(bytes, a.mimeType ?? mimeForName(a.name), a.name);
+    } catch (e) {
+      if (mounted) MasterActions.showError(context, e);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final a = widget.attachment;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.insert_drive_file_outlined,
+              size: 18, color: AppColors.plum),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  a.name,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.ink,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                Text(
+                  '${a.sizeLabel} · ${formatDate(a.uploadedAt)}',
+                  style: const TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 11.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _loading
+              ? const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : TextButton.icon(
+                  onPressed: _view,
+                  icon: const Icon(Icons.visibility_outlined, size: 16),
+                  label: const Text('View'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.plum,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
         ],
       ),
     );

@@ -7,6 +7,8 @@ class SystemConfig {
   // LR print format
   final String companyName;
   final String companyTagline;
+  final String companyAddress;
+  final String companyGstin;
   final String termsText;
   final String footerText;
   final bool showVistarMargin;
@@ -24,8 +26,11 @@ class SystemConfig {
     this.lrPrefix = 'LR',
     this.lrFormat = '{prefix}/{YY}/{MM}/{seq:05d}',
     this.nextLrNumber = 1,
-    this.companyName = 'Vistar Logitek Pvt Ltd',
-    this.companyTagline = 'Transport Documentation · Dispatch · Billing',
+    this.companyName = 'Vistar Logitek Private Limited',
+    this.companyTagline = 'Warehousing, Transportation & Contracts Logistics',
+    this.companyAddress =
+        'Office No. 302, 3rd Floor, MSR Capital Building, Samrat Chowk, Morwadi, Pimpri, Pune 411018.',
+    this.companyGstin = 'MH 27AAECV9694A1ZZ',
     this.termsText =
         'All disputes subject to Pune jurisdiction. Goods carried at owner\'s risk. Insurance to be arranged by consignor unless otherwise agreed.',
     this.footerText = 'For Vistar Logitek Pvt Ltd',
@@ -45,6 +50,8 @@ class SystemConfig {
     int? nextLrNumber,
     String? companyName,
     String? companyTagline,
+    String? companyAddress,
+    String? companyGstin,
     String? termsText,
     String? footerText,
     bool? showVistarMargin,
@@ -62,6 +69,8 @@ class SystemConfig {
       nextLrNumber: nextLrNumber ?? this.nextLrNumber,
       companyName: companyName ?? this.companyName,
       companyTagline: companyTagline ?? this.companyTagline,
+      companyAddress: companyAddress ?? this.companyAddress,
+      companyGstin: companyGstin ?? this.companyGstin,
       termsText: termsText ?? this.termsText,
       footerText: footerText ?? this.footerText,
       showVistarMargin: showVistarMargin ?? this.showVistarMargin,

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../shell/widgets/app_topbar.dart';
 
 class AdminScreen extends ConsumerWidget {
@@ -11,6 +12,7 @@ class AdminScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(currentUserProvider);
     final tiles = <_AdminTile>[
       const _AdminTile(
         title: 'Users',
@@ -19,6 +21,14 @@ class AdminScreen extends ConsumerWidget {
         path: '/admin/users',
         tint: AppColors.plum,
       ),
+      if (user?.canManageRegions ?? false)
+        const _AdminTile(
+          title: 'Regions',
+          subtitle: 'Operating areas & user assignments',
+          icon: Icons.public_outlined,
+          path: '/admin/regions',
+          tint: AppColors.ok,
+        ),
       const _AdminTile(
         title: 'LR Numbering',
         subtitle: 'Prefix, format & next number',

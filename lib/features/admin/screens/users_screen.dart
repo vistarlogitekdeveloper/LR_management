@@ -14,6 +14,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../data/admin_repository.dart';
 import '../../shell/widgets/app_topbar.dart';
 import '../providers/users_provider.dart';
+import '../widgets/user_permissions_dialog.dart';
 
 class UsersAdminScreen extends ConsumerWidget {
   const UsersAdminScreen({super.key});
@@ -28,8 +29,19 @@ class UsersAdminScreen extends ConsumerWidget {
 
   Future<void> _openForm(BuildContext context, WidgetRef ref,
       {AppUser? existing}) async {
+    final currentUser = ref.read(currentUserProvider);
+    final isSuper = currentUser?.isSuperAdmin ?? false;
     final roles = ref.read(rolesProvider).valueOrNull ?? const <RoleInfo>[];
     final roleNames = roles.map((r) => r.name).toList();
+    final regions = ref.read(regionsProvider);
+    final regionNames = regions.map((r) => r.name).toList();
+
+    // Only pre-select a region the dropdown actually offers — otherwise the
+    // DropdownButtonFormField would assert on an unknown value.
+    final existingRegionName =
+        (existing?.regionName != null && regionNames.contains(existing!.regionName))
+            ? existing.regionName
+            : null;
 
     String? initialRoleName;
     if (existing != null) {
@@ -72,6 +84,15 @@ class UsersAdminScreen extends ConsumerWidget {
             required: true,
             options: roleNames,
             initialValue: initialRoleName),
+        // Region is assignable only by a super admin. Region admins create
+        // users inside their own region automatically (set by the backend).
+        if (isSuper)
+          FormFieldSpec(
+              name: 'region',
+              label: 'Region (leave blank for super admins)',
+              type: FieldType.dropdown,
+              options: regionNames,
+              initialValue: existingRegionName),
         FormFieldSpec(
             name: 'password',
             label: existing == null ? 'Password' : 'Reset Password (optional)',
@@ -86,15 +107,13 @@ class UsersAdminScreen extends ConsumerWidget {
               'email': existing.email,
               if (existing.mobile != null) 'mobile': existing.mobile!,
               if (initialRoleName != null) 'role': initialRoleName,
+              if (existingRegionName != null) 'region': existingRegionName,
             },
       onSave: (values) async {
         final n = ref.read(usersProvider.notifier);
         final roleName = values['role'] ?? '';
-        final roleId = roles
-            .where((r) => r.name == roleName)
-            .map((r) => r.id)
-            .firstOrNull;
-        if (roleId == null) {
+        final role = roles.where((r) => r.name == roleName).firstOrNull;
+        if (role == null) {
           messenger.showSnackBar(
             const SnackBar(content: Text('Please select a valid role')),
           );
@@ -102,24 +121,45 @@ class UsersAdminScreen extends ConsumerWidget {
         }
         final email = (values['email'] ?? '').trim();
         final mobile = (values['mobile'] ?? '').trim();
+
+        // Resolve region (super admin only). Required for any non-super-admin
+        // role so the new user is visible to their region admin.
+        String? regionId;
+        if (isSuper) {
+          final regionName = (values['region'] ?? '').trim();
+          regionId = regions
+              .where((r) => r.name == regionName)
+              .map((r) => r.id)
+              .firstOrNull;
+          final makingSuperAdmin = role.code == 'SUPER_ADMIN';
+          if (!makingSuperAdmin && regionId == null) {
+            messenger.showSnackBar(
+              const SnackBar(content: Text('Please pick a region for this user.')),
+            );
+            return false;
+          }
+        }
+
         try {
           if (existing == null) {
             await n.create(
               username: values['username'] ?? '',
               name: values['name'] ?? '',
-              roleId: roleId,
+              roleId: role.id,
               password: values['password'] ?? '',
               email: email.isEmpty ? null : email,
               mobile: mobile.isEmpty ? null : mobile,
+              regionId: regionId,
               active: true,
             );
           } else {
             await n.updateUser(
               existing,
               name: values['name'] ?? existing.name,
-              roleId: roleId,
+              roleId: role.id,
               email: email,
               mobile: mobile.isEmpty ? null : mobile,
+              regionId: regionId,
             );
           }
           return true;
@@ -133,10 +173,22 @@ class UsersAdminScreen extends ConsumerWidget {
     );
   }
 
+  bool _canManagePermissions(AppUser? current, AppUser row) {
+    if (current == null) return false;
+    if (current.id == row.id) return false;
+    // Per-user toggles target operators / accounts (the role defaults the
+    // toggle set is built around). Super admins and region admins may both
+    // manage them; the backend enforces region scope.
+    return row.role == UserRole.operator || row.role == UserRole.accounts;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final users = ref.watch(usersProvider);
     final currentUser = ref.watch(currentUserProvider);
+    final isSuper = currentUser?.isSuperAdmin ?? false;
+    // Keep regions/roles warm for the form pickers.
+    ref.watch(regionsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.mist,
@@ -144,7 +196,9 @@ class UsersAdminScreen extends ConsumerWidget {
         children: [
           AppTopbar(
             title: 'Users',
-            subtitle: '${users.length} system users',
+            subtitle: isSuper
+                ? '${users.length} users · all regions'
+                : '${users.length} users · ${currentUser?.regionName ?? 'your region'}',
             actions: [
               AppButton(
                 label: 'Add user',
@@ -169,6 +223,7 @@ class UsersAdminScreen extends ConsumerWidget {
                       DataColumn(label: Text('Name')),
                       DataColumn(label: Text('Username')),
                       DataColumn(label: Text('Role')),
+                      DataColumn(label: Text('Region')),
                       DataColumn(label: Text('')),
                     ],
                     rows: [
@@ -179,9 +234,22 @@ class UsersAdminScreen extends ConsumerWidget {
                                   fontWeight: FontWeight.w700))),
                           DataCell(Text(u.username)),
                           DataCell(_RoleBadge(role: u.role)),
+                          DataCell(Text(u.regionName ?? '—',
+                              style: TextStyle(
+                                  color: u.regionName == null
+                                      ? AppColors.slate
+                                      : AppColors.ink))),
                           DataCell(Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              if (_canManagePermissions(currentUser, u))
+                                IconButton(
+                                  tooltip: 'Access',
+                                  icon: const Icon(Icons.tune_rounded,
+                                      color: AppColors.orange, size: 18),
+                                  onPressed: () =>
+                                      UserPermissionsDialog.show(context, u),
+                                ),
                               IconButton(
                                 tooltip: 'Edit',
                                 icon: const Icon(Icons.edit_outlined,
@@ -245,6 +313,7 @@ class _RoleBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (role) {
+      UserRole.superAdmin => AppColors.red,
       UserRole.admin => AppColors.plum,
       UserRole.operator => AppColors.orange,
       UserRole.accounts => AppColors.ok,

@@ -4,8 +4,8 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/mock_data.dart';
 import '../../../shared/models/driver.dart';
+import '../../../shared/models/route_master.dart';
 import '../../../shared/models/transporter.dart';
-import '../../../shared/models/user.dart';
 import '../../../shared/models/vehicle.dart';
 import '../../../shared/widgets/form_field_spec.dart';
 import '../../../shared/widgets/master_form_dialog.dart';
@@ -26,12 +26,14 @@ class VehiclesScreen extends ConsumerWidget {
     required List<String> vehicleTypes,
     required List<String> driverNames,
     required List<String> transporterNames,
+    required List<String> routeNames,
   }) =>
       [
         FormFieldSpec(
             name: 'number',
             label: 'Vehicle Number',
             required: true,
+            uppercase: true,
             initialValue: v?.number),
         FormFieldSpec(
             name: 'type',
@@ -60,6 +62,13 @@ class VehiclesScreen extends ConsumerWidget {
             initialValue: (v != null && v.transporterName.isNotEmpty)
                 ? v.transporterName
                 : _none),
+        FormFieldSpec(
+            name: 'route',
+            label: 'Assigned Route',
+            type: FieldType.dropdown,
+            options: [_none, ...routeNames],
+            initialValue:
+                (v != null && v.routeName.isNotEmpty) ? v.routeName : _none),
       ];
 
   Future<void> _openForm(
@@ -69,12 +78,14 @@ class VehiclesScreen extends ConsumerWidget {
     required List<LookupValue> vehicleTypes,
     required List<Driver> drivers,
     required List<Transporter> transporters,
+    required List<RouteMaster> routes,
   }) async {
     final typeLabels = vehicleTypes.isEmpty
         ? MockData.vehicleTypes
         : vehicleTypes.map((e) => e.label).toList();
     final driverNames = drivers.map((d) => d.name).toList();
     final transporterNames = transporters.map((t) => t.name).toList();
+    final routeNames = routes.map((r) => r.name).toList();
 
     await MasterFormDialog.show(
       context: context,
@@ -83,7 +94,8 @@ class VehiclesScreen extends ConsumerWidget {
       fields: _fields(existing,
           vehicleTypes: typeLabels,
           driverNames: driverNames,
-          transporterNames: transporterNames),
+          transporterNames: transporterNames,
+          routeNames: routeNames),
       initial: existing == null
           ? const {}
           : {
@@ -95,6 +107,8 @@ class VehiclesScreen extends ConsumerWidget {
               'transporter': existing.transporterName.isEmpty
                   ? _none
                   : existing.transporterName,
+              'route':
+                  existing.routeName.isEmpty ? _none : existing.routeName,
             },
       onSave: (values) async {
         try {
@@ -117,6 +131,13 @@ class VehiclesScreen extends ConsumerWidget {
                   .where((t) => t.name == trName)
                   .cast<Transporter?>()
                   .firstWhere((_) => true, orElse: () => null);
+          final rName = values['route'];
+          final route = (rName == null || rName == _none)
+              ? null
+              : routes
+                  .where((r) => r.name == rName)
+                  .cast<RouteMaster?>()
+                  .firstWhere((_) => true, orElse: () => null);
           final capacity = double.tryParse(values['capacity'] ?? '') ?? 0;
 
           final n = ref.read(vehiclesProvider.notifier);
@@ -132,11 +153,16 @@ class VehiclesScreen extends ConsumerWidget {
               currentDriverId: driver?.id,
               driver: driver?.name ?? '',
               driverMobile: driver?.mobile ?? '',
+              routeId: route?.id,
+              routeName: route?.name ?? '',
             ));
           } else {
-            await n.update(existing.copyWith(
-              number: values['number'],
-              typeId: typeId ?? existing.typeId,
+            // Build explicitly (not copyWith) so picking "(None)" clears the FK.
+            await n.update(Vehicle(
+              id: existing.id,
+              version: existing.version,
+              number: values['number'] ?? existing.number,
+              typeId: typeId ?? '',
               type: typeLabel,
               capacityMt: capacity,
               transporterId: transporter?.id,
@@ -144,6 +170,8 @@ class VehiclesScreen extends ConsumerWidget {
               currentDriverId: driver?.id,
               driver: driver?.name ?? '',
               driverMobile: driver?.mobile ?? '',
+              routeId: route?.id,
+              routeName: route?.name ?? '',
             ));
           }
           return true;
@@ -160,10 +188,11 @@ class VehiclesScreen extends ConsumerWidget {
     final vehicles = ref.watch(vehiclesProvider);
     final drivers = ref.watch(driversProvider);
     final transporters = ref.watch(transportersProvider);
+    final routes = ref.watch(routesProvider);
     final vehicleTypes =
         lookupList(ref.watch(lookupsMapProvider), 'VEHICLE_TYPE');
     final user = ref.watch(currentUserProvider);
-    final canEdit = user?.role == UserRole.admin;
+    final canEdit = user?.canManageVehicles ?? false;
 
     return MasterPage(
       title: 'Vehicles & Drivers',
@@ -174,7 +203,8 @@ class VehiclesScreen extends ConsumerWidget {
           ? () => _openForm(context, ref,
               vehicleTypes: vehicleTypes,
               drivers: drivers,
-              transporters: transporters)
+              transporters: transporters,
+              routes: routes)
           : null,
       onEdit: canEdit
           ? (id) {
@@ -183,7 +213,8 @@ class VehiclesScreen extends ConsumerWidget {
                   existing: v,
                   vehicleTypes: vehicleTypes,
                   drivers: drivers,
-                  transporters: transporters);
+                  transporters: transporters,
+                  routes: routes);
             }
           : null,
       onDelete: canEdit
@@ -203,8 +234,8 @@ class VehiclesScreen extends ConsumerWidget {
         'Type',
         'Capacity',
         'Driver',
-        'Driver Mobile',
         'Transporter',
+        'Route',
       ],
       rows: [
         for (final v in vehicles)
@@ -215,8 +246,8 @@ class VehiclesScreen extends ConsumerWidget {
               v.type,
               v.capacity,
               v.driver,
-              v.driverMobile,
               v.transporterName,
+              v.routeName,
             ],
           ),
       ],

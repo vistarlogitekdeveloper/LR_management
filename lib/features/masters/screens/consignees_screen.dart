@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../shared/models/consignee.dart';
-import '../../../shared/models/user.dart';
 import '../../../shared/widgets/form_field_spec.dart';
 import '../../../shared/widgets/master_form_dialog.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -106,7 +105,7 @@ class ConsigneesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final consignees = ref.watch(consigneesProvider);
     final user = ref.watch(currentUserProvider);
-    final canEdit = user?.role == UserRole.admin;
+    final canEdit = user?.canManageConsignees ?? false;
 
     return MasterPage(
       title: 'Consignees',

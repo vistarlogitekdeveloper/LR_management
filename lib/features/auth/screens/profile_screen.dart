@@ -134,15 +134,15 @@ class ProfileScreen extends ConsumerWidget {
                         ),
                         _AccessRow(
                           label: 'Create LR',
-                          granted: user.role.canCreate,
+                          granted: user.canCreateLr,
                         ),
                         _AccessRow(
                           label: 'Edit LR',
-                          granted: user.role.canEdit,
+                          granted: user.canEditLr,
                         ),
                         _AccessRow(
                           label: 'Delete LR',
-                          granted: user.role.canDelete,
+                          granted: user.canDeleteLr,
                         ),
                         _AccessRow(
                           label: 'View Reports',

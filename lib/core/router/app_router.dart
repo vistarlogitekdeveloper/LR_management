@@ -7,6 +7,7 @@ import '../../features/admin/screens/admin_screen.dart';
 import '../../features/admin/screens/audit_screen.dart';
 import '../../features/admin/screens/lr_format_screen.dart';
 import '../../features/admin/screens/numbering_screen.dart';
+import '../../features/admin/screens/regions_screen.dart';
 import '../../features/admin/screens/settings_screen.dart';
 import '../../features/admin/screens/users_screen.dart';
 import '../../features/auth/providers/auth_provider.dart';
@@ -42,27 +43,61 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/dashboard',
     redirect: (context, state) {
-      final isAuthed = auth.isAuthenticated;
       final loc = state.matchedLocation;
-      final isPublic =
-          loc == '/login' || loc == '/forgot-password';
+
+      // While restoring a saved session (e.g. after a browser refresh) wait on
+      // a splash instead of bouncing to /login — and remember where to return.
+      if (auth.initializing) {
+        return loc == '/splash'
+            ? null
+            : '/splash?from=${Uri.encodeComponent(state.uri.toString())}';
+      }
+
+      final isAuthed = auth.isAuthenticated;
+
+      // Once auth is known, send the splash to the original page (or /login).
+      if (loc == '/splash') {
+        if (!isAuthed) return '/login';
+        final from = state.uri.queryParameters['from'];
+        if (from != null &&
+            from.isNotEmpty &&
+            !from.startsWith('/splash') &&
+            !from.startsWith('/login')) {
+          return from;
+        }
+        return '/dashboard';
+      }
+
+      final isPublic = loc == '/login' || loc == '/forgot-password';
       if (!isAuthed && !isPublic) return '/login';
       if (isAuthed && loc == '/login') return '/dashboard';
 
-      // Role guards for protected branches
-      final role = auth.user?.role;
-      if (role != null) {
+      // Role / permission guards for protected branches
+      final user = auth.user;
+      final role = user?.role;
+      if (user != null && role != null) {
         if (loc.startsWith('/admin') && !role.canAdmin) return '/dashboard';
+        // Region maintenance is super-admin only.
+        if (loc.startsWith('/admin/regions') && !role.canManageRegions) {
+          return '/dashboard';
+        }
         if (loc.startsWith('/masters/') && !(role.canMasters || role.canReports)) {
           return '/dashboard';
         }
-        if (loc == '/lrs/new' && !role.canCreate) return '/dashboard';
-        if (loc.endsWith('/edit') && !role.canEdit) return '/dashboard';
+        // LR create/edit honour per-user permission overrides.
+        if (loc == '/lrs/new' && !user.canCreateLr) return '/dashboard';
+        if (loc.endsWith('/edit') && !user.canEditLr) return '/dashboard';
       }
       return null;
     },
     refreshListenable: _AuthListenable(ref),
     routes: [
+      GoRoute(
+        path: '/splash',
+        builder: (context, state) => const Scaffold(
+          body: Center(child: CircularProgressIndicator()),
+        ),
+      ),
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),
@@ -252,6 +287,17 @@ final routerProvider = Provider<GoRouter>((ref) {
                     onEnter: (ref) =>
                         ref.read(usersProvider.notifier).refresh(),
                     child: const UsersAdminScreen(),
+                  ),
+                ),
+              ),
+              GoRoute(
+                path: 'regions',
+                pageBuilder: (context, state) => NoTransitionPage(
+                  key: state.pageKey,
+                  child: RefreshGate(
+                    onEnter: (ref) =>
+                        ref.read(regionsProvider.notifier).refresh(),
+                    child: const RegionsScreen(),
                   ),
                 ),
               ),

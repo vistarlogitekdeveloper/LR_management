@@ -17,9 +17,9 @@ class LookupValue {
 
   factory LookupValue.fromJson(Map<String, dynamic> json) => LookupValue(
         id: json['id'] as String,
-        category: json['category'] as String,
-        code: json['code'] as String,
-        label: json['label'] as String,
+        category: (json['category'] as String?) ?? '',
+        code: (json['code'] as String?) ?? '',
+        label: (json['label'] as String?) ?? '',
         sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
         meta: ((json['meta'] as Map?) ?? const {}).cast<String, dynamic>(),
       );

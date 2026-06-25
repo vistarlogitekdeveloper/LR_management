@@ -90,10 +90,13 @@ class _FilterBar extends ConsumerWidget {
               for (final s in LrStatus.values)
                 DropdownMenuItem(value: s, child: Text(s.label)),
             ],
-            onChanged: (v) => ref.read(lrFilterProvider.notifier).update(
-                (s) => v == null
-                    ? s.copyWith(clearStatus: true)
-                    : s.copyWith(status: v)),
+            onChanged: (v) => ref
+                .read(lrFilterProvider.notifier)
+                .update(
+                  (s) => v == null
+                      ? s.copyWith(clearStatus: true)
+                      : s.copyWith(status: v),
+                ),
           ),
         ),
         SizedBox(
@@ -106,10 +109,13 @@ class _FilterBar extends ConsumerWidget {
               for (final r in ref.watch(routesProvider).map((r) => r.name))
                 DropdownMenuItem(value: r, child: Text(r)),
             ],
-            onChanged: (v) => ref.read(lrFilterProvider.notifier).update(
-                (s) => v == null
-                    ? s.copyWith(clearRoute: true)
-                    : s.copyWith(route: v)),
+            onChanged: (v) => ref
+                .read(lrFilterProvider.notifier)
+                .update(
+                  (s) => v == null
+                      ? s.copyWith(clearRoute: true)
+                      : s.copyWith(route: v),
+                ),
           ),
         ),
       ],
@@ -117,12 +123,26 @@ class _FilterBar extends ConsumerWidget {
   }
 }
 
-class _LrTable extends StatelessWidget {
+class _LrTable extends StatefulWidget {
   final List<LorryReceipt> lrs;
   const _LrTable({required this.lrs});
 
   @override
+  State<_LrTable> createState() => _LrTableState();
+}
+
+class _LrTableState extends State<_LrTable> {
+  final ScrollController _hController = ScrollController();
+
+  @override
+  void dispose() {
+    _hController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final lrs = widget.lrs;
     if (lrs.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(40),
@@ -134,63 +154,83 @@ class _LrTable extends StatelessWidget {
       );
     }
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        headingRowColor: WidgetStatePropertyAll(
-          AppColors.plum.withValues(alpha: 0.05),
+    return Scrollbar(
+      controller: _hController,
+      thumbVisibility: true,
+      child: SingleChildScrollView(
+        controller: _hController,
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.only(bottom: 12),
+        child: DataTable(
+          headingRowColor: WidgetStatePropertyAll(
+            AppColors.plum.withValues(alpha: 0.05),
+          ),
+          columnSpacing: 24,
+          dataRowMinHeight: 52,
+          dataRowMaxHeight: 56,
+          columns: const [
+            DataColumn(label: Text('')),
+            DataColumn(label: Text('LR Number')),
+            DataColumn(label: Text('Date')),
+            DataColumn(label: Text('Consignor')),
+            DataColumn(label: Text('Consignee')),
+            DataColumn(label: Text('Vehicle')),
+            DataColumn(label: Text('Route')),
+            DataColumn(label: Text('Freight')),
+            DataColumn(label: Text('Status')),
+            DataColumn(label: Text('Pay')),
+          ],
+          rows: [
+            for (final lr in lrs)
+              DataRow(
+                cells: [
+                  DataCell(
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'View',
+                          icon: const Icon(
+                            Icons.visibility_outlined,
+                            color: AppColors.plum,
+                            size: 18,
+                          ),
+                          onPressed: () => context.go('/lrs/${lr.id}'),
+                        ),
+                        IconButton(
+                          tooltip: 'Print',
+                          icon: const Icon(
+                            Icons.print_outlined,
+                            color: AppColors.plum,
+                            size: 18,
+                          ),
+                          onPressed: () => context.go('/lrs/${lr.id}/print'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  DataCell(
+                    Text(
+                      lr.number,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  DataCell(Text(formatDate(lr.date))),
+                  DataCell(
+                    Text(lr.consignor.name, overflow: TextOverflow.ellipsis),
+                  ),
+                  DataCell(
+                    Text(lr.consignee.name, overflow: TextOverflow.ellipsis),
+                  ),
+                  DataCell(Text(lr.vehicle.number)),
+                  DataCell(Text(lr.route)),
+                  DataCell(Text(inr(lr.freight.total))),
+                  DataCell(StatusPill(status: lr.status)),
+                  DataCell(PayPill(pay: lr.payType)),
+                ],
+              ),
+          ],
         ),
-        columnSpacing: 24,
-        dataRowMinHeight: 52,
-        dataRowMaxHeight: 56,
-        columns: const [
-          DataColumn(label: Text('LR Number')),
-          DataColumn(label: Text('Date')),
-          DataColumn(label: Text('Consignor')),
-          DataColumn(label: Text('Consignee')),
-          DataColumn(label: Text('Vehicle')),
-          DataColumn(label: Text('Route')),
-          DataColumn(label: Text('Freight')),
-          DataColumn(label: Text('Status')),
-          DataColumn(label: Text('Pay')),
-          DataColumn(label: Text('')),
-        ],
-        rows: [
-          for (final lr in lrs)
-            DataRow(
-              cells: [
-                DataCell(Text(lr.number,
-                    style: const TextStyle(fontWeight: FontWeight.w700))),
-                DataCell(Text(formatDate(lr.date))),
-                DataCell(Text(lr.consignor.name,
-                    overflow: TextOverflow.ellipsis)),
-                DataCell(Text(lr.consignee.name,
-                    overflow: TextOverflow.ellipsis)),
-                DataCell(Text(lr.vehicle.number)),
-                DataCell(Text(lr.route)),
-                DataCell(Text(inr(lr.freight.total))),
-                DataCell(StatusPill(status: lr.status)),
-                DataCell(PayPill(pay: lr.payType)),
-                DataCell(Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      tooltip: 'View',
-                      icon: const Icon(Icons.visibility_outlined,
-                          color: AppColors.plum, size: 18),
-                      onPressed: () => context.go('/lrs/${lr.id}'),
-                    ),
-                    IconButton(
-                      tooltip: 'Print',
-                      icon: const Icon(Icons.print_outlined,
-                          color: AppColors.plum, size: 18),
-                      onPressed: () => context.go('/lrs/${lr.id}/print'),
-                    ),
-                  ],
-                )),
-              ],
-            ),
-        ],
       ),
     );
   }

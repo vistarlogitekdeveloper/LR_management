@@ -92,9 +92,10 @@ class VehiclesNotifier extends StateNotifier<List<Vehicle>> {
     }
   }
 
-  Future<void> add(Vehicle v) async {
+  Future<Vehicle> add(Vehicle v) async {
     final created = await _repo.create(v);
     state = [...state, created];
+    return created;
   }
 
   Future<void> update(Vehicle v) async {

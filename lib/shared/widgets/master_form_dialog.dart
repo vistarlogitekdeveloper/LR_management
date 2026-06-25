@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/theme/app_colors.dart';
 import 'app_button.dart';
@@ -50,6 +51,20 @@ class MasterFormDialog extends StatefulWidget {
 
   @override
   State<MasterFormDialog> createState() => _MasterFormDialogState();
+}
+
+/// Forces typed text to uppercase (e.g. vehicle registration numbers).
+class _UpperCaseTextFormatter extends TextInputFormatter {
+  const _UpperCaseTextFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    return TextEditingValue(
+      text: newValue.text.toUpperCase(),
+      selection: newValue.selection,
+    );
+  }
 }
 
 class _MasterFormDialogState extends State<MasterFormDialog> {
@@ -226,6 +241,10 @@ class _MasterFormDialogState extends State<MasterFormDialog> {
           FieldType.multiline => TextInputType.multiline,
           _ => TextInputType.text,
         },
+        textCapitalization:
+            f.uppercase ? TextCapitalization.characters : TextCapitalization.none,
+        inputFormatters:
+            f.uppercase ? const [_UpperCaseTextFormatter()] : null,
         maxLines: f.type == FieldType.multiline ? 3 : 1,
         maxLength: f.maxLength,
         decoration: InputDecoration(

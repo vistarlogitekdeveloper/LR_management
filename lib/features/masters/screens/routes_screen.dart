@@ -4,7 +4,6 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/utils/formatters.dart';
 import '../../../shared/models/route_master.dart';
-import '../../../shared/models/user.dart';
 import '../../../shared/widgets/form_field_spec.dart';
 import '../../../shared/widgets/master_form_dialog.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -18,13 +17,15 @@ class RoutesScreen extends ConsumerWidget {
   static List<FormFieldSpec> _fields(RouteMaster? r) => [
         FormFieldSpec(
             name: 'fromCity',
-            label: 'From City',
+            label: 'From Location / City',
             required: true,
+            hint: 'Short company name - location · e.g. VLL - Pune',
             initialValue: r?.fromCity),
         FormFieldSpec(
             name: 'toCity',
-            label: 'To City',
+            label: 'To Location / City',
             required: true,
+            hint: 'Short company name - location · e.g. TATA - Chakan',
             initialValue: r?.toCity),
         FormFieldSpec(
             name: 'distanceKm',
@@ -37,7 +38,15 @@ class RoutesScreen extends ConsumerWidget {
             label: 'Base Rate (₹)',
             type: FieldType.number,
             required: true,
+            hint: 'Standard/transporter cost',
             initialValue: r?.baseRate.toStringAsFixed(0)),
+        FormFieldSpec(
+            name: 'customerRate',
+            label: 'Customer Rate (₹)',
+            type: FieldType.number,
+            hint: 'Rate charged to customer · used for Vistar margin',
+            initialValue:
+                (r != null && r.customerRate > 0) ? r.customerRate.toStringAsFixed(0) : ''),
       ];
 
   Future<void> _openForm(BuildContext context, WidgetRef ref,
@@ -54,12 +63,17 @@ class RoutesScreen extends ConsumerWidget {
               'toCity': existing.toCity,
               'distanceKm': existing.distanceKm.toStringAsFixed(0),
               'baseRate': existing.baseRate.toStringAsFixed(0),
+              'customerRate': existing.customerRate > 0
+                  ? existing.customerRate.toStringAsFixed(0)
+                  : '',
             },
       onSave: (values) async {
         try {
           final n = ref.read(routesProvider.notifier);
           final distance = double.tryParse(values['distanceKm'] ?? '0') ?? 0;
           final rate = double.tryParse(values['baseRate'] ?? '0') ?? 0;
+          final customerRate =
+              double.tryParse(values['customerRate'] ?? '0') ?? 0;
           if (existing == null) {
             await n.add(RouteMaster(
               id: const Uuid().v4(),
@@ -67,6 +81,7 @@ class RoutesScreen extends ConsumerWidget {
               toCity: values['toCity'] ?? '',
               distanceKm: distance,
               baseRate: rate,
+              customerRate: customerRate,
             ));
           } else {
             await n.update(existing.copyWith(
@@ -74,6 +89,7 @@ class RoutesScreen extends ConsumerWidget {
               toCity: values['toCity'],
               distanceKm: distance,
               baseRate: rate,
+              customerRate: customerRate,
             ));
           }
           return true;
@@ -89,7 +105,7 @@ class RoutesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final routes = ref.watch(routesProvider);
     final user = ref.watch(currentUserProvider);
-    final canEdit = user?.role == UserRole.admin;
+    final canEdit = user?.canManageRoutes ?? false;
 
     return MasterPage(
       title: 'Routes',
@@ -120,6 +136,7 @@ class RoutesScreen extends ConsumerWidget {
         'To',
         'Distance (km)',
         'Base Rate',
+        'Customer Rate',
       ],
       rows: [
         for (final r in routes)
@@ -130,6 +147,7 @@ class RoutesScreen extends ConsumerWidget {
               r.toCity,
               r.distanceKm.toStringAsFixed(0),
               inr(r.baseRate),
+              r.customerRate > 0 ? inr(r.customerRate) : '—',
             ],
           ),
       ],

@@ -46,8 +46,9 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
   }
 
   Future<LorryReceipt> create(Map<String, dynamic> payload,
-      {EwbInput? ewb}) async {
-    final created = await _repo.create(payload, ewb: ewb);
+      {EwbInput? ewb, String? idempotencyKey}) async {
+    final created =
+        await _repo.create(payload, ewb: ewb, idempotencyKey: idempotencyKey);
     state = [created, ...state];
     return created;
   }

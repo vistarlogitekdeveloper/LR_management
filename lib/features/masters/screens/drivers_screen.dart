@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../shared/models/driver.dart';
-import '../../../shared/models/user.dart';
 import '../../../shared/widgets/form_field_spec.dart';
 import '../../../shared/widgets/master_form_dialog.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -95,7 +94,7 @@ class DriversScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final drivers = ref.watch(driversProvider);
     final user = ref.watch(currentUserProvider);
-    final canEdit = user?.role == UserRole.admin;
+    final canEdit = user?.canManageDrivers ?? false;
 
     return MasterPage(
       title: 'Drivers',

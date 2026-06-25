@@ -28,6 +28,10 @@ class SystemRepository {
           int.tryParse('${numbering['next_sequence'] ?? ''}') ?? def.nextLrNumber,
       companyName: format['company_name'] as String?,
       companyTagline: format['tagline'] as String?,
+      // Optional — backend has no column yet; falls back to the default
+      // (the Vistar registered address / GSTIN shown on the consignment note).
+      companyAddress: format['company_address'] as String?,
+      companyGstin: format['company_gstin'] as String?,
       termsText: format['terms_md'] as String?,
       footerText: format['footer_md'] as String?,
       showEwb: format['show_ewb'] as bool?,

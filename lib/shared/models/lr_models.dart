@@ -288,7 +288,9 @@ class LorryReceipt {
   final String number;
   final DateTime date;
   final String enteredBy;
+  final String enteredByName;
   final int version;
+  final String customerName;
   final Consignor consignor;
   final Consignee consignee;
   final Vehicle vehicle;
@@ -315,7 +317,9 @@ class LorryReceipt {
     required this.number,
     required this.date,
     required this.enteredBy,
+    this.enteredByName = '',
     this.version = 0,
+    this.customerName = '',
     required this.consignor,
     required this.consignee,
     required this.vehicle,
@@ -380,7 +384,9 @@ class LorryReceipt {
       date: DateTime.tryParse(json['lr_date']?.toString() ?? '') ??
           DateTime.now(),
       enteredBy: (json['entered_by'] as String?) ?? '',
+      enteredByName: (nested('enteredBy')?['name'] as String?) ?? '',
       version: asInt(json['version']),
+      customerName: (json['customer_name'] as String?) ?? '',
       consignor: consignorJson != null
           ? Consignor.fromJson(consignorJson)
           : Consignor(
@@ -456,7 +462,9 @@ class LorryReceipt {
       number: number,
       date: date,
       enteredBy: enteredBy,
+      enteredByName: enteredByName,
       version: version ?? this.version,
+      customerName: customerName,
       consignor: consignor,
       consignee: consignee,
       vehicle: vehicle,

@@ -26,7 +26,7 @@ class DashboardScreen extends ConsumerWidget {
     final summary = ref.watch(dashboardSummaryProvider).valueOrNull;
 
     final flow = user == null ? null : RoleFlows.flows[user.role];
-    final canCreate = user?.role.canCreate ?? false;
+    final canCreate = user?.canCreateLr ?? false;
 
     final today = lrs.take(6).toList();
     final pendingFreightLocal = lrs

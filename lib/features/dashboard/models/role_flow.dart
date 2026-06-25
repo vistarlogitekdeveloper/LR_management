@@ -31,6 +31,52 @@ class RoleFlows {
   RoleFlows._();
 
   static final Map<UserRole, RoleFlow> flows = {
+    UserRole.superAdmin: const RoleFlow(
+      tagline:
+          'Tenant-wide control — oversee every region, manage all users, regions & per-user access.',
+      steps: [
+        FlowStep(
+          id: 'users',
+          icon: Icons.people_outline,
+          title: 'Users',
+          desc: 'Create & manage all accounts',
+          tint: AppColors.plum,
+          path: '/admin/users',
+        ),
+        FlowStep(
+          id: 'regions',
+          icon: Icons.public_outlined,
+          title: 'Regions',
+          desc: 'Define operating areas',
+          tint: AppColors.ok,
+          path: '/admin/regions',
+        ),
+        FlowStep(
+          id: 'lrs',
+          icon: Icons.description_outlined,
+          title: 'Manage LRs',
+          desc: 'View across every region',
+          tint: AppColors.orange,
+          path: '/lrs',
+        ),
+        FlowStep(
+          id: 'reports',
+          icon: Icons.bar_chart_rounded,
+          title: 'Reports',
+          desc: 'Daily, monthly & accounts',
+          tint: AppColors.plumLight,
+          path: '/reports',
+        ),
+        FlowStep(
+          id: 'admin',
+          icon: Icons.shield_outlined,
+          title: 'Admin Panel',
+          desc: 'Numbering, format & audit',
+          tint: AppColors.plum,
+          path: '/admin',
+        ),
+      ],
+    ),
     UserRole.admin: const RoleFlow(
       tagline:
           'Full control — create LRs, manage masters, run reports & administer the system.',

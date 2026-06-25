@@ -30,7 +30,7 @@ class AppSidebar extends ConsumerWidget {
     final visibleSections = <NavSection>[];
     for (final section in AppNav.sections) {
       final filtered =
-          section.items.where((i) => i.canAccess(user.role)).toList();
+          section.items.where((i) => i.canAccess(user)).toList();
       if (filtered.isNotEmpty) {
         visibleSections.add(NavSection(title: section.title, items: filtered));
       }
@@ -128,11 +128,14 @@ class AppSidebar extends ConsumerWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            user.role.label,
+                            user.regionName != null
+                                ? '${user.role.label} · ${user.regionName}'
+                                : user.role.label,
                             style: const TextStyle(
                               fontSize: 11.5,
                               color: AppColors.slate,
                             ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),

@@ -33,4 +33,66 @@ class TransportersRepository {
   Future<void> remove(String id) async {
     await _api.dio.delete('/transporters/$id');
   }
+
+  /// Uploads the blank cheque / passbook image and returns the transporter with
+  /// the stored document key. Works on web (bytes) and native (filePath).
+  Future<Transporter> uploadDocument(
+    String id, {
+    required String fileName,
+    List<int>? bytes,
+    String? filePath,
+  }) async {
+    final contentType = _mediaTypeForName(fileName);
+    final MultipartFile multipart;
+    if (bytes != null) {
+      multipart = MultipartFile.fromBytes(bytes,
+          filename: fileName, contentType: contentType);
+    } else if (filePath != null) {
+      multipart = await MultipartFile.fromFile(filePath,
+          filename: fileName, contentType: contentType);
+    } else {
+      throw ArgumentError('Either bytes or filePath is required');
+    }
+    final form = FormData.fromMap({'file': multipart});
+    final res = await _api.dio.post('/transporters/$id/document', data: form);
+    return Transporter.fromJson(
+        (res.data['data'] as Map).cast<String, dynamic>());
+  }
+
+  /// Downloads the cheque/passbook bytes (auth header applied by the client).
+  Future<List<int>> downloadDocument(String id) async {
+    final res = await _api.dio.get(
+      '/transporters/$id/document',
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return (res.data as List).cast<int>();
+  }
+
+  Future<Transporter> deleteDocument(String id) async {
+    final res = await _api.dio.delete('/transporters/$id/document');
+    return Transporter.fromJson(
+        (res.data['data'] as Map).cast<String, dynamic>());
+  }
+}
+
+/// Maps a filename extension to a content type so the server's MIME allowlist
+/// accepts the upload (Dio otherwise defaults to application/octet-stream).
+DioMediaType _mediaTypeForName(String fileName) {
+  final ext =
+      fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+  switch (ext) {
+    case 'pdf':
+      return DioMediaType('application', 'pdf');
+    case 'jpg':
+    case 'jpeg':
+      return DioMediaType('image', 'jpeg');
+    case 'png':
+      return DioMediaType('image', 'png');
+    case 'webp':
+      return DioMediaType('image', 'webp');
+    case 'heic':
+      return DioMediaType('image', 'heic');
+    default:
+      return DioMediaType('application', 'octet-stream');
+  }
 }

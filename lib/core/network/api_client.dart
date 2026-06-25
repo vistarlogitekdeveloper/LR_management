@@ -12,6 +12,12 @@ class ApiClient {
           receiveTimeout: ApiConfig.receiveTimeout,
           contentType: Headers.jsonContentType,
           responseType: ResponseType.json,
+          // Never serve stale data from the browser HTTP cache — this is a
+          // live operational app, so every read must hit the server.
+          headers: const {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+          },
         )) {
     _dio.interceptors.add(_buildAuthInterceptor());
   }
@@ -30,6 +36,14 @@ class ApiClient {
         final token = await _tokens.readAccess();
         if (token != null && token.isNotEmpty) {
           options.headers['Authorization'] = 'Bearer $token';
+        }
+        // Cache-bust GET reads so the browser can never hand back a stale body
+        // (e.g. after a backend deploy that changes the response shape).
+        if (options.method.toUpperCase() == 'GET') {
+          options.queryParameters = {
+            ...options.queryParameters,
+            '_ts': DateTime.now().millisecondsSinceEpoch,
+          };
         }
         handler.next(options);
       },

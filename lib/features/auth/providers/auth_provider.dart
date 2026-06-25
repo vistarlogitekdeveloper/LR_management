@@ -13,7 +13,17 @@ class AuthState {
   final String? error;
   final bool loading;
 
-  const AuthState({this.user, this.error, this.loading = false});
+  /// True only while the app is restoring a session on startup/refresh (reading
+  /// the stored token and validating it via /auth/me). The router shows a splash
+  /// instead of bouncing to /login during this window.
+  final bool initializing;
+
+  const AuthState({
+    this.user,
+    this.error,
+    this.loading = false,
+    this.initializing = false,
+  });
 
   bool get isAuthenticated => user != null;
 
@@ -21,6 +31,7 @@ class AuthState {
     AppUser? user,
     String? error,
     bool? loading,
+    bool? initializing,
     bool clearUser = false,
     bool clearError = false,
   }) {
@@ -28,12 +39,14 @@ class AuthState {
       user: clearUser ? null : (user ?? this.user),
       error: clearError ? null : (error ?? this.error),
       loading: loading ?? this.loading,
+      initializing: initializing ?? this.initializing,
     );
   }
 }
 
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier(this._api, this._tokens) : super(const AuthState()) {
+  AuthNotifier(this._api, this._tokens)
+      : super(const AuthState(initializing: true)) {
     _bootstrap();
   }
 
@@ -42,8 +55,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> _bootstrap() async {
     final access = await _tokens.readAccess();
-    if (access == null || access.isEmpty) return;
-    state = state.copyWith(loading: true);
+    if (access == null || access.isEmpty) {
+      state = const AuthState(initializing: false);
+      return;
+    }
     try {
       final res = await _api.dio.get('/auth/me');
       final user = AppUser.fromJson(
@@ -52,7 +67,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = AuthState(user: user);
     } catch (_) {
       await _tokens.clear();
-      state = const AuthState();
+      state = const AuthState(initializing: false);
     }
   }
 

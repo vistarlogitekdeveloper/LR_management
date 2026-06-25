@@ -12,6 +12,7 @@ class FormFieldSpec {
   final int? maxLength;
   final String? hint;
   final IconData? icon;
+  final bool uppercase;
   final String? Function(String?)? validator;
 
   const FormFieldSpec({
@@ -24,6 +25,7 @@ class FormFieldSpec {
     this.maxLength,
     this.hint,
     this.icon,
+    this.uppercase = false,
     this.validator,
   });
 }

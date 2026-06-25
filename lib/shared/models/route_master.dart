@@ -6,6 +6,7 @@ class RouteMaster {
   final String toCity;
   final double distanceKm;
   final double baseRate;
+  final double customerRate;
   final int version;
 
   const RouteMaster({
@@ -14,6 +15,7 @@ class RouteMaster {
     required this.toCity,
     required this.distanceKm,
     required this.baseRate,
+    this.customerRate = 0,
     this.version = 0,
   });
 
@@ -25,6 +27,7 @@ class RouteMaster {
         toCity: (json['to_city'] as String?) ?? '',
         distanceKm: asDouble(json['distance_km']),
         baseRate: asDouble(json['base_rate']),
+        customerRate: asDouble(json['customer_rate']),
         version: asInt(json['version']),
       );
 
@@ -33,6 +36,7 @@ class RouteMaster {
         'to_city': toCity,
         if (distanceKm > 0) 'distance_km': distanceKm,
         if (baseRate > 0) 'base_rate': baseRate,
+        'customer_rate': customerRate > 0 ? customerRate : null,
       };
 
   RouteMaster copyWith({
@@ -40,6 +44,7 @@ class RouteMaster {
     String? toCity,
     double? distanceKm,
     double? baseRate,
+    double? customerRate,
     int? version,
   }) {
     return RouteMaster(
@@ -48,6 +53,7 @@ class RouteMaster {
       toCity: toCity ?? this.toCity,
       distanceKm: distanceKm ?? this.distanceKm,
       baseRate: baseRate ?? this.baseRate,
+      customerRate: customerRate ?? this.customerRate,
       version: version ?? this.version,
     );
   }

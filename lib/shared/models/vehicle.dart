@@ -11,6 +11,8 @@ class Vehicle {
   final String? currentDriverId;
   final String driver; // current driver name
   final String driverMobile;
+  final String? routeId; // assigned/default route
+  final String routeName; // "From → To"
   final int version;
 
   const Vehicle({
@@ -24,6 +26,8 @@ class Vehicle {
     this.currentDriverId,
     this.driver = '',
     this.driverMobile = '',
+    this.routeId,
+    this.routeName = '',
     this.version = 0,
   });
 
@@ -42,7 +46,15 @@ class Vehicle {
 
     final vt = nested('vehicleType') ?? nested('vehicle_type');
     final tr = nested('transporter');
-    final dr = nested('currentDriver') ?? nested('current_driver') ?? nested('driver');
+    final dr =
+        nested('currentDriver') ?? nested('current_driver') ?? nested('driver');
+    final rt = nested('route');
+    String routeName = '';
+    if (rt != null) {
+      final from = (rt['from_city'] as String?) ?? '';
+      final to = (rt['to_city'] as String?) ?? '';
+      if (from.isNotEmpty || to.isNotEmpty) routeName = '$from → $to';
+    }
 
     return Vehicle(
       id: json['id'] as String,
@@ -58,18 +70,25 @@ class Vehicle {
       driver: (dr?['name'] as String?) ?? (json['driver'] as String?) ?? '',
       driverMobile:
           (dr?['mobile'] as String?) ?? (json['driverMobile'] as String?) ?? '',
+      routeId: json['route_id'] as String?,
+      routeName: routeName,
       version: asInt(json['version']),
     );
   }
 
+  // Optional FKs are always sent (null when unset) so an edit can clear them.
   Map<String, dynamic> toJson() => {
         'registration_no': number,
-        if (typeId.isNotEmpty) 'vehicle_type_id': typeId,
-        if (capacityMt > 0) 'capacity_mt': capacityMt,
-        if (transporterId != null && transporterId!.isNotEmpty)
-          'transporter_id': transporterId,
-        if (currentDriverId != null && currentDriverId!.isNotEmpty)
-          'current_driver_id': currentDriverId,
+        'vehicle_type_id': typeId.isNotEmpty ? typeId : null,
+        'capacity_mt': capacityMt > 0 ? capacityMt : null,
+        'transporter_id': (transporterId != null && transporterId!.isNotEmpty)
+            ? transporterId
+            : null,
+        'current_driver_id':
+            (currentDriverId != null && currentDriverId!.isNotEmpty)
+                ? currentDriverId
+                : null,
+        'route_id': (routeId != null && routeId!.isNotEmpty) ? routeId : null,
       };
 
   Vehicle copyWith({
@@ -82,6 +101,8 @@ class Vehicle {
     String? currentDriverId,
     String? driver,
     String? driverMobile,
+    String? routeId,
+    String? routeName,
     int? version,
   }) {
     return Vehicle(
@@ -95,6 +116,8 @@ class Vehicle {
       currentDriverId: currentDriverId ?? this.currentDriverId,
       driver: driver ?? this.driver,
       driverMobile: driverMobile ?? this.driverMobile,
+      routeId: routeId ?? this.routeId,
+      routeName: routeName ?? this.routeName,
       version: version ?? this.version,
     );
   }

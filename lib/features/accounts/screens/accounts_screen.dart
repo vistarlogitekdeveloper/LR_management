@@ -3,13 +3,16 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/file_opener.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../shared/models/lr_models.dart';
+import '../../../shared/models/transporter.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/pills.dart';
 import '../../../shared/widgets/section_title.dart';
 import '../../lr/providers/lr_providers.dart';
+import '../../masters/providers/master_providers.dart';
 import '../../shell/widgets/app_topbar.dart';
 
 enum _PayFilter { all, awaitingAdvance, awaitingBalance, paid }
@@ -168,6 +171,12 @@ class _LrPaymentCard extends ConsumerWidget {
     final hasAdvance = lr.freight.advance > 0;
     final hasBalance = lr.freight.balance > 0;
     final fullyPaid = lr.freight.total > 0 && !hasBalance;
+    // Resolve the full transporter (with bank details) from the masters list so
+    // accounts can pay the correct party.
+    final transporter = ref
+        .watch(transportersProvider)
+        .where((t) => t.id == lr.transporter.id)
+        .firstOrNull;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -287,31 +296,184 @@ class _LrPaymentCard extends ConsumerWidget {
             ],
           );
 
-          if (wide) {
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(flex: 3, child: header),
-                const SizedBox(width: 16),
-                Expanded(flex: 3, child: amounts),
-                const SizedBox(width: 16),
-                Expanded(flex: 2, child: actions),
-              ],
-            );
-          }
+          final main = wide
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(flex: 3, child: header),
+                    const SizedBox(width: 16),
+                    Expanded(flex: 3, child: amounts),
+                    const SizedBox(width: 16),
+                    Expanded(flex: 2, child: actions),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    header,
+                    const SizedBox(height: 12),
+                    amounts,
+                    const SizedBox(height: 12),
+                    actions,
+                  ],
+                );
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              header,
-              const SizedBox(height: 12),
-              amounts,
-              const SizedBox(height: 12),
-              actions,
-            ],
+            children: [main, _payInfo(context, ref, transporter)],
           );
         },
       ),
     );
+  }
+
+  /// Transporter payment / bank details for accounts to action the payout.
+  Widget _payInfo(BuildContext context, WidgetRef ref, Transporter? t) {
+    if (t == null) return const SizedBox.shrink();
+    final hasBank =
+        t.bankName.isNotEmpty || t.accountNo.isNotEmpty || t.ifsc.isNotEmpty;
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.plum.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.plum.withValues(alpha: 0.14)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.account_balance_outlined,
+                  size: 16, color: AppColors.plum),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Pay to: ${t.name}',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.ink,
+                      fontSize: 13),
+                ),
+              ),
+              if (t.hasDocument)
+                TextButton.icon(
+                  onPressed: () => _viewCheque(context, ref, t),
+                  icon: const Icon(Icons.image_outlined, size: 16),
+                  label: const Text('Cheque'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          if (hasBank)
+            Wrap(
+              spacing: 18,
+              runSpacing: 4,
+              children: [
+                if (t.bankName.isNotEmpty) _kvChip('Bank', t.bankName),
+                if (t.accountHolder.isNotEmpty)
+                  _kvChip('A/C Holder', t.accountHolder),
+                if (t.accountNo.isNotEmpty) _kvChip('A/C No', t.accountNo),
+                if (t.ifsc.isNotEmpty) _kvChip('IFSC', t.ifsc),
+              ],
+            )
+          else
+            const Text(
+              'No bank details on this transporter — add them in the Transporter master.',
+              style: TextStyle(color: AppColors.orange, fontSize: 11.5),
+            ),
+          _ocrVerify(t),
+        ],
+      ),
+    );
+  }
+
+  /// Cheque-vs-entered verification badge from the background OCR.
+  Widget _ocrVerify(Transporter t) {
+    if (!t.ocrDone) return const SizedBox.shrink();
+    final mismatch = t.ocrHasMismatch;
+    final anyChecked =
+        t.ifscMatchesOcr() != null || t.accountMatchesOcr() != null;
+    if (!mismatch && !anyChecked) return const SizedBox.shrink();
+    final color = mismatch ? AppColors.red : AppColors.ok;
+    final icon =
+        mismatch ? Icons.warning_amber_rounded : Icons.verified_outlined;
+    final text = mismatch
+        ? 'Cheque OCR mismatch — verify bank details before paying'
+        : 'Bank details match the uploaded cheque';
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(text,
+                style: TextStyle(
+                    color: color,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _kvChip(String k, String v) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('$k: ',
+            style: const TextStyle(
+                color: AppColors.slate,
+                fontWeight: FontWeight.w700,
+                fontSize: 11.5)),
+        Text(v,
+            style: const TextStyle(
+                color: AppColors.ink,
+                fontWeight: FontWeight.w700,
+                fontSize: 11.5)),
+      ],
+    );
+  }
+
+  Future<void> _viewCheque(
+      BuildContext context, WidgetRef ref, Transporter t) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final bytes =
+          await ref.read(transportersRepositoryProvider).downloadDocument(t.id);
+      final name = t.chequeFileName;
+      openFileInBrowser(
+          bytes, _mimeForName(name), name.isEmpty ? 'cheque' : name);
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not open the document')),
+      );
+    }
+  }
+
+  String _mimeForName(String name) {
+    final ext = name.contains('.') ? name.split('.').last.toLowerCase() : '';
+    switch (ext) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'heic':
+        return 'image/heic';
+      default:
+        return 'application/octet-stream';
+    }
   }
 
   Future<void> _payAdvance(BuildContext context, WidgetRef ref) async {
