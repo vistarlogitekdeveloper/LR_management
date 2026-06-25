@@ -73,12 +73,17 @@ class AppUser {
   bool get canDeleteLr => can('LR_DELETE');
   bool get canViewReports => can('REPORTS_VIEW');
 
-  bool get canManageConsignors => can('MASTER_CONSIGNOR_MANAGE');
-  bool get canManageConsignees => can('MASTER_CONSIGNEE_MANAGE');
-  bool get canManageVehicles => can('MASTER_VEHICLE_MANAGE');
-  bool get canManageDrivers => can('MASTER_DRIVER_MANAGE');
-  bool get canManageTransporters => can('MASTER_TRANSPORTER_MANAGE');
-  bool get canManageRoutes => can('MASTER_ROUTE_MANAGE');
+  // Master management: the granular per-master permission OR the coarse
+  // MASTERS_MANAGE umbrella — so this works whether the backend is the new
+  // per-master scheme or the older umbrella-only one (keeps admins working
+  // even if the frontend is deployed ahead of the backend).
+  bool _canMaster(String code) => can(code) || can('MASTERS_MANAGE');
+  bool get canManageConsignors => _canMaster('MASTER_CONSIGNOR_MANAGE');
+  bool get canManageConsignees => _canMaster('MASTER_CONSIGNEE_MANAGE');
+  bool get canManageVehicles => _canMaster('MASTER_VEHICLE_MANAGE');
+  bool get canManageDrivers => _canMaster('MASTER_DRIVER_MANAGE');
+  bool get canManageTransporters => _canMaster('MASTER_TRANSPORTER_MANAGE');
+  bool get canManageRoutes => _canMaster('MASTER_ROUTE_MANAGE');
 
   /// Can reach the admin surface (users, regions, system config).
   bool get canAdmin => role.canAdmin;
