@@ -35,7 +35,7 @@ class RoutesScreen extends ConsumerWidget {
             initialValue: r?.distanceKm.toStringAsFixed(0)),
         FormFieldSpec(
             name: 'baseRate',
-            label: 'Base Rate (₹)',
+            label: 'Transporter Rate (₹)',
             type: FieldType.number,
             required: true,
             hint: 'Standard/transporter cost',
@@ -135,7 +135,7 @@ class RoutesScreen extends ConsumerWidget {
         'From',
         'To',
         'Distance (km)',
-        'Base Rate',
+        'Transporter Rate (₹)',
         'Customer Rate',
       ],
       rows: [

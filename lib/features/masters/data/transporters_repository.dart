@@ -9,15 +9,19 @@ class TransportersRepository {
   final ApiClient _api;
 
   Future<List<Transporter>> list({String? query}) async {
-    final rows = await fetchAllPages(_api, '/transporters',
-        query: {if (query != null && query.isNotEmpty) 'q': query});
+    final rows = await fetchAllPages(
+      _api,
+      '/transporters',
+      query: {if (query != null && query.isNotEmpty) 'q': query},
+    );
     return rows.map(Transporter.fromJson).toList();
   }
 
   Future<Transporter> create(Transporter t) async {
     final res = await _api.dio.post('/transporters', data: t.toJson());
     return Transporter.fromJson(
-        (res.data['data'] as Map).cast<String, dynamic>());
+      (res.data['data'] as Map).cast<String, dynamic>(),
+    );
   }
 
   Future<Transporter> update(Transporter t) async {
@@ -28,7 +32,8 @@ class TransportersRepository {
         options: Options(headers: {'If-Match': version.toString()}),
       );
       return Transporter.fromJson(
-          (res.data['data'] as Map).cast<String, dynamic>());
+        (res.data['data'] as Map).cast<String, dynamic>(),
+      );
     }
 
     try {
@@ -56,52 +61,77 @@ class TransportersRepository {
     await _api.dio.delete('/transporters/$id');
   }
 
-  /// Uploads the blank cheque / passbook image and returns the transporter with
-  /// the stored document key. Works on web (bytes) and native (filePath).
+  /// Uploads a transporter document and returns the updated transporter.
+  /// [type] is 'cheque' (blank cheque / passbook, default) or 'tds' (TDS
+  /// attachment). Works on web (bytes) and native (filePath).
   Future<Transporter> uploadDocument(
     String id, {
     required String fileName,
     List<int>? bytes,
     String? filePath,
+    String type = 'cheque',
   }) async {
     final contentType = _mediaTypeForName(fileName);
     final MultipartFile multipart;
     if (bytes != null) {
-      multipart = MultipartFile.fromBytes(bytes,
-          filename: fileName, contentType: contentType);
+      multipart = MultipartFile.fromBytes(
+        bytes,
+        filename: fileName,
+        contentType: contentType,
+      );
     } else if (filePath != null) {
-      multipart = await MultipartFile.fromFile(filePath,
-          filename: fileName, contentType: contentType);
+      multipart = await MultipartFile.fromFile(
+        filePath,
+        filename: fileName,
+        contentType: contentType,
+      );
     } else {
       throw ArgumentError('Either bytes or filePath is required');
     }
     final form = FormData.fromMap({'file': multipart});
-    final res = await _api.dio.post('/transporters/$id/document', data: form);
+    final res = await _api.dio.post(
+      '/transporters/$id/document',
+      data: form,
+      queryParameters: {'type': type},
+    );
     return Transporter.fromJson(
-        (res.data['data'] as Map).cast<String, dynamic>());
+      (res.data['data'] as Map).cast<String, dynamic>(),
+    );
   }
 
-  /// Downloads the cheque/passbook bytes (auth header applied by the client).
-  Future<List<int>> downloadDocument(String id) async {
+  /// Downloads the document bytes ([type] 'cheque' or 'tds').
+  Future<List<int>> downloadDocument(
+    String id, {
+    String type = 'cheque',
+  }) async {
     final res = await _api.dio.get(
       '/transporters/$id/document',
+      queryParameters: {'type': type},
       options: Options(responseType: ResponseType.bytes),
     );
     return (res.data as List).cast<int>();
   }
 
-  Future<Transporter> deleteDocument(String id) async {
-    final res = await _api.dio.delete('/transporters/$id/document');
+  Future<Transporter> deleteDocument(
+    String id, {
+    String type = 'cheque',
+  }) async {
+    final res = await _api.dio.delete(
+      '/transporters/$id/document',
+      queryParameters: {'type': type},
+    );
     return Transporter.fromJson(
-        (res.data['data'] as Map).cast<String, dynamic>());
+      (res.data['data'] as Map).cast<String, dynamic>(),
+    );
   }
 }
 
 /// Maps a filename extension to a content type so the server's MIME allowlist
 /// accepts the upload (Dio otherwise defaults to application/octet-stream).
 DioMediaType _mediaTypeForName(String fileName) {
-  final ext =
-      fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+  final ext = fileName.contains('.')
+      ? fileName.split('.').last.toLowerCase()
+      : '';
   switch (ext) {
     case 'pdf':
       return DioMediaType('application', 'pdf');

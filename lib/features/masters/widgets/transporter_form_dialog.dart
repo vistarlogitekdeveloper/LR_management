@@ -48,6 +48,7 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
   late String _tds;
 
   PlatformFile? _picked;
+  PlatformFile? _pickedTds;
   bool _saving = false;
 
   Transporter? get _existing => widget.existing;
@@ -102,6 +103,31 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
     }
   }
 
+  Future<void> _pickTds() async {
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'heic', 'pdf'],
+      withData: true,
+    );
+    if (picked == null || picked.files.isEmpty) return;
+    setState(() => _pickedTds = picked.files.first);
+  }
+
+  Future<void> _viewTds() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final bytes = await ref
+          .read(transportersRepositoryProvider)
+          .downloadDocument(_existing!.id, type: 'tds');
+      final name = _existing!.tdsFileName;
+      openFileInBrowser(bytes, _mimeForName(name), name.isEmpty ? 'tds' : name);
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(MasterActions.messageFor(e))),
+      );
+    }
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
@@ -142,6 +168,15 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
           fileName: _picked!.name,
           bytes: _picked!.bytes,
           filePath: _picked!.path,
+        );
+      }
+      if (_pickedTds != null) {
+        t = await repo.uploadDocument(
+          t.id,
+          fileName: _pickedTds!.name,
+          bytes: _pickedTds!.bytes,
+          filePath: _pickedTds!.path,
+          type: 'tds',
         );
       }
       await ref.read(transportersProvider.notifier).refresh();
@@ -202,6 +237,7 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
                         child: _text(_ifsc, 'IFSC Code', upper: true),
                       ),
                       SizedBox(width: c.maxWidth, child: _chequeField()),
+                      SizedBox(width: c.maxWidth, child: _tdsAttachmentField()),
                     ],
                   );
                 },
@@ -330,6 +366,58 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
             ],
           ),
           _ocrCheck(),
+        ],
+      ),
+    );
+  }
+
+  Widget _tdsAttachmentField() {
+    final picked = _pickedTds;
+    final hasExisting = _existing?.hasTdsDocument ?? false;
+    return LabeledField(
+      label: 'TDS Attachment',
+      child: Row(
+        children: [
+          AppButton(
+            label: picked == null && !hasExisting
+                ? 'Upload file'
+                : 'Replace file',
+            kind: BtnKind.ghost,
+            icon: Icons.upload_file_outlined,
+            onPressed: _saving ? null : _pickTds,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              picked != null
+                  ? picked.name
+                  : hasExisting
+                  ? (_existing!.tdsFileName.isEmpty
+                        ? 'Document on file'
+                        : _existing!.tdsFileName)
+                  : 'JPG, PNG, WEBP or PDF',
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: AppColors.slate, fontSize: 12.5),
+            ),
+          ),
+          if (picked == null && hasExisting)
+            TextButton.icon(
+              onPressed: _saving ? null : _viewTds,
+              icon: const Icon(Icons.visibility_outlined, size: 18),
+              label: const Text('View'),
+            ),
+          if (picked != null)
+            IconButton(
+              tooltip: 'Remove selection',
+              onPressed: _saving
+                  ? null
+                  : () => setState(() => _pickedTds = null),
+              icon: const Icon(
+                Icons.close_rounded,
+                color: AppColors.slate,
+                size: 18,
+              ),
+            ),
         ],
       ),
     );

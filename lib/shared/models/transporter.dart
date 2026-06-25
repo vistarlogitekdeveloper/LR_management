@@ -11,6 +11,9 @@ class Transporter {
   // Uploaded blank cheque / passbook photo (stored under bank_account too).
   final String chequeFileKey;
   final String chequeFileName;
+  // Uploaded TDS attachment (certificate / declaration), also under bank_account.
+  final String tdsFileKey;
+  final String tdsFileName;
   // OCR readout of the uploaded cheque (raw values; the match is computed live).
   final bool ocrDone;
   final String ocrIfsc;
@@ -28,6 +31,8 @@ class Transporter {
     this.ifsc = '',
     this.chequeFileKey = '',
     this.chequeFileName = '',
+    this.tdsFileKey = '',
+    this.tdsFileName = '',
     this.ocrDone = false,
     this.ocrIfsc = '',
     this.ocrAccountNo = '',
@@ -36,6 +41,7 @@ class Transporter {
 
   bool get tdsApplicable => tds.toLowerCase() == 'yes';
   bool get hasDocument => chequeFileKey.isNotEmpty;
+  bool get hasTdsDocument => tdsFileKey.isNotEmpty;
 
   static String _normIfsc(String s) =>
       s.toUpperCase().replaceAll(RegExp(r'\s'), '');
@@ -66,8 +72,7 @@ class Transporter {
 
   /// True when the cheque was read and a checked field disagrees with entry.
   bool get ocrHasMismatch =>
-      ocrDone &&
-      (ifscMatchesOcr() == false || accountMatchesOcr() == false);
+      ocrDone && (ifscMatchesOcr() == false || accountMatchesOcr() == false);
 
   factory Transporter.fromJson(Map<String, dynamic> json) {
     final bank = (json['bank_account'] is Map)
@@ -84,6 +89,8 @@ class Transporter {
       ifsc: (bank['ifsc'] as String?) ?? '',
       chequeFileKey: (bank['cheque_file_key'] as String?) ?? '',
       chequeFileName: (bank['cheque_file_name'] as String?) ?? '',
+      tdsFileKey: (bank['tds_file_key'] as String?) ?? '',
+      tdsFileName: (bank['tds_file_name'] as String?) ?? '',
       ocrDone: (bank['ocr_done'] as bool?) ?? false,
       ocrIfsc: (bank['ocr_ifsc'] as String?) ?? '',
       ocrAccountNo: (bank['ocr_account_no'] as String?) ?? '',
@@ -92,20 +99,20 @@ class Transporter {
   }
 
   Map<String, dynamic> toJson() => {
-        'name': name,
-        if (pan.isNotEmpty) 'pan': pan,
-        'tds_applicable': tdsApplicable,
-        // Only the user-editable bank fields are sent — always (so clearing a
-        // field sticks). On PATCH the backend MERGES this onto the stored
-        // bank_account, preserving the cheque key + OCR readout set out-of-band
-        // by the document upload.
-        'bank_account': {
-          'bank_name': bankName,
-          'account_holder': accountHolder,
-          'account_no': accountNo,
-          'ifsc': ifsc,
-        },
-      };
+    'name': name,
+    if (pan.isNotEmpty) 'pan': pan,
+    'tds_applicable': tdsApplicable,
+    // Only the user-editable bank fields are sent — always (so clearing a
+    // field sticks). On PATCH the backend MERGES this onto the stored
+    // bank_account, preserving the cheque key + OCR readout set out-of-band
+    // by the document upload.
+    'bank_account': {
+      'bank_name': bankName,
+      'account_holder': accountHolder,
+      'account_no': accountNo,
+      'ifsc': ifsc,
+    },
+  };
 
   Transporter copyWith({
     String? name,
@@ -117,6 +124,8 @@ class Transporter {
     String? ifsc,
     String? chequeFileKey,
     String? chequeFileName,
+    String? tdsFileKey,
+    String? tdsFileName,
     bool? ocrDone,
     String? ocrIfsc,
     String? ocrAccountNo,
@@ -133,6 +142,8 @@ class Transporter {
       ifsc: ifsc ?? this.ifsc,
       chequeFileKey: chequeFileKey ?? this.chequeFileKey,
       chequeFileName: chequeFileName ?? this.chequeFileName,
+      tdsFileKey: tdsFileKey ?? this.tdsFileKey,
+      tdsFileName: tdsFileName ?? this.tdsFileName,
       ocrDone: ocrDone ?? this.ocrDone,
       ocrIfsc: ocrIfsc ?? this.ocrIfsc,
       ocrAccountNo: ocrAccountNo ?? this.ocrAccountNo,
