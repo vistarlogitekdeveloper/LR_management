@@ -45,6 +45,12 @@ dependencies:
   # Secure storage for JWT (access + refresh)
   flutter_secure_storage: ^9.2.2
 
+  # Maps — free OpenStreetMap stack for the route location picker.
+  # flutter_map renders OSM tiles (no API key); geocoding/search goes through
+  # the backend /maps proxy (Nominatim, also keyless).
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

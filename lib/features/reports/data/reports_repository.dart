@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 import '../../../core/network/api_client.dart';
 
 class DashboardSummary {
@@ -59,5 +61,19 @@ class ReportsRepository {
     final res = await _api.dio.get('/reports/dashboard');
     return DashboardSummary.fromJson(
         (res.data['data'] as Map).cast<String, dynamic>());
+  }
+
+  /// Fetches the server-generated MIS workbook (`.xlsx`) as raw bytes. Optional
+  /// `from`/`to` are `YYYY-MM-DD` LR-date bounds.
+  Future<List<int>> misXlsx({String? from, String? to}) async {
+    final res = await _api.dio.get(
+      '/reports/mis.xlsx',
+      queryParameters: {
+        if (from != null && from.isNotEmpty) 'from': from,
+        if (to != null && to.isNotEmpty) 'to': to,
+      },
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return (res.data as List).cast<int>();
   }
 }

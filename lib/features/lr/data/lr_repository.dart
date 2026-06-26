@@ -126,6 +126,28 @@ class LrRepository {
     return getById(id);
   }
 
+  /// Releases the standard 90% transporter advance. The backend computes the
+  /// amount (90% of transporter freight) and emails the LR creator + admins, so
+  /// the client only needs to send the current version for the optimistic lock.
+  Future<LorryReceipt> markAdvancePaid(String id, int version) async {
+    await _api.dio.post(
+      '/lrs/$id/advance-paid',
+      options: Options(headers: {'If-Match': version.toString()}),
+    );
+    return getById(id);
+  }
+
+  /// Completes the payment: releases the balance held against POD so the
+  /// transporter is paid in full. The backend settles the amount (full
+  /// transporter freight) and emails the LR creator + admins.
+  Future<LorryReceipt> completePayment(String id, int version) async {
+    await _api.dio.post(
+      '/lrs/$id/payment-complete',
+      options: Options(headers: {'If-Match': version.toString()}),
+    );
+    return getById(id);
+  }
+
   Future<void> changeStatus(String id, String toCode, {String? reason}) async {
     await _api.dio.post('/lrs/$id/status', data: {
       'to': toCode,

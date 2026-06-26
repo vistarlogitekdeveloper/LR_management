@@ -69,6 +69,22 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
     return updated;
   }
 
+  /// Marks the 90% transporter advance as paid (backend computes the amount and
+  /// triggers the notification email), then refreshes the LR in local state.
+  Future<LorryReceipt> markAdvancePaid(String id, int version) async {
+    final updated = await _repo.markAdvancePaid(id, version);
+    state = [for (final lr in state) lr.id == updated.id ? updated : lr];
+    return updated;
+  }
+
+  /// Completes the payment (releases the POD balance; backend settles the amount
+  /// and triggers the notification email), then refreshes the LR in local state.
+  Future<LorryReceipt> completePayment(String id, int version) async {
+    final updated = await _repo.completePayment(id, version);
+    state = [for (final lr in state) lr.id == updated.id ? updated : lr];
+    return updated;
+  }
+
   Future<void> changeStatus(String id, LrStatus to, {String? reason}) async {
     await _repo.changeStatus(id, to.code, reason: reason);
     final fresh = await _repo.getById(id);

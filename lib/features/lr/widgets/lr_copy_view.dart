@@ -316,7 +316,6 @@ class LrCopyView extends StatelessWidget {
                     _moneyRow('Insurance', lr.freight.insurance),
                   if (format.showMathadi)
                     _moneyRow('Mathadi', lr.freight.mathadi),
-                  _moneyRow('GST', lr.freight.gst),
                   const Divider(),
                   _moneyRow('Total', lr.freight.total, bold: true),
                   _moneyRow('Advance', lr.freight.advance),

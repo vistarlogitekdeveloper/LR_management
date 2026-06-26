@@ -83,21 +83,21 @@ class DashboardScreen extends ConsumerWidget {
           Expanded(
             child: SingleChildScrollView(
               padding: EdgeInsets.all(
-                MediaQuery.of(context).size.width < 600 ? 16 : 28,
+                MediaQuery.of(context).size.width < 600 ? 14 : 20,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (flow != null) ...[
                     _RoleFlowStrip(flow: flow),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 14),
                   ],
                   LayoutBuilder(
                     builder: (context, c) {
-                      // Phones show all four KPIs in one compact row.
-                      final mobile = c.maxWidth < 600;
-                      final cols = mobile ? 4 : (c.maxWidth >= 1100 ? 4 : 2);
-                      final spacing = mobile ? 8.0 : 16.0;
+                      // Compact KPI tiles, four per row (two only when very
+                      // narrow) — same small card on web and mobile.
+                      final cols = c.maxWidth < 480 ? 2 : 4;
+                      final spacing = c.maxWidth < 600 ? 8.0 : 12.0;
                       final stats = <_StatTile>[
                         _StatTile(
                           icon: Icons.description_outlined,
@@ -105,7 +105,7 @@ class DashboardScreen extends ConsumerWidget {
                           label: 'Today\'s LR',
                           value: '$todayCount',
                           sub: '$totalLrCount total in system',
-                          compact: mobile,
+                          compact: true,
                         ),
                         _StatTile(
                           icon: Icons.local_shipping_outlined,
@@ -113,7 +113,7 @@ class DashboardScreen extends ConsumerWidget {
                           label: 'Vehicles Dispatched',
                           value: '$dispatched',
                           sub: '$inTransit in transit',
-                          compact: mobile,
+                          compact: true,
                         ),
                         _StatTile(
                           icon: Icons.schedule_rounded,
@@ -121,7 +121,7 @@ class DashboardScreen extends ConsumerWidget {
                           label: 'Pending Delivery',
                           value: '$inTransit',
                           sub: 'On the road',
-                          compact: mobile,
+                          compact: true,
                         ),
                         _StatTile(
                           icon: Icons.account_balance_wallet_outlined,
@@ -129,7 +129,7 @@ class DashboardScreen extends ConsumerWidget {
                           label: 'Pending Freight',
                           value: inr(pendingFreight),
                           sub: 'across open LRs',
-                          compact: mobile,
+                          compact: true,
                         ),
                       ];
                       return Wrap(
@@ -145,7 +145,7 @@ class DashboardScreen extends ConsumerWidget {
                       );
                     },
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 14),
                   LayoutBuilder(
                     builder: (context, c) {
                       final wide = c.maxWidth >= 1100;
@@ -234,43 +234,28 @@ class _RoleFlowStrip extends StatelessWidget {
           ),
           LayoutBuilder(
             builder: (context, c) {
-              // Mobile: ALL steps in a single equal-width row (no chevrons) so
-              // the workflow takes minimal vertical space and never scrolls.
-              if (c.maxWidth < 600) {
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (var i = 0; i < flow.steps.length; i++) ...[
-                      if (i > 0) const SizedBox(width: 6),
-                      Expanded(
-                        child: _FlowStepCard(
-                          step: flow.steps[i],
-                          index: i + 1,
-                          compact: true,
-                        ),
-                      ),
-                    ],
-                  ],
-                );
-              }
-              // Wider screens keep the roomy cards with chevrons between.
-              return Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                crossAxisAlignment: WrapCrossAlignment.center,
+              // Compact step cards in one equal-width row at every width
+              // (chevrons between on wider screens) — minimal vertical space.
+              final wide = c.maxWidth >= 600;
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   for (var i = 0; i < flow.steps.length; i++) ...[
-                    SizedBox(
-                      width: 170,
-                      child: _FlowStepCard(step: flow.steps[i], index: i + 1),
+                    if (i > 0) SizedBox(width: wide ? 2 : 6),
+                    Expanded(
+                      child: _FlowStepCard(
+                        step: flow.steps[i],
+                        index: i + 1,
+                        compact: true,
+                      ),
                     ),
-                    if (i < flow.steps.length - 1)
+                    if (wide && i < flow.steps.length - 1)
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 2),
                         child: Icon(
                           Icons.chevron_right_rounded,
                           color: AppColors.line,
-                          size: 22,
+                          size: 20,
                         ),
                       ),
                   ],

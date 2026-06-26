@@ -189,8 +189,10 @@ class FreightDetails {
   }) : _total = total,
        _balance = balance;
 
-  double get total =>
-      _total ?? (freight + doorDelivery + handling + gst + insurance);
+  // GST is no longer charged; it is excluded from the total. The backend still
+  // returns a `total` generated column (authoritative) — this fallback is only
+  // used when that is absent.
+  double get total => _total ?? (freight + doorDelivery + handling + insurance);
   double get balance => _balance ?? (total - advance);
 
   factory FreightDetails.fromJson(
@@ -319,6 +321,12 @@ class LorryReceipt {
   final String statusId;
   final String? remarks;
   final List<Attachment> attachments;
+  // Accounts-owned MIS / billing fields (set by Accounts; see Accounts screen).
+  final String vistarBillNo;
+  final DateTime? vistarBillDate;
+  final DateTime? podSoftCopyDate;
+  final DateTime? advancePaidAt;
+  final DateTime? balancePaidAt;
 
   const LorryReceipt({
     required this.id,
@@ -351,6 +359,11 @@ class LorryReceipt {
     this.statusId = '',
     this.remarks,
     this.attachments = const [],
+    this.vistarBillNo = '',
+    this.vistarBillDate,
+    this.podSoftCopyDate,
+    this.advancePaidAt,
+    this.balancePaidAt,
   });
 
   int get totalPackages => items.fold(0, (sum, item) => sum + item.packages);
@@ -465,6 +478,14 @@ class LorryReceipt {
           .cast<Map<String, dynamic>>()
           .map(Attachment.fromJson)
           .toList(),
+      vistarBillNo: (json['vistar_bill_no'] as String?) ?? '',
+      vistarBillDate: DateTime.tryParse(json['vistar_bill_date']?.toString() ?? ''),
+      podSoftCopyDate:
+          DateTime.tryParse(json['pod_soft_copy_date']?.toString() ?? ''),
+      advancePaidAt:
+          DateTime.tryParse(json['advance_paid_at']?.toString() ?? ''),
+      balancePaidAt:
+          DateTime.tryParse(json['balance_paid_at']?.toString() ?? ''),
     );
   }
 
@@ -477,6 +498,11 @@ class LorryReceipt {
     String? remarks,
     List<Attachment>? attachments,
     int? version,
+    String? vistarBillNo,
+    DateTime? vistarBillDate,
+    DateTime? podSoftCopyDate,
+    DateTime? advancePaidAt,
+    DateTime? balancePaidAt,
   }) {
     return LorryReceipt(
       id: id,
@@ -509,6 +535,11 @@ class LorryReceipt {
       statusId: statusId,
       remarks: remarks ?? this.remarks,
       attachments: attachments ?? this.attachments,
+      vistarBillNo: vistarBillNo ?? this.vistarBillNo,
+      vistarBillDate: vistarBillDate ?? this.vistarBillDate,
+      podSoftCopyDate: podSoftCopyDate ?? this.podSoftCopyDate,
+      advancePaidAt: advancePaidAt ?? this.advancePaidAt,
+      balancePaidAt: balancePaidAt ?? this.balancePaidAt,
     );
   }
 }

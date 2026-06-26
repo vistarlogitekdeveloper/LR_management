@@ -110,6 +110,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   final _remarksCtrl = TextEditingController();
   final _ewbCtrl = TextEditingController();
 
+  // LR date — null means "use the system date at save time".
+  DateTime? _lrDate;
   DateTime? _inDateTime;
   DateTime? _outDateTime;
 
@@ -233,6 +235,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
               );
         _orderNoCtrl.text = lr.orderNo;
         _ewbCtrl.text = lr.ewb?.number ?? '';
+        _lrDate = lr.date;
         _inDateTime = lr.inDateTime;
         _outDateTime = lr.outDateTime;
         _existingAttachments = List.of(lr.attachments);
@@ -373,20 +376,11 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   double _toDouble(TextEditingController c) =>
       double.tryParse(c.text.trim()) ?? 0;
 
-  double get _gst {
-    final base =
-        _toDouble(_freightCtrl) +
-        _toDouble(_doorCtrl) +
-        _toDouble(_handlingCtrl);
-    return (base * 0.12).roundToDouble();
-  }
-
   double get _total =>
       _toDouble(_freightCtrl) +
       _toDouble(_doorCtrl) +
       _toDouble(_handlingCtrl) +
-      _toDouble(_insuranceCtrl) +
-      _gst;
+      _toDouble(_insuranceCtrl);
 
   double get _balance => _total - _toDouble(_advanceCtrl);
 
@@ -1085,14 +1079,14 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         result = await notifier.updateLr(
           _editing!.id,
           _editing!.version,
-          _buildPayload(_editing!.date),
+          _buildPayload(_lrDate ?? _editing!.date),
           ewb: ewb,
           existingEwbId: _editing!.ewb?.id,
           existingEwbVersion: 0,
         );
       } else {
         result = await notifier.create(
-          _buildPayload(DateTime.now()),
+          _buildPayload(_lrDate ?? DateTime.now()),
           ewb: ewb,
           idempotencyKey: _idempotencyKey,
         );
@@ -1652,7 +1646,6 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                               ),
                               child: Column(
                                 children: [
-                                  _summaryRow('GST (12%)', inr(_gst)),
                                   _summaryRow(
                                     'Vistar Margin (auto)',
                                     inr(_vistarMargin),
@@ -1679,6 +1672,66 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // LR date picker. Left untouched it stays on "today (auto)" and the system
+  // date is applied at save time; pick a date to override it.
+  Widget _lrDateField() {
+    final d = _lrDate;
+    return LabeledField(
+      label: 'LR Date',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () async {
+          final now = DateTime.now();
+          final picked = await showDatePicker(
+            context: context,
+            initialDate: _lrDate ?? now,
+            firstDate: DateTime(now.year - 2),
+            lastDate: DateTime(now.year + 1),
+          );
+          if (picked != null) setState(() => _lrDate = picked);
+        },
+        child: InputDecorator(
+          isEmpty: d == null,
+          decoration: const InputDecoration(
+            suffixIcon: Icon(
+              Icons.event_outlined,
+              color: AppColors.slate,
+              size: 20,
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  d == null
+                      ? '${formatDate(DateTime.now())}  ·  today (auto)'
+                      : formatDate(d),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: d == null ? AppColors.slate : AppColors.ink,
+                  ),
+                ),
+              ),
+              if (d != null)
+                InkWell(
+                  onTap: () => setState(() => _lrDate = null),
+                  borderRadius: BorderRadius.circular(20),
+                  child: const Padding(
+                    padding: EdgeInsets.all(2),
+                    child: Icon(
+                      Icons.close_rounded,
+                      size: 16,
+                      color: AppColors.slate,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -1720,6 +1773,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
               onPressed: _addCustomerInline,
             ),
           ),
+          _lrDateField(),
           LabeledField(
             label: 'Customer Name',
             child: SearchableField<Customer>(

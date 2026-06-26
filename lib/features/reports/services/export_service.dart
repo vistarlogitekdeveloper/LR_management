@@ -21,7 +21,6 @@ class ExportService {
         'Freight',
         'Door Delivery',
         'Handling',
-        'GST',
         'Insurance',
         'Mathadi',
         'Advance',
@@ -44,7 +43,6 @@ class ExportService {
         lr.freight.freight.toStringAsFixed(0),
         lr.freight.doorDelivery.toStringAsFixed(0),
         lr.freight.handling.toStringAsFixed(0),
-        lr.freight.gst.toStringAsFixed(0),
         lr.freight.insurance.toStringAsFixed(0),
         lr.freight.mathadi.toStringAsFixed(0),
         lr.freight.advance.toStringAsFixed(0),
@@ -120,4 +118,11 @@ class ExportService {
   static Future<void> _share(Uint8List bytes, String filename) async {
     await Printing.sharePdf(bytes: bytes, filename: filename);
   }
+
+  /// Shares/downloads arbitrary file bytes (e.g. a server-generated .xlsx).
+  static Future<void> shareBytes(List<int> bytes, String filename) async {
+    await _share(Uint8List.fromList(bytes), filename);
+  }
+
+  static String stamp() => _now();
 }

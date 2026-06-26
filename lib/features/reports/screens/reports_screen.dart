@@ -6,9 +6,12 @@ import '../../../core/utils/formatters.dart';
 import '../../../shared/models/lr_models.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/models/user.dart';
 import '../../../shared/widgets/section_title.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../lr/providers/lr_providers.dart';
 import '../../shell/widgets/app_topbar.dart';
+import '../providers/reports_providers.dart';
 import '../services/export_service.dart';
 
 class ReportsScreen extends ConsumerStatefulWidget {
@@ -264,6 +267,10 @@ class _AccountsTab extends ConsumerWidget {
     final mobile = MediaQuery.of(context).size.width < 600;
     final pad = mobile ? 14.0 : 28.0;
     final gap = mobile ? 10.0 : 20.0;
+    // The MIS export carries accounts-owned billing / payment fields, so it is
+    // hidden from operators (and blocked server-side).
+    final isOperator =
+        ref.watch(currentUserProvider)?.role == UserRole.operator;
     return SingleChildScrollView(
       padding: EdgeInsets.all(pad),
       child: Column(
@@ -318,6 +325,66 @@ class _AccountsTab extends ConsumerWidget {
               ],
             ),
           ),
+          if (!isOperator)
+            Padding(
+              padding: EdgeInsets.only(top: gap),
+              child: AppCard(
+                padding: EdgeInsets.all(mobile ? 12 : 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SectionTitle(
+                      icon: Icons.table_view_outlined,
+                      title: 'MIS report',
+                    ),
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Download the Transport Business Tracker MIS (Excel) — '
+                            'all LRs with billing, payment and POD details.',
+                            style: TextStyle(
+                              color: AppColors.slate,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        AppButton(
+                          label: 'Download MIS (Excel)',
+                          icon: Icons.download_outlined,
+                          kind: BtnKind.primary,
+                          small: true,
+                          onPressed: () async {
+                            final messenger = ScaffoldMessenger.of(context);
+                            try {
+                              final bytes = await ref
+                                  .read(reportsRepositoryProvider)
+                                  .misXlsx();
+                              await ExportService.shareBytes(
+                                bytes,
+                                'Transport_MIS_${ExportService.stamp()}.xlsx',
+                              );
+                              messenger.showSnackBar(
+                                const SnackBar(
+                                  content: Text('MIS Excel generated'),
+                                ),
+                              );
+                            } catch (e) {
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text('Could not generate MIS: $e'),
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );

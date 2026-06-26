@@ -39,21 +39,29 @@ class AccountsScreen extends ConsumerWidget {
     final filter = ref.watch(_accountsFilterProvider);
 
     final sorted = [...lrs]..sort((a, b) => b.date.compareTo(a.date));
+    // Accounts pays the transporter, so payment state is tracked against the
+    // transporter freight (90% advance / 10% against POD), not the customer
+    // total. `balance` here means the transporter freight still unpaid.
     final filtered = sorted.where((lr) {
+      final freight = lr.freight.freight;
+      final balance = freight - lr.freight.advance;
       switch (filter) {
         case _PayFilter.all:
           return true;
         case _PayFilter.awaitingAdvance:
-          return lr.freight.advance <= 0 && lr.freight.total > 0;
+          return lr.freight.advance <= 0 && freight > 0;
         case _PayFilter.awaitingBalance:
-          return lr.freight.advance > 0 && lr.freight.balance > 0;
+          return lr.freight.advance > 0 && balance > 0.01;
         case _PayFilter.paid:
-          return lr.freight.total > 0 && lr.freight.balance <= 0;
+          return freight > 0 && balance <= 0.01;
       }
     }).toList();
 
     final totalAdvance = lrs.fold<double>(0, (s, l) => s + l.freight.advance);
-    final totalPending = lrs.fold<double>(0, (s, l) => s + l.freight.balance);
+    final totalPending = lrs.fold<double>(0, (s, l) {
+      final pend = l.freight.freight - l.freight.advance;
+      return s + (pend > 0 ? pend : 0);
+    });
 
     final isMobile = MediaQuery.of(context).size.width < 600;
 
@@ -185,9 +193,14 @@ class _LrPaymentCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final hasAdvance = lr.freight.advance > 0;
-    final hasBalance = lr.freight.balance > 0;
-    final fullyPaid = lr.freight.total > 0 && !hasBalance;
+    // Payment state is tracked against the transporter freight (the amount
+    // Accounts pays out): 90% advance up front, the ~10% balance against POD.
+    final freight = lr.freight.freight;
+    final advance = lr.freight.advance;
+    final transBalance = (freight - advance) > 0 ? (freight - advance) : 0.0;
+    final hasAdvance = advance > 0;
+    final hasBalance = transBalance > 0.01;
+    final fullyPaid = freight > 0 && !hasBalance;
     // Resolve the full transporter (with bank details) from the masters list so
     // accounts can pay the correct party.
     final transporter = ref
@@ -261,15 +274,15 @@ class _LrPaymentCard extends ConsumerWidget {
             spacing: 18,
             runSpacing: 8,
             children: [
-              _Amount(label: 'Total', value: lr.freight.total),
+              _Amount(label: 'Transporter Freight', value: freight),
               _Amount(
                 label: 'Advance',
-                value: lr.freight.advance,
+                value: advance,
                 color: AppColors.ok,
               ),
               _Amount(
-                label: 'Remaining',
-                value: lr.freight.balance,
+                label: 'Balance (after POD)',
+                value: transBalance,
                 color: hasBalance ? AppColors.red : AppColors.ok,
                 emphasis: true,
               ),
@@ -281,13 +294,13 @@ class _LrPaymentCard extends ConsumerWidget {
             runSpacing: 8,
             alignment: WrapAlignment.end,
             children: [
-              if (!hasAdvance && lr.freight.total > 0)
+              if (!hasAdvance && lr.freight.freight > 0)
                 AppButton(
-                  label: 'Pay Advance',
+                  label: 'Mark Advance Paid',
                   kind: BtnKind.soft,
                   icon: Icons.savings_outlined,
                   small: true,
-                  onPressed: () => _payAdvance(context, ref),
+                  onPressed: () => _markAdvancePaid(context, ref),
                 ),
               if (hasAdvance && hasBalance)
                 AppButton(
@@ -307,6 +320,13 @@ class _LrPaymentCard extends ConsumerWidget {
                 ),
               if (fullyPaid)
                 const _BadgePill(text: 'Settled', fg: AppColors.ok),
+              AppButton(
+                label: 'Billing / MIS',
+                kind: BtnKind.ghost,
+                icon: Icons.receipt_long_outlined,
+                small: true,
+                onPressed: () => _editBillingMis(context, ref),
+              ),
             ],
           );
 
@@ -333,7 +353,12 @@ class _LrPaymentCard extends ConsumerWidget {
                 );
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [main, _payInfo(context, ref, transporter)],
+            children: [
+              main,
+              _advancePlan(context),
+              _billingMisInfo(context),
+              _payInfo(context, ref, transporter),
+            ],
           );
         },
       ),
@@ -407,6 +432,107 @@ class _LrPaymentCard extends ConsumerWidget {
           _ocrVerify(t),
         ],
       ),
+    );
+  }
+
+  /// The 90/10 transporter advance plan: 90% of the transporter freight is
+  /// released up front, the remaining 10% settles after POD. The actual figures
+  /// are computed on `freight` (the transporter freight, excluding the
+  /// customer-side door/handling charges) — the same base Accounts pays out on.
+  Widget _advancePlan(BuildContext context) {
+    final freight = lr.freight.freight;
+    if (freight <= 0) return const SizedBox.shrink();
+    final advance = freight * 0.9; // 90% up front
+    final afterPod = freight - advance; // 10% against POD
+    // Treat the advance as released once the recorded advance covers the 90%
+    // target (small epsilon for rounding to whole rupees).
+    final advanceDone = lr.freight.advance + 0.5 >= advance;
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.ok.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.ok.withValues(alpha: 0.16)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.account_balance_wallet_outlined,
+                size: 16,
+                color: AppColors.ok,
+              ),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  'Transporter Advance Plan',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.ink,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              _BadgePill(
+                text: advanceDone ? 'Advance Paid' : 'Advance Due',
+                fg: advanceDone ? AppColors.ok : AppColors.orange,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 18,
+            runSpacing: 8,
+            children: [
+              _Amount(label: 'Transporter Freight', value: freight),
+              _Amount(
+                label: 'Advance 90% (now)',
+                value: advance,
+                color: AppColors.ok,
+                emphasis: true,
+              ),
+              _Amount(
+                label: 'Balance 10% (after POD)',
+                value: afterPod,
+                color: AppColors.slate,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Read-only summary of the accounts-owned billing / MIS fields, shown only
+  /// in the Accounts view. Empty (hidden) until Accounts fills them in.
+  Widget _billingMisInfo(BuildContext context) {
+    final chips = <Widget>[];
+    if (lr.vistarBillNo.isNotEmpty) chips.add(_kvChip('Bill No', lr.vistarBillNo));
+    if (lr.vistarBillDate != null) {
+      chips.add(_kvChip('Bill Date', formatDate(lr.vistarBillDate!)));
+    }
+    if (lr.podSoftCopyDate != null) {
+      chips.add(_kvChip('POD Recd', formatDate(lr.podSoftCopyDate!)));
+    }
+    if (lr.advancePaidAt != null) {
+      chips.add(_kvChip('Adv Paid', formatDate(lr.advancePaidAt!)));
+    }
+    if (lr.balancePaidAt != null) {
+      chips.add(_kvChip('Bal Paid', formatDate(lr.balancePaidAt!)));
+    }
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.mist,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Wrap(spacing: 16, runSpacing: 6, children: chips),
     );
   }
 
@@ -511,18 +637,78 @@ class _LrPaymentCard extends ConsumerWidget {
     }
   }
 
+  /// Releases the standard 90% transporter advance and triggers the
+  /// advance-paid notification email (LR creator + admins + master admin). The
+  /// backend computes the amount from the transporter freight.
+  Future<void> _markAdvancePaid(BuildContext context, WidgetRef ref) async {
+    final freight = lr.freight.freight;
+    final advance = freight * 0.9;
+    final afterPod = freight - advance;
+    final transporterName = lr.transporter.name.isEmpty
+        ? 'the transporter'
+        : lr.transporter.name;
+    // Captured before the dialog await so we never touch context across the gap.
+    final messenger = ScaffoldMessenger.of(context);
+    final ok =
+        await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text('Mark advance paid · ${lr.number}'),
+            content: Text(
+              'Release ${inr(advance)} (90% of the transporter freight ${inr(freight)}) '
+              'to $transporterName. The remaining ${inr(afterPod)} settles after POD.\n\n'
+              'An advance-paid notification will be emailed to the LR creator, '
+              'admin and master admin.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Mark Paid & Notify'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!ok) return;
+    try {
+      await ref
+          .read(lrListProvider.notifier)
+          .markAdvancePaid(lr.id, lr.version);
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not mark advance paid: $e')),
+      );
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          'Advance marked paid for ${lr.number} — notification email sent',
+        ),
+      ),
+    );
+  }
+
   Future<void> _payAdvance(BuildContext context, WidgetRef ref) async {
+    final freight = lr.freight.freight;
+    final outstanding = (freight - lr.freight.advance) > 0
+        ? (freight - lr.freight.advance)
+        : 0.0;
     final amount = await _showAmountDialog(
       context: context,
-      title: 'Pay Advance · ${lr.number}',
+      title: 'Add Advance · ${lr.number}',
       message:
-          'Outstanding ${inr(lr.freight.balance)} of ${inr(lr.freight.total)}.',
-      max: lr.freight.balance,
+          'Outstanding ${inr(outstanding)} of transporter freight ${inr(freight)}.',
+      max: outstanding,
       confirmLabel: 'Record Advance',
     );
     if (amount == null || amount <= 0) return;
     final newAdvance = (lr.freight.advance + amount)
-        .clamp(0, lr.freight.total)
+        .clamp(0, freight)
         .toDouble();
     try {
       await ref.read(lrListProvider.notifier).updateLr(lr.id, lr.version, {
@@ -543,16 +729,30 @@ class _LrPaymentCard extends ConsumerWidget {
     );
   }
 
+  /// Releases the balance held against POD so the transporter is paid in full,
+  /// and triggers the balance-paid notification email (LR creator + admins +
+  /// master admin). The backend settles the amount (full transporter freight).
   Future<void> _completePayment(BuildContext context, WidgetRef ref) async {
-    final remaining = lr.freight.balance;
+    final freight = lr.freight.freight;
+    final remaining = (freight - lr.freight.advance) > 0
+        ? (freight - lr.freight.advance)
+        : 0.0;
+    final transporterName = lr.transporter.name.isEmpty
+        ? 'the transporter'
+        : lr.transporter.name;
+    // Captured before the dialog await so we never touch context across the gap.
+    final messenger = ScaffoldMessenger.of(context);
     final ok =
         await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: Text('Complete payment for ${lr.number}?'),
             content: Text(
-              'Remaining balance ${inr(remaining)} will be marked as received. '
-              'Total ${inr(lr.freight.total)} − Advance ${inr(lr.freight.advance)} = ${inr(remaining)}.',
+              'Release the remaining balance ${inr(remaining)} to $transporterName '
+              'against POD. Transporter freight ${inr(freight)} − advance '
+              '${inr(lr.freight.advance)} = ${inr(remaining)}.\n\n'
+              'A balance-paid notification will be emailed to the LR creator, '
+              'admin and master admin.',
             ),
             actions: [
               TextButton(
@@ -561,29 +761,179 @@ class _LrPaymentCard extends ConsumerWidget {
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Mark Paid'),
+                child: const Text('Mark Paid & Notify'),
               ),
             ],
           ),
         ) ??
         false;
     if (!ok) return;
-    final newAdvance = lr.freight.total;
     try {
-      await ref.read(lrListProvider.notifier).updateLr(lr.id, lr.version, {
-        'advance': newAdvance,
-      });
+      await ref
+          .read(lrListProvider.notifier)
+          .completePayment(lr.id, lr.version);
     } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not complete payment: $e')));
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not complete payment: $e')),
+      );
       return;
     }
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('${lr.number} settled in full')));
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          '${lr.number} settled in full — notification email sent',
+        ),
+      ),
+    );
+  }
+
+  /// Accounts-only editor for the MIS / billing fields: Vistar bill no & date,
+  /// POD soft-copy date, and the advance/balance paid dates. Saved through the
+  /// payment PATCH path, which the backend restricts to the Accounts role.
+  Future<void> _editBillingMis(BuildContext context, WidgetRef ref) async {
+    final billNoCtrl = TextEditingController(text: lr.vistarBillNo);
+    DateTime? billDate = lr.vistarBillDate;
+    DateTime? podDate = lr.podSoftCopyDate;
+    DateTime? advDate = lr.advancePaidAt;
+    DateTime? balDate = lr.balancePaidAt;
+    final messenger = ScaffoldMessenger.of(context);
+
+    String fmt(DateTime? d) => d == null ? 'Not set' : formatDate(d);
+
+    final saved =
+        await showDialog<bool>(
+          context: context,
+          builder: (ctx) => StatefulBuilder(
+            builder: (ctx, setLocal) {
+              Future<void> pick(
+                DateTime? current,
+                ValueChanged<DateTime> onPicked,
+              ) async {
+                final picked = await showDatePicker(
+                  context: ctx,
+                  initialDate: current ?? DateTime.now(),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2100),
+                );
+                if (picked != null) setLocal(() => onPicked(picked));
+              }
+
+              Widget dateRow(
+                String label,
+                DateTime? value,
+                ValueChanged<DateTime> onPicked,
+                VoidCallback onClear,
+              ) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '$label: ${fmt(value)}',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => pick(value, onPicked),
+                        child: const Text('Pick'),
+                      ),
+                      if (value != null)
+                        IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          tooltip: 'Clear',
+                          onPressed: () => setLocal(onClear),
+                        ),
+                    ],
+                  ),
+                );
+              }
+
+              return AlertDialog(
+                title: Text('Billing / MIS · ${lr.number}'),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: billNoCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Vistar Bill No',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      dateRow(
+                        'Vistar Bill Date',
+                        billDate,
+                        (d) => billDate = d,
+                        () => billDate = null,
+                      ),
+                      dateRow(
+                        'POD Soft-Copy Date',
+                        podDate,
+                        (d) => podDate = d,
+                        () => podDate = null,
+                      ),
+                      const Divider(),
+                      dateRow(
+                        'Advance Paid Date',
+                        advDate,
+                        (d) => advDate = d,
+                        () => advDate = null,
+                      ),
+                      dateRow(
+                        'Balance Paid Date',
+                        balDate,
+                        (d) => balDate = d,
+                        () => balDate = null,
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Save'),
+                  ),
+                ],
+              );
+            },
+          ),
+        ) ??
+        false;
+
+    if (!saved) return;
+
+    String? dateOnly(DateTime? d) => d?.toIso8601String().substring(0, 10);
+    final payload = <String, dynamic>{
+      'vistar_bill_no': billNoCtrl.text.trim(),
+      'vistar_bill_date': dateOnly(billDate),
+      'pod_soft_copy_date': dateOnly(podDate),
+      // Date-only (not full ISO) so the picked calendar day round-trips without
+      // a timezone shift, same as the bill/POD dates above.
+      'advance_paid_at': dateOnly(advDate),
+      'balance_paid_at': dateOnly(balDate),
+    };
+    try {
+      await ref
+          .read(lrListProvider.notifier)
+          .updateLr(lr.id, lr.version, payload);
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not save billing details: $e')),
+      );
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(content: Text('Billing / MIS details saved for ${lr.number}')),
+    );
   }
 }
 

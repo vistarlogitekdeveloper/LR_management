@@ -130,7 +130,8 @@ class AppNav {
           label: 'Accounts & Billing',
           icon: Icons.account_balance_wallet_outlined,
           path: '/accounts',
-          canAccess: (u) => u.canViewReports,
+          // Operators handle dispatch, not payouts — hide Accounts from them.
+          canAccess: (u) => u.canViewReports && u.role != UserRole.operator,
         ),
       ],
     ),

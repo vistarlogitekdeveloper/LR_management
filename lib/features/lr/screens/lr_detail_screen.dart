@@ -433,7 +433,6 @@ class _RightColumn extends StatelessWidget {
               ),
               _FreightRow(label: 'Handling', value: lr.freight.handling),
               _FreightRow(label: 'Insurance', value: lr.freight.insurance),
-              _FreightRow(label: 'GST', value: lr.freight.gst),
               const Divider(),
               _FreightRow(
                 label: 'Total',
