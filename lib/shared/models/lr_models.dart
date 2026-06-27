@@ -319,6 +319,10 @@ class LorryReceipt {
   final String payTypeId;
   final String deliveryTypeId;
   final String statusId;
+  // Optional vehicle capacity (VEHICLE_CAPACITY lookup): id for the form, label
+  // for the slip.
+  final String capacityId;
+  final String capacityLabel;
   final String? remarks;
   final List<Attachment> attachments;
   // Accounts-owned MIS / billing fields (set by Accounts; see Accounts screen).
@@ -357,6 +361,8 @@ class LorryReceipt {
     this.payTypeId = '',
     this.deliveryTypeId = '',
     this.statusId = '',
+    this.capacityId = '',
+    this.capacityLabel = '',
     this.remarks,
     this.attachments = const [],
     this.vistarBillNo = '',
@@ -473,6 +479,8 @@ class LorryReceipt {
       payTypeId: (json['pay_type_id'] as String?) ?? '',
       deliveryTypeId: (json['delivery_type_id'] as String?) ?? '',
       statusId: (json['status_id'] as String?) ?? '',
+      capacityId: (json['capacity_id'] as String?) ?? '',
+      capacityLabel: (nested('capacity')?['label'] as String?) ?? '',
       remarks: json['remarks'] as String?,
       attachments: attachJson
           .cast<Map<String, dynamic>>()
@@ -533,6 +541,8 @@ class LorryReceipt {
       payTypeId: payTypeId,
       deliveryTypeId: deliveryTypeId,
       statusId: statusId,
+      capacityId: capacityId,
+      capacityLabel: capacityLabel,
       remarks: remarks ?? this.remarks,
       attachments: attachments ?? this.attachments,
       vistarBillNo: vistarBillNo ?? this.vistarBillNo,

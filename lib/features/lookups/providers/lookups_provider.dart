@@ -14,6 +14,7 @@ const lookupCategories = <String>[
   'EWB_LOAD_TYPE',
   'ADVANCE_PAID_BY',
   'TRIP_LEAD_BY',
+  'VEHICLE_CAPACITY',
 ];
 
 final lookupsRepositoryProvider = Provider<LookupsRepository>(

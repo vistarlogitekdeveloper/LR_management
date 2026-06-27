@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/accounts/screens/accounts_screen.dart';
 import '../../features/admin/screens/admin_screen.dart';
 import '../../features/admin/screens/audit_screen.dart';
+import '../../features/admin/screens/capacity_options_screen.dart';
 import '../../features/admin/screens/lr_format_screen.dart';
 import '../../features/admin/screens/numbering_screen.dart';
 import '../../features/admin/screens/regions_screen.dart';
@@ -28,6 +29,7 @@ import '../../features/masters/screens/parties_screen.dart';
 import '../../features/masters/screens/routes_screen.dart';
 import '../../features/masters/screens/transporters_screen.dart';
 import '../../features/masters/screens/vehicles_screen.dart';
+import '../../features/admin/providers/capacity_options_provider.dart';
 import '../../features/admin/providers/system_config_provider.dart';
 import '../../features/admin/providers/users_provider.dart';
 import '../../features/lr/providers/lr_providers.dart';
@@ -336,6 +338,17 @@ final routerProvider = Provider<GoRouter>((ref) {
                     onEnter: (ref) =>
                         ref.read(systemConfigProvider.notifier).refresh(),
                     child: const LrFormatScreen(),
+                  ),
+                ),
+              ),
+              GoRoute(
+                path: 'vehicle-capacity',
+                pageBuilder: (context, state) => NoTransitionPage(
+                  key: state.pageKey,
+                  child: RefreshGate(
+                    onEnter: (ref) =>
+                        ref.read(capacityOptionsProvider.notifier).refresh(),
+                    child: const CapacityOptionsScreen(),
                   ),
                 ),
               ),

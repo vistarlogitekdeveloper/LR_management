@@ -44,6 +44,13 @@ class AdminScreen extends ConsumerWidget {
         tint: AppColors.red,
       ),
       const _AdminTile(
+        title: 'Vehicle Capacity',
+        subtitle: 'Manage the LR capacity dropdown options',
+        icon: Icons.scale_outlined,
+        path: '/admin/vehicle-capacity',
+        tint: AppColors.ok,
+      ),
+      const _AdminTile(
         title: 'Audit Trail',
         subtitle: 'All system events with user & timestamp',
         icon: Icons.fact_check_outlined,

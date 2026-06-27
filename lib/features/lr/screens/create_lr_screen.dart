@@ -103,6 +103,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
   LookupValue? _payType;
   LookupValue? _deliveryType;
+  LookupValue? _capacity;
   LookupValue? _advancePaidBy;
   LookupValue? _tripLeadBy;
   LookupValue? _ewbLoad;
@@ -225,6 +226,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         _deliveryType =
             lookupById(_lookups, 'DELIVERY_TYPE', lr.deliveryTypeId) ??
             lookupByCode(_lookups, 'DELIVERY_TYPE', lr.deliveryType.code);
+        _capacity = lookupById(_lookups, 'VEHICLE_CAPACITY', lr.capacityId);
         _advancePaidBy = lookupById(
           _lookups,
           'ADVANCE_PAID_BY',
@@ -276,6 +278,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       _route = null;
       _payType = null;
       _deliveryType = null;
+      _capacity = null;
       _advancePaidBy = null;
       _tripLeadBy = null;
       _ewbLoad = null;
@@ -490,6 +493,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       if (_route != null) 'to_city': _route!.toCity,
       'pay_type_id': _payType!.id,
       'delivery_type_id': _deliveryType!.id,
+      if (_capacity != null) 'capacity_id': _capacity!.id,
       'freight': _toDouble(_freightCtrl),
       'door_delivery': _toDouble(_doorCtrl),
       'handling': _toDouble(_handlingCtrl),
@@ -591,6 +595,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     'route_id': _route?.id,
     'pay_type_id': _payType?.id,
     'delivery_type_id': _deliveryType?.id,
+    'capacity_id': _capacity?.id,
     'advance_paid_by_id': _advancePaidBy?.id,
     'trip_lead_by_id': _tripLeadBy?.id,
     'ewb_load_type_id': _ewbLoad?.id,
@@ -809,6 +814,9 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       _deliveryType =
           lookupById(lk, 'DELIVERY_TYPE', p['delivery_type_id'] as String?) ??
           _deliveryType;
+      _capacity =
+          lookupById(lk, 'VEHICLE_CAPACITY', p['capacity_id'] as String?) ??
+          _capacity;
       _advancePaidBy =
           lookupById(
             lk,
@@ -1348,6 +1356,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
     final payTypes = lookupList(lookups, 'PAY_TYPE');
     final deliveryTypes = lookupList(lookups, 'DELIVERY_TYPE');
+    final capacityList = lookupList(lookups, 'VEHICLE_CAPACITY');
     final packageTypes = lookupList(lookups, 'PACKAGE_TYPE');
     final advancePaidByList = lookupList(lookups, 'ADVANCE_PAID_BY');
     final tripLeadByList = lookupList(lookups, 'TRIP_LEAD_BY');
@@ -1569,6 +1578,15 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                       _fieldErrors.remove('deliveryType');
                                     }
                                   }),
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Vehicle Capacity',
+                                child: _lookupDropdown(
+                                  value: _capacity,
+                                  options: capacityList,
+                                  onChanged: (v) =>
+                                      setState(() => _capacity = v),
                                 ),
                               ),
                             ]),

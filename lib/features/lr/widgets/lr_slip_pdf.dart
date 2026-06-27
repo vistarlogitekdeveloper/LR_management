@@ -43,9 +43,8 @@ const double _bw = 0.7; // border width
 ///
 /// The layout mirrors the approved Vistar consignment note and intentionally
 /// shows ONLY those fields — company header, vehicle/LR meta, consignor/
-/// consignee block, route, e-way + driver, the goods table (with To Pay /
-/// To Be Billed freight columns) and a signature footer. No charge/GST/margin
-/// breakdown is rendered.
+/// consignee block, route, e-way + driver, the goods table and a signature
+/// footer. No freight/charge/GST/margin amounts are rendered.
 Future<Uint8List> buildLrSlipPdf({
   required LorryReceipt lr,
   required LrSlipCompany company,
@@ -150,7 +149,13 @@ pw.Widget _pad(pw.Widget child, {pw.Alignment? align}) => pw.Container(
 );
 
 /// "Label : value" cell — label bold, value normal (matches the reference).
-pw.Widget _kv(String label, String value, {double size = 8}) => _pad(
+/// Pass [valueBold] to bold the value too (used for the emphasised meta row).
+pw.Widget _kv(
+  String label,
+  String value, {
+  double size = 8,
+  bool valueBold = false,
+}) => _pad(
   pw.RichText(
     text: pw.TextSpan(
       style: _s(size: size, bold: true),
@@ -158,7 +163,7 @@ pw.Widget _kv(String label, String value, {double size = 8}) => _pad(
         pw.TextSpan(text: '${_ascii(label)} : '),
         pw.TextSpan(
           text: _ascii(value),
-          style: _s(size: size, bold: false),
+          style: _s(size: size, bold: valueBold),
         ),
       ],
     ),
@@ -220,25 +225,9 @@ pw.Widget _copyBody(
       ? lr.consignee.mobile
       : lr.consignee.contact;
 
-  // LR-level freight lands in one of the two freight columns based on pay type
-  // (To Be Billed for TBB, otherwise To Pay), on the first goods row only.
-  final freightStr = _num(lr.freight.freight);
-  final firstToPay = freightStr.isNotEmpty && lr.payType != PayType.tbb
-      ? freightStr
-      : '';
-  final firstToBeBilled = freightStr.isNotEmpty && lr.payType == PayType.tbb
-      ? freightStr
-      : '';
-
   final goodsRows = <pw.TableRow>[_goodsHeaderRow()];
   if (lr.items.isEmpty) {
-    goodsRows.add(
-      _goodsRow(
-        remarks: lr.remarks ?? '',
-        toPay: firstToPay,
-        toBeBilled: firstToBeBilled,
-      ),
-    );
+    goodsRows.add(_goodsRow(remarks: lr.remarks ?? ''));
   } else {
     for (var i = 0; i < lr.items.length; i++) {
       final it = lr.items[i];
@@ -251,8 +240,6 @@ pw.Widget _copyBody(
           invNo: it.invoiceNo,
           invDate: it.invoiceNo.isNotEmpty ? idf.format(it.invoiceDate) : '',
           invVal: _num(it.grossValue),
-          toPay: i == 0 ? firstToPay : '',
-          toBeBilled: i == 0 ? firstToBeBilled : '',
           remarks: it.natureOfGoods,
         ),
       );
@@ -325,10 +312,20 @@ pw.Widget _copyBody(
         rows: [
           pw.TableRow(
             children: [
-              _kv('Vehicle Type', lr.vehicle.type),
-              _kv('LR Date.', df.format(lr.date)),
-              _kv('Vehicle Number', lr.vehicle.number),
-              _kv('L.R. No', lr.number),
+              _kv(
+                'Vehicle Capacity',
+                lr.capacityLabel,
+                size: 11,
+                valueBold: true,
+              ),
+              _kv('LR Date.', df.format(lr.date), size: 11, valueBold: true),
+              _kv(
+                'Vehicle Number',
+                lr.vehicle.number,
+                size: 11,
+                valueBold: true,
+              ),
+              _kv('L.R. No', lr.number, size: 11, valueBold: true),
             ],
           ),
           pw.TableRow(
@@ -406,8 +403,7 @@ pw.Widget _copyBody(
           4: pw.FlexColumnWidth(1.5),
           5: pw.FlexColumnWidth(1.3),
           6: pw.FixedColumnWidth(48),
-          7: pw.FixedColumnWidth(92),
-          8: pw.FlexColumnWidth(1.9),
+          7: pw.FlexColumnWidth(1.9),
         },
         children: goodsRows,
       ),
@@ -510,70 +506,7 @@ pw.TableRow _goodsHeaderRow() => pw.TableRow(
     _hc('Invoice No'),
     _hc('Invoice Date'),
     _hc('Invoice\nValue'),
-    _freightHeaderCell(),
     _hc('REMARKS'),
-  ],
-);
-
-/// The grouped FREIGHT header: "FREIGHT" over a "TO PAY | TO BE BILLED" split,
-/// kept inside one parent column so it always aligns with the data cell.
-pw.Widget _freightHeaderCell() => pw.Column(
-  crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-  mainAxisSize: pw.MainAxisSize.min,
-  children: [
-    pw.Container(
-      alignment: pw.Alignment.center,
-      padding: const pw.EdgeInsets.symmetric(vertical: 2),
-      child: _txt('FREIGHT', size: 7, bold: true),
-    ),
-    pw.Container(
-      decoration: const pw.BoxDecoration(
-        border: pw.Border(top: pw.BorderSide(width: _bw)),
-      ),
-      child: pw.Row(
-        children: [
-          pw.Expanded(
-            child: pw.Container(
-              alignment: pw.Alignment.center,
-              padding: const pw.EdgeInsets.symmetric(vertical: 2),
-              child: _txt('TO PAY', size: 6, bold: true),
-            ),
-          ),
-          pw.Expanded(
-            child: pw.Container(
-              alignment: pw.Alignment.center,
-              padding: const pw.EdgeInsets.symmetric(vertical: 2),
-              decoration: const pw.BoxDecoration(
-                border: pw.Border(left: pw.BorderSide(width: _bw)),
-              ),
-              child: _txt('TO BE BILLED', size: 6, bold: true),
-            ),
-          ),
-        ],
-      ),
-    ),
-  ],
-);
-
-pw.Widget _freightDataCell(String toPay, String toBeBilled) => pw.Row(
-  children: [
-    pw.Expanded(
-      child: pw.Container(
-        alignment: pw.Alignment.center,
-        padding: const pw.EdgeInsets.symmetric(horizontal: 2, vertical: 3.5),
-        child: _txt(toPay, size: 7.5),
-      ),
-    ),
-    pw.Expanded(
-      child: pw.Container(
-        alignment: pw.Alignment.center,
-        padding: const pw.EdgeInsets.symmetric(horizontal: 2, vertical: 3.5),
-        decoration: const pw.BoxDecoration(
-          border: pw.Border(left: pw.BorderSide(width: _bw)),
-        ),
-        child: _txt(toBeBilled, size: 7.5),
-      ),
-    ),
   ],
 );
 
@@ -585,8 +518,6 @@ pw.TableRow _goodsRow({
   String invNo = '',
   String invDate = '',
   String invVal = '',
-  String toPay = '',
-  String toBeBilled = '',
   String remarks = '',
   bool spacer = false,
 }) {
@@ -611,7 +542,6 @@ pw.TableRow _goodsRow({
       cell(invNo),
       cell(invDate),
       cell(invVal, align: pw.Alignment.center),
-      _freightDataCell(toPay, toBeBilled),
       cell(remarks),
     ],
   );
