@@ -3,6 +3,7 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
 
+# Content-hashed / version-pinned assets — safe to cache forever.
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
@@ -12,11 +13,24 @@
 /icons/*
   Cache-Control: public, max-age=31536000, immutable
 
-/*.js
-  Cache-Control: public, max-age=31536000, immutable
-
+# Flutter's entry files keep the SAME name every build but their contents change
+# on each deploy. They MUST always revalidate, otherwise a returning browser
+# serves the old bundle and never picks up a new deployment. (Do NOT cache these
+# immutable — that was the bug that pinned the app to an old version.)
 /index.html
   Cache-Control: public, max-age=0, must-revalidate
 
+/flutter_bootstrap.js
+  Cache-Control: public, max-age=0, must-revalidate
+
 /flutter_service_worker.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/main.dart.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/flutter.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/version.json
   Cache-Control: public, max-age=0, must-revalidate
