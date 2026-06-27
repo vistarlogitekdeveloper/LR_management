@@ -23,7 +23,6 @@ import '../../features/lr/screens/lr_list_screen.dart';
 import '../../features/lr/screens/print_lr_screen.dart';
 import '../../features/masters/screens/consignees_screen.dart';
 import '../../features/masters/screens/consignors_screen.dart';
-import '../../features/masters/screens/customers_screen.dart';
 import '../../features/masters/screens/drivers_screen.dart';
 import '../../features/masters/screens/parties_screen.dart';
 import '../../features/masters/screens/routes_screen.dart';
@@ -199,16 +198,11 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ),
           ),
+          // Customers were merged into the unified Parties master (role-tagged).
+          // Keep the old path working for any bookmark.
           GoRoute(
             path: '/masters/customers',
-            pageBuilder: (context, state) => NoTransitionPage(
-              key: state.pageKey,
-              child: RefreshGate(
-                onEnter: (ref) =>
-                    ref.read(customersProvider.notifier).refresh(),
-                child: const CustomersScreen(),
-              ),
-            ),
+            redirect: (context, state) => '/masters/parties',
           ),
           GoRoute(
             path: '/masters/consignees',

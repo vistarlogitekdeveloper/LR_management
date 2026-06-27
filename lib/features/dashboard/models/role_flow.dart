@@ -101,9 +101,11 @@ class RoleFlows {
           id: 'masters',
           icon: Icons.business_outlined,
           title: 'Masters',
-          desc: 'Customers, vehicles, transporters',
+          desc: 'Parties, customers, vehicles, transporters',
           tint: AppColors.amber,
-          path: '/masters/consignors',
+          // Unified Parties master (Consignors + Consignees were merged); this
+          // matches the first item of the sidebar's Masters section.
+          path: '/masters/parties',
         ),
         FlowStep(
           id: 'reports',

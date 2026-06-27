@@ -9,7 +9,6 @@ import '../../../core/utils/file_opener.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/mime_types.dart';
 import '../../../shared/models/attachment.dart';
-import '../../../shared/models/customer.dart';
 import '../../../shared/models/driver.dart';
 import '../../../shared/models/lr_models.dart';
 import '../../../shared/models/lr_template.dart';
@@ -28,6 +27,7 @@ import '../../lookups/data/lookup_value.dart';
 import '../../lookups/providers/lookups_provider.dart';
 import '../../masters/providers/master_providers.dart';
 import '../../masters/widgets/master_actions.dart';
+import '../../masters/widgets/party_form_dialog.dart';
 import '../../shell/widgets/app_topbar.dart';
 import '../data/lr_repository.dart';
 import '../providers/lr_providers.dart';
@@ -81,8 +81,20 @@ class _InvoiceForm {
 class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   final _formKey = GlobalKey<FormState>();
 
+  // Anchors for scroll-to-first-missing-field on a failed save, one per
+  // backend-mandatory selector (createLrSchema: consignor, consignee,
+  // pay type, delivery type — lr_date defaults to today).
+  final _consignorFieldKey = GlobalKey();
+  final _consigneeFieldKey = GlobalKey();
+  final _payTypeFieldKey = GlobalKey();
+  final _deliveryTypeFieldKey = GlobalKey();
+
+  // Per-field validation messages shown inline under each mandatory field;
+  // set on a failed save, cleared as soon as the field is filled.
+  final Map<String, String> _fieldErrors = {};
+
   Party? _consignor;
-  Customer? _customer;
+  Party? _customer;
   Party? _consignee;
   Vehicle? _vehicle;
   Transporter? _transporter;
@@ -138,14 +150,9 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
   Map<String, List<LookupValue>> get _lookups => ref.read(lookupsMapProvider);
 
-  LookupValue? _firstLookup(String category) {
-    final list = _lookups[category] ?? const [];
-    return list.isEmpty ? null : list.first;
-  }
-
   Future<void> _hydrate() async {
     final parties = ref.read(partiesProvider);
-    final customers = ref.read(customersProvider);
+    final customers = ref.read(customerPartiesProvider);
     final vehicles = ref.read(vehiclesProvider);
     final transporters = ref.read(transportersProvider);
     final drivers = ref.read(driversProvider);
@@ -155,6 +162,12 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       try {
         final lr = await ref.read(lrRepositoryProvider).getById(widget.editId!);
         _editing = lr;
+        // Make sure the lookup catalog is loaded before resolving pay/delivery
+        // type. On a cold-start (deep-link) edit the synchronous lookups map
+        // can still be empty, which would otherwise leave these mandatory
+        // fields blank and trip the validation on a perfectly valid LR.
+        await ref.read(lookupsProvider.future);
+        if (!mounted) return;
         T? pick<T>(List<T> list, bool Function(T) test) {
           for (final e in list) {
             if (test(e)) return e;
@@ -201,8 +214,17 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         _driver = pick(drivers, (d) => d.id == lr.driverId);
         _route = pick(routes, (r) => r.id == lr.routeId);
 
-        _payType = _byCode('PAY_TYPE', lr.payType.code);
-        _deliveryType = _byCode('DELIVERY_TYPE', lr.deliveryType.code);
+        // Resolve by the real FK id first (most stable), then by code; never
+        // fall back to an arbitrary lookup. If the saved value was
+        // discontinued these stay null and the mandatory-field validation
+        // flags them, so the user re-picks instead of silently persisting the
+        // wrong pay/delivery type.
+        _payType =
+            lookupById(_lookups, 'PAY_TYPE', lr.payTypeId) ??
+            lookupByCode(_lookups, 'PAY_TYPE', lr.payType.code);
+        _deliveryType =
+            lookupById(_lookups, 'DELIVERY_TYPE', lr.deliveryTypeId) ??
+            lookupByCode(_lookups, 'DELIVERY_TYPE', lr.deliveryType.code);
         _advancePaidBy = lookupById(
           _lookups,
           'ADVANCE_PAID_BY',
@@ -259,13 +281,6 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       _ewbLoad = null;
     }
     if (mounted) setState(() => _loading = false);
-  }
-
-  LookupValue? _byCode(String category, String code) {
-    for (final v in _lookups[category] ?? const <LookupValue>[]) {
-      if (v.code == code) return v;
-    }
-    return _firstLookup(category);
   }
 
   @override
@@ -619,7 +634,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
   /// Match a customer master record by (case-insensitive) name — used to
   /// resolve the free-text customer_name back to a master row.
-  Customer? _byCustomerName(List<Customer> list, String name) {
+  Party? _byCustomerName(List<Party> list, String name) {
     final n = name.trim().toLowerCase();
     if (n.isEmpty) return null;
     for (final c in list) {
@@ -662,50 +677,14 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   }
 
   Future<void> _addCustomerInline() async {
-    await MasterFormDialog.show(
-      context: context,
-      title: 'New Customer',
-      subtitle: 'Adds to your customers and selects it on this LR',
-      fields: const [
-        FormFieldSpec(name: 'name', label: 'Customer Name', required: true),
-        FormFieldSpec(name: 'gst', label: 'GST Number', maxLength: 15),
-        FormFieldSpec(name: 'city', label: 'City'),
-        FormFieldSpec(
-          name: 'address',
-          label: 'Address',
-          type: FieldType.multiline,
-        ),
-        FormFieldSpec(name: 'contact', label: 'Contact Person'),
-        FormFieldSpec(name: 'mobile', label: 'Mobile', type: FieldType.number),
-        FormFieldSpec(name: 'email', label: 'Email', type: FieldType.email),
-      ],
-      onSave: (values) async {
-        try {
-          final created = await ref
-              .read(customersProvider.notifier)
-              .add(
-                Customer(
-                  id: const Uuid().v4(),
-                  name: values['name'] ?? '',
-                  gst: values['gst'] ?? '',
-                  city: values['city'] ?? '',
-                  address: values['address'] ?? '',
-                  contact: values['contact'] ?? '',
-                  mobile: values['mobile'] ?? '',
-                  email: values['email'] ?? '',
-                ),
-              );
-          setState(() {
-            _customer = created;
-            _customerCtrl.text = created.name;
-          });
-          return true;
-        } catch (e) {
-          MasterActions.showError(context, e);
-          return false;
-        }
-      },
-    );
+    // Customers are parties tagged with the Customer role — create one with
+    // that role pre-ticked and select it on this LR.
+    final created = await PartyFormDialog.show(context, defaultCustomer: true);
+    if (created == null || !mounted) return;
+    setState(() {
+      _customer = created;
+      _customerCtrl.text = created.name;
+    });
   }
 
   Future<void> _addVehicleInline() async {
@@ -1051,22 +1030,98 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       );
   }
 
+  // Mandatory fields, in the order they appear on the form — drives both the
+  // error message and which field is scrolled to.
+  static const _mandatoryOrder = [
+    'consignor',
+    'consignee',
+    'deliveryType',
+    'payType',
+  ];
+  static const _mandatoryLabels = {
+    'consignor': 'Consignor / Sender',
+    'consignee': 'Consignee / Receiver',
+    'deliveryType': 'Delivery Type',
+    'payType': 'Pay Type',
+  };
+
+  /// Checks the backend-mandatory fields (createLrSchema: consignor, consignee,
+  /// pay type, delivery type). On failure every missing field is flagged inline,
+  /// an accurate message naming them is shown, and the form scrolls to the
+  /// first one. Returns true only when the form is safe to submit.
+  bool _validateMandatory() {
+    final errors = <String, String>{};
+    if (_consignor == null) {
+      errors['consignor'] = 'Select a consignor / sender.';
+    }
+    if (_consignee == null) {
+      errors['consignee'] = 'Select a consignee / receiver.';
+    }
+    if (_deliveryType == null) {
+      errors['deliveryType'] = 'Select a delivery type.';
+    }
+    if (_payType == null) {
+      errors['payType'] = 'Select a pay type.';
+    }
+
+    // Also run the text-field validators (EWB format, etc.).
+    final textOk = _formKey.currentState?.validate() ?? true;
+
+    if (errors.isEmpty && textOk) {
+      if (_fieldErrors.isNotEmpty) setState(() => _fieldErrors.clear());
+      return true;
+    }
+
+    setState(() {
+      _fieldErrors
+        ..clear()
+        ..addAll(errors);
+    });
+
+    if (errors.isNotEmpty) {
+      final missing = _mandatoryOrder.where(errors.containsKey).toList();
+      final names = missing.map((k) => _mandatoryLabels[k]).join(', ');
+      MasterActions.showError(
+        context,
+        missing.length == 1
+            ? '$names is required.'
+            : 'Please fill the required field(s): $names.',
+      );
+      // Scroll once the inline messages have been laid out, so the target
+      // settles at a stable position.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scrollToField(missing.first);
+      });
+    } else {
+      MasterActions.showError(
+        context,
+        'Please correct the highlighted fields.',
+      );
+    }
+    return false;
+  }
+
+  void _scrollToField(String fieldKey) {
+    final keys = {
+      'consignor': _consignorFieldKey,
+      'consignee': _consigneeFieldKey,
+      'deliveryType': _deliveryTypeFieldKey,
+      'payType': _payTypeFieldKey,
+    };
+    final ctx = keys[fieldKey]?.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeInOut,
+      // Land the field ~25% down the viewport so its label *and* the newly
+      // shown inline error stay clear of the fold on narrow screens.
+      alignment: 0.25,
+    );
+  }
+
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_consignor == null || _consignee == null) {
-      MasterActions.showError(
-        context,
-        'Select a consignor and consignee (add them in Masters first).',
-      );
-      return;
-    }
-    if (_payType == null || _deliveryType == null) {
-      MasterActions.showError(
-        context,
-        'Pay type and delivery type are required (lookups not loaded).',
-      );
-      return;
-    }
+    if (!_validateMandatory()) return;
 
     setState(() => _saving = true);
     final notifier = ref.read(lrListProvider.notifier);
@@ -1283,7 +1338,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final parties = ref.watch(partiesProvider);
+    final consignorParties = ref.watch(consignorPartiesProvider);
+    final consigneeParties = ref.watch(consigneePartiesProvider);
     final vehicles = ref.watch(vehiclesProvider);
     final transporters = ref.watch(transportersProvider);
     final drivers = ref.watch(driversProvider);
@@ -1358,35 +1414,47 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                             ),
                             _grid(2, [
                               LabeledField(
+                                key: _consignorFieldKey,
                                 label: 'Consignor/Sender',
                                 required: true,
+                                errorText: _fieldErrors['consignor'],
                                 child: SearchableField<Party>(
                                   value: _consignor,
-                                  options: parties,
+                                  options: consignorParties,
                                   labelOf: (p) => p.name,
                                   subtitleOf: (p) => p.gst.isNotEmpty
                                       ? 'GST ${p.gst}'
                                       : p.city,
                                   hintText: 'Select consignor',
                                   dialogTitle: 'Select Consignor',
-                                  onChanged: (v) =>
-                                      setState(() => _consignor = v),
+                                  onChanged: (v) => setState(() {
+                                    _consignor = v;
+                                    if (v != null) {
+                                      _fieldErrors.remove('consignor');
+                                    }
+                                  }),
                                 ),
                               ),
                               LabeledField(
+                                key: _consigneeFieldKey,
                                 label: 'Consignee/Receiver',
                                 required: true,
+                                errorText: _fieldErrors['consignee'],
                                 child: SearchableField<Party>(
                                   value: _consignee,
-                                  options: parties,
+                                  options: consigneeParties,
                                   labelOf: (p) => p.name,
                                   subtitleOf: (p) => p.gst.isNotEmpty
                                       ? 'GST ${p.gst}'
                                       : p.city,
                                   hintText: 'Select consignee',
                                   dialogTitle: 'Select Consignee',
-                                  onChanged: (v) =>
-                                      setState(() => _consignee = v),
+                                  onChanged: (v) => setState(() {
+                                    _consignee = v;
+                                    if (v != null) {
+                                      _fieldErrors.remove('consignee');
+                                    }
+                                  }),
                                 ),
                               ),
                             ]),
@@ -1488,12 +1556,19 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                 ),
                               ),
                               LabeledField(
+                                key: _deliveryTypeFieldKey,
                                 label: 'Delivery Type',
+                                required: true,
+                                errorText: _fieldErrors['deliveryType'],
                                 child: _lookupDropdown(
                                   value: _deliveryType,
                                   options: deliveryTypes,
-                                  onChanged: (v) =>
-                                      setState(() => _deliveryType = v),
+                                  onChanged: (v) => setState(() {
+                                    _deliveryType = v;
+                                    if (v != null) {
+                                      _fieldErrors.remove('deliveryType');
+                                    }
+                                  }),
                                 ),
                               ),
                             ]),
@@ -1616,13 +1691,19 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                 ),
                               ),
                               LabeledField(
+                                key: _payTypeFieldKey,
                                 label: 'Pay Type',
                                 required: true,
+                                errorText: _fieldErrors['payType'],
                                 child: _lookupDropdown(
                                   value: _payType,
                                   options: payTypes,
-                                  onChanged: (v) =>
-                                      setState(() => _payType = v),
+                                  onChanged: (v) => setState(() {
+                                    _payType = v;
+                                    if (v != null) {
+                                      _fieldErrors.remove('payType');
+                                    }
+                                  }),
                                 ),
                               ),
                             ]),
@@ -1738,16 +1819,16 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   }
 
   Widget _customerCard() {
-    final customers = ref.watch(customersProvider);
+    final customers = ref.watch(customerPartiesProvider);
     // _customerCtrl is the source of truth for customer_name. Show the matching
-    // master record if there is one; otherwise show the raw entered/saved name
-    // (e.g. an edit-loaded LR whose customer isn't in the master list yet).
+    // customer-tagged party if there is one; otherwise show the raw entered/saved
+    // name (e.g. an edit-loaded LR whose customer isn't a party yet).
     final name = _customerCtrl.text.trim();
-    Customer? selected = _customer;
+    Party? selected = _customer;
     if (selected == null && name.isNotEmpty) {
       selected =
           _byCustomerName(customers, name) ??
-          Customer(
+          Party(
             id: '',
             name: _customerCtrl.text,
             gst: '',
@@ -1776,7 +1857,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
           _lrDateField(),
           LabeledField(
             label: 'Customer Name',
-            child: SearchableField<Customer>(
+            child: SearchableField<Party>(
               value: selected,
               options: customers,
               clearable: true,

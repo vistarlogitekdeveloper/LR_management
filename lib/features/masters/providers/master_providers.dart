@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_providers.dart';
 import '../../../shared/models/consignee.dart';
 import '../../../shared/models/consignor.dart';
-import '../../../shared/models/customer.dart';
 import '../../../shared/models/driver.dart';
 import '../../../shared/models/party.dart';
 import '../../../shared/models/route_master.dart';
@@ -11,7 +10,6 @@ import '../../../shared/models/transporter.dart';
 import '../../../shared/models/vehicle.dart';
 import '../data/consignees_repository.dart';
 import '../data/consignors_repository.dart';
-import '../data/customers_repository.dart';
 import '../data/parties_repository.dart';
 import '../data/drivers_repository.dart';
 import '../data/routes_repository.dart';
@@ -66,45 +64,16 @@ class PartiesNotifier extends StateNotifier<List<Party>> {
     }
   }
 
-  Future<void> add(Party p) async {
+  Future<Party> add(Party p) async {
     final created = await _repo.create(p);
-    state = [...state, created];
-  }
-
-  Future<void> update(Party p) async {
-    final updated = await _repo.update(p);
-    state = [for (final x in state) x.id == updated.id ? updated : x];
-  }
-
-  Future<void> remove(String id) async {
-    await _repo.remove(id);
-    state = state.where((x) => x.id != id).toList();
-  }
-}
-
-class CustomersNotifier extends StateNotifier<List<Customer>> {
-  CustomersNotifier(this._repo) : super(const []) {
-    refresh();
-  }
-  final CustomersRepository _repo;
-
-  Future<void> refresh() async {
-    try {
-      state = await _repo.list();
-    } catch (_) {
-      // A transient backend/DB error shouldn't crash the UI; keep prior state.
-    }
-  }
-
-  Future<Customer> add(Customer c) async {
-    final created = await _repo.create(c);
     state = [...state, created];
     return created;
   }
 
-  Future<void> update(Customer c) async {
-    final updated = await _repo.update(c);
+  Future<Party> update(Party p) async {
+    final updated = await _repo.update(p);
     state = [for (final x in state) x.id == updated.id ? updated : x];
+    return updated;
   }
 
   Future<void> remove(String id) async {
@@ -271,9 +240,6 @@ final consignorsRepositoryProvider = Provider<ConsignorsRepository>(
 final partiesRepositoryProvider = Provider<PartiesRepository>(
   (ref) => PartiesRepository(ref.watch(apiClientProvider)),
 );
-final customersRepositoryProvider = Provider<CustomersRepository>(
-  (ref) => CustomersRepository(ref.watch(apiClientProvider)),
-);
 final consigneesRepositoryProvider = Provider<ConsigneesRepository>(
   (ref) => ConsigneesRepository(ref.watch(apiClientProvider)),
 );
@@ -300,10 +266,18 @@ final partiesProvider = StateNotifierProvider<PartiesNotifier, List<Party>>(
   (ref) => PartiesNotifier(ref.watch(partiesRepositoryProvider)),
 );
 
-final customersProvider =
-    StateNotifierProvider<CustomersNotifier, List<Customer>>(
-      (ref) => CustomersNotifier(ref.watch(customersRepositoryProvider)),
-    );
+// Role-filtered views of the single parties master — feed the LR form's
+// Consignor / Consignee / Customer pickers so each shows only its tagged
+// parties.
+final consignorPartiesProvider = Provider<List<Party>>(
+  (ref) => ref.watch(partiesProvider).where((p) => p.isConsignor).toList(),
+);
+final consigneePartiesProvider = Provider<List<Party>>(
+  (ref) => ref.watch(partiesProvider).where((p) => p.isConsignee).toList(),
+);
+final customerPartiesProvider = Provider<List<Party>>(
+  (ref) => ref.watch(partiesProvider).where((p) => p.isCustomer).toList(),
+);
 
 final consigneesProvider =
     StateNotifierProvider<ConsigneesNotifier, List<Consignee>>(
