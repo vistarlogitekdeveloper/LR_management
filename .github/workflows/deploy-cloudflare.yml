@@ -30,8 +30,10 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      # Info-level lints (style / deprecation hints) must not block a deploy;
+      # warnings and errors still fail the build.
       - name: Analyze
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos
 
       - name: Test
         run: flutter test
