@@ -63,6 +63,23 @@ class AccountsScreen extends ConsumerWidget {
       return s + (pend > 0 ? pend : 0);
     });
 
+    // Status counts — same buckets as the filter chips below.
+    var countPending = 0; // awaiting advance (nothing paid)
+    var countAdvancePaid = 0; // advance paid, balance against POD pending
+    var countFullyPaid = 0; // advance + balance both settled
+    for (final l in lrs) {
+      final f = l.freight.freight;
+      if (f <= 0) continue;
+      final bal = f - l.freight.advance;
+      if (l.freight.advance <= 0) {
+        countPending++;
+      } else if (bal > 0.01) {
+        countAdvancePaid++;
+      } else {
+        countFullyPaid++;
+      }
+    }
+
     final isMobile = MediaQuery.of(context).size.width < 600;
 
     return Scaffold(
@@ -82,12 +99,13 @@ class AccountsScreen extends ConsumerWidget {
                   LayoutBuilder(
                     builder: (context, c) {
                       final mobile = c.maxWidth < 600;
-                      // Two compact tiles per row on phones, full grid otherwise.
-                      final cols = c.maxWidth >= 700
-                          ? 2
-                          : mobile
-                          ? 2
-                          : 1;
+                      // 5 tiles (2 money totals + 3 status counts): all in a row
+                      // on wide screens, 3-up on tablets, 2-up on phones.
+                      final cols = c.maxWidth >= 1040
+                          ? 5
+                          : c.maxWidth >= 680
+                          ? 3
+                          : 2;
                       final gap = mobile ? 10.0 : 16.0;
                       final tiles = <Widget>[
                         _MiniTile(
@@ -102,6 +120,27 @@ class AccountsScreen extends ConsumerWidget {
                           value: inr(totalPending),
                           icon: Icons.pending_actions_outlined,
                           color: AppColors.red,
+                          compact: mobile,
+                        ),
+                        _MiniTile(
+                          label: 'Pending',
+                          value: '$countPending',
+                          icon: Icons.hourglass_bottom,
+                          color: AppColors.orange,
+                          compact: mobile,
+                        ),
+                        _MiniTile(
+                          label: 'Advance Paid',
+                          value: '$countAdvancePaid',
+                          icon: Icons.account_balance_wallet_outlined,
+                          color: AppColors.plum,
+                          compact: mobile,
+                        ),
+                        _MiniTile(
+                          label: 'Fully Paid',
+                          value: '$countFullyPaid',
+                          icon: Icons.task_alt,
+                          color: AppColors.ok,
                           compact: mobile,
                         ),
                       ];
@@ -435,6 +474,14 @@ class _LrPaymentCard extends ConsumerWidget {
     );
   }
 
+  // 90% of the transporter freight, rounded to the nearest 1000 so Accounts
+  // releases a clean round figure (e.g. 17,550 -> 18,000), clamped to the
+  // freight. The backend rounds the same way when the advance is paid.
+  double _advance90(double freight) =>
+      (((freight * 0.9) / 1000).roundToDouble() * 1000)
+          .clamp(0, freight)
+          .toDouble();
+
   /// The 90/10 transporter advance plan: 90% of the transporter freight is
   /// released up front, the remaining 10% settles after POD. The actual figures
   /// are computed on `freight` (the transporter freight, excluding the
@@ -442,11 +489,12 @@ class _LrPaymentCard extends ConsumerWidget {
   Widget _advancePlan(BuildContext context) {
     final freight = lr.freight.freight;
     if (freight <= 0) return const SizedBox.shrink();
-    final advance = freight * 0.9; // 90% up front
-    final afterPod = freight - advance; // 10% against POD
-    // Treat the advance as released once the recorded advance covers the 90%
-    // target (small epsilon for rounding to whole rupees).
+    final advance = _advance90(freight); // ~90% up front, rounded to 1000
+    final afterPod = freight - advance; // balance against POD
+    // "Advance done" once the recorded advance covers the rounded target;
+    // "fully paid" once it covers the whole freight (balance also released).
     final advanceDone = lr.freight.advance + 0.5 >= advance;
+    final fullyPaid = lr.freight.advance + 0.5 >= freight;
     return Container(
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.all(12),
@@ -477,8 +525,14 @@ class _LrPaymentCard extends ConsumerWidget {
                 ),
               ),
               _BadgePill(
-                text: advanceDone ? 'Advance Paid' : 'Advance Due',
-                fg: advanceDone ? AppColors.ok : AppColors.orange,
+                text: fullyPaid
+                    ? 'Fully Paid'
+                    : advanceDone
+                    ? 'Advance Paid'
+                    : 'Advance Due',
+                fg: (fullyPaid || advanceDone)
+                    ? AppColors.ok
+                    : AppColors.orange,
               ),
             ],
           ),
@@ -642,7 +696,7 @@ class _LrPaymentCard extends ConsumerWidget {
   /// backend computes the amount from the transporter freight.
   Future<void> _markAdvancePaid(BuildContext context, WidgetRef ref) async {
     final freight = lr.freight.freight;
-    final advance = freight * 0.9;
+    final advance = _advance90(freight);
     final afterPod = freight - advance;
     final transporterName = lr.transporter.name.isEmpty
         ? 'the transporter'

@@ -68,9 +68,14 @@ class AppUser {
   bool can(String permission) => permissions.contains(permission);
 
   // ---- Fine-grained feature access (per-user, backend-enforced) ----
+  // Admin / super-admin override — mirrors the backend's ADMIN_ACCESS /
+  // SUPERADMIN_ACCESS guards. Without it a super admin (who holds
+  // SUPERADMIN_ACCESS but not the granular LR_EDIT / LR_DELETE toggles) saw no
+  // edit/delete button even though the API allows the action.
+  bool get _lrAdminAccess => can('ADMIN_ACCESS') || can('SUPERADMIN_ACCESS');
   bool get canCreateLr => can('LR_CREATE');
-  bool get canEditLr => can('LR_EDIT');
-  bool get canDeleteLr => can('LR_DELETE');
+  bool get canEditLr => can('LR_EDIT') || _lrAdminAccess;
+  bool get canDeleteLr => can('LR_DELETE') || _lrAdminAccess;
   bool get canViewReports => can('REPORTS_VIEW');
 
   // Master management: the granular per-master permission OR the coarse
@@ -86,6 +91,8 @@ class AppUser {
   bool get canManageDrivers => _canMaster('MASTER_DRIVER_MANAGE');
   bool get canManageTransporters => _canMaster('MASTER_TRANSPORTER_MANAGE');
   bool get canManageRoutes => _canMaster('MASTER_ROUTE_MANAGE');
+  bool get canManagePartDescriptions =>
+      _canMaster('MASTER_PART_DESCRIPTION_MANAGE');
 
   /// Can reach the admin surface (users, regions, system config).
   bool get canAdmin => role.canAdmin;

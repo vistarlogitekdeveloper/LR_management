@@ -26,6 +26,7 @@ import '../../features/masters/screens/consignees_screen.dart';
 import '../../features/masters/screens/consignors_screen.dart';
 import '../../features/masters/screens/drivers_screen.dart';
 import '../../features/masters/screens/parties_screen.dart';
+import '../../features/masters/screens/part_descriptions_screen.dart';
 import '../../features/masters/screens/routes_screen.dart';
 import '../../features/masters/screens/transporters_screen.dart';
 import '../../features/masters/screens/vehicles_screen.dart';
@@ -34,6 +35,7 @@ import '../../features/admin/providers/system_config_provider.dart';
 import '../../features/admin/providers/users_provider.dart';
 import '../../features/lr/providers/lr_providers.dart';
 import '../../features/masters/providers/master_providers.dart';
+import '../../features/masters/providers/part_descriptions_provider.dart';
 import '../../features/reports/screens/reports_screen.dart';
 import '../../features/shell/app_shell.dart';
 import '../../features/warehouse/screens/warehouse_screen.dart';
@@ -259,6 +261,17 @@ final routerProvider = Provider<GoRouter>((ref) {
               child: RefreshGate(
                 onEnter: (ref) => ref.read(routesProvider.notifier).refresh(),
                 child: const RoutesScreen(),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/masters/part-descriptions',
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: RefreshGate(
+                onEnter: (ref) =>
+                    ref.read(partDescriptionsProvider.notifier).refresh(),
+                child: const PartDescriptionsScreen(),
               ),
             ),
           ),

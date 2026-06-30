@@ -106,6 +106,13 @@ class AppNav {
           path: '/masters/routes',
           canAccess: (u) => u.role != UserRole.accounts,
         ),
+        NavItem(
+          id: 'part-descriptions',
+          label: 'Part Descriptions',
+          icon: Icons.inventory_2_outlined,
+          path: '/masters/part-descriptions',
+          canAccess: (u) => u.role != UserRole.accounts,
+        ),
       ],
     ),
     NavSection(

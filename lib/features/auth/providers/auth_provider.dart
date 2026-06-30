@@ -61,12 +61,21 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
     try {
       final res = await _api.dio.get('/auth/me');
+      // /auth/me returns { data: { user: {...} } } — parse the NESTED user,
+      // exactly like login does. Reading res.data['data'] directly handed
+      // AppUser.fromJson the { user: ... } wrapper, so username was null and
+      // the non-null cast threw — bouncing every refresh to /login despite a
+      // perfectly valid session.
+      final data = (res.data['data'] as Map).cast<String, dynamic>();
       final user = AppUser.fromJson(
-        (res.data['data'] as Map).cast<String, dynamic>(),
+        (data['user'] as Map).cast<String, dynamic>(),
       );
       state = AuthState(user: user);
     } catch (_) {
-      await _tokens.clear();
+      // Do NOT wipe the tokens here. The API client already clears them on a
+      // DEFINITIVE auth rejection (a 4xx from /auth/refresh); a transient
+      // failure (backend cold-start / offline) leaves them in place so the
+      // next launch can restore the session instead of forcing a re-login.
       state = const AuthState(initializing: false);
     }
   }

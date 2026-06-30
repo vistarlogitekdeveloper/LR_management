@@ -7,11 +7,41 @@ import '../../../core/utils/formatters.dart';
 import '../../../shared/models/lr_models.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/confirm_dialog.dart';
 import '../../../shared/widgets/pills.dart';
 import '../../../shared/widgets/searchable_field.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../masters/providers/master_providers.dart';
+import '../../masters/widgets/master_actions.dart';
 import '../../shell/widgets/app_topbar.dart';
 import '../providers/lr_providers.dart';
+
+/// Confirm + delete an LR from the list. Calls the same notifier.remove ->
+/// DELETE /lrs/:id used by the detail screen; the list refreshes from state.
+Future<void> _confirmDeleteLr(
+  BuildContext context,
+  WidgetRef ref,
+  LorryReceipt lr,
+) async {
+  final ok = await showConfirmDialog(
+    context: context,
+    title: 'Delete LR ${lr.number}?',
+    message:
+        'This cannot be undone. The LR record will be removed from the system.',
+    confirmLabel: 'Delete LR',
+  );
+  if (!ok || !context.mounted) return;
+  try {
+    await ref.read(lrListProvider.notifier).remove(lr.id);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('LR ${lr.number} deleted')),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) MasterActions.showError(context, e);
+  }
+}
 
 class LrListScreen extends ConsumerWidget {
   const LrListScreen({super.key});
@@ -20,6 +50,7 @@ class LrListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final lrs = ref.watch(filteredLrsProvider);
     final filter = ref.watch(lrFilterProvider);
+    final canDelete = ref.watch(currentUserProvider)?.canDeleteLr ?? false;
     final mobile = MediaQuery.of(context).size.width < 600;
 
     return Scaffold(
@@ -47,7 +78,12 @@ class LrListScreen extends ConsumerWidget {
                   children: [
                     _FilterBar(filter: filter),
                     const SizedBox(height: 14),
-                    _LrTable(lrs: lrs),
+                    _LrTable(
+                      lrs: lrs,
+                      onDelete: canDelete
+                          ? (lr) => _confirmDeleteLr(context, ref, lr)
+                          : null,
+                    ),
                   ],
                 ),
               ),
@@ -150,7 +186,8 @@ class _FilterBar extends ConsumerWidget {
 
 class _LrTable extends StatefulWidget {
   final List<LorryReceipt> lrs;
-  const _LrTable({required this.lrs});
+  final void Function(LorryReceipt lr)? onDelete;
+  const _LrTable({required this.lrs, this.onDelete});
 
   @override
   State<_LrTable> createState() => _LrTableState();
@@ -184,7 +221,15 @@ class _LrTableState extends State<_LrTable> {
         // Phones get stacked cards; wider screens get the scrollable table.
         if (c.maxWidth < 720) {
           return Column(
-            children: [for (final lr in lrs) _LrMobileCard(lr: lr)],
+            children: [
+              for (final lr in lrs)
+                _LrMobileCard(
+                  lr: lr,
+                  onDelete: widget.onDelete == null
+                      ? null
+                      : () => widget.onDelete!(lr),
+                ),
+            ],
           );
         }
         return Scrollbar(
@@ -240,6 +285,16 @@ class _LrTableState extends State<_LrTable> {
                               onPressed: () =>
                                   context.go('/lrs/${lr.id}/print'),
                             ),
+                            if (widget.onDelete != null)
+                              IconButton(
+                                tooltip: 'Delete',
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  color: AppColors.danger,
+                                  size: 18,
+                                ),
+                                onPressed: () => widget.onDelete!(lr),
+                              ),
                           ],
                         ),
                       ),
@@ -280,7 +335,8 @@ class _LrTableState extends State<_LrTable> {
 
 class _LrMobileCard extends StatelessWidget {
   final LorryReceipt lr;
-  const _LrMobileCard({required this.lr});
+  final VoidCallback? onDelete;
+  const _LrMobileCard({required this.lr, this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -338,6 +394,17 @@ class _LrMobileCard extends StatelessWidget {
                   ),
                   onPressed: () => context.go('/lrs/${lr.id}/print'),
                 ),
+                if (onDelete != null)
+                  IconButton(
+                    tooltip: 'Delete',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      color: AppColors.danger,
+                      size: 18,
+                    ),
+                    onPressed: onDelete,
+                  ),
               ],
             ),
             Text(

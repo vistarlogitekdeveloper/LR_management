@@ -12,7 +12,7 @@ Future<bool> showConfirmDialog({
 }) async {
   final result = await showDialog<bool>(
     context: context,
-    builder: (_) => Dialog(
+    builder: (dialogContext) => Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
@@ -59,13 +59,13 @@ Future<bool> showConfirmDialog({
                   AppButton(
                     label: 'Cancel',
                     kind: BtnKind.ghost,
-                    onPressed: () => Navigator.pop(context, false),
+                    onPressed: () => Navigator.pop(dialogContext, false),
                   ),
                   const SizedBox(width: 10),
                   AppButton(
                     label: confirmLabel,
                     kind: destructive ? BtnKind.danger : BtnKind.primary,
-                    onPressed: () => Navigator.pop(context, true),
+                    onPressed: () => Navigator.pop(dialogContext, true),
                   ),
                 ],
               ),

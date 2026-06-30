@@ -82,9 +82,19 @@ class ApiClient {
           for (final pending in waiting) {
             await _replay(pending, newAccess);
           }
-        } catch (_) {
+        } catch (refreshErr) {
           _refreshing = false;
-          await _tokens.clear();
+          // Only a DEFINITIVE rejection (a 4xx from /auth/refresh — the refresh
+          // token is genuinely invalid or revoked) clears the saved session. A
+          // transient failure (backend cold-start 5xx, timeout, offline) keeps
+          // the tokens so the NEXT launch can recover instead of forcing a
+          // needless re-login.
+          final st = refreshErr is DioException
+              ? (refreshErr.response?.statusCode ?? 0)
+              : 0;
+          if (st >= 400 && st < 500) {
+            await _tokens.clear();
+          }
           final waiting = [..._queue];
           _queue.clear();
           for (final pending in waiting) {
@@ -135,17 +145,40 @@ class ApiClient {
   }
 
   Future<String> _refreshTokens(String refreshToken) async {
-    // Bare Dio to avoid recursing through this interceptor.
-    final raw = Dio(BaseOptions(baseUrl: ApiConfig.baseUrl));
-    final res = await raw.post(
-      '/auth/refresh',
-      data: {'refresh_token': refreshToken},
-    );
-    final data = (res.data['data'] as Map).cast<String, dynamic>();
-    final access = data['access_token'] as String;
-    final refresh = (data['refresh_token'] as String?) ?? refreshToken;
-    await _tokens.write(access: access, refresh: refresh);
-    return access;
+    // Bare Dio to avoid recursing through this interceptor. Generous timeouts +
+    // a few retries so a cold-starting backend (Render free tier spins down
+    // after inactivity) doesn't fail the refresh and nuke the session on
+    // reopen. The refresh token is only rotated on a SUCCESSFUL response, so
+    // retrying after a transient failure is safe (the token wasn't consumed).
+    final raw = Dio(BaseOptions(
+      baseUrl: ApiConfig.baseUrl,
+      connectTimeout: ApiConfig.connectTimeout,
+      receiveTimeout: ApiConfig.receiveTimeout,
+    ));
+    DioException? lastErr;
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      try {
+        final res = await raw.post(
+          '/auth/refresh',
+          data: {'refresh_token': refreshToken},
+        );
+        final data = (res.data['data'] as Map).cast<String, dynamic>();
+        final access = data['access_token'] as String;
+        final refresh = (data['refresh_token'] as String?) ?? refreshToken;
+        await _tokens.write(access: access, refresh: refresh);
+        return access;
+      } on DioException catch (e) {
+        // A 4xx means the refresh token is genuinely bad — stop and surface it.
+        final status = e.response?.statusCode ?? 0;
+        if (status >= 400 && status < 500) rethrow;
+        // Transient (5xx / timeout / connection) — wait for the backend to wake.
+        lastErr = e;
+        if (attempt < 3) {
+          await Future.delayed(Duration(milliseconds: 700 * attempt));
+        }
+      }
+    }
+    throw lastErr!;
   }
 
   Future<void> _replay(_PendingRequest pending, String newAccess) async {

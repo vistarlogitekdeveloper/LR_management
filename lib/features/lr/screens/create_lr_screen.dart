@@ -12,6 +12,7 @@ import '../../../shared/models/attachment.dart';
 import '../../../shared/models/driver.dart';
 import '../../../shared/models/lr_models.dart';
 import '../../../shared/models/lr_template.dart';
+import '../../../shared/models/part_description.dart';
 import '../../../shared/models/party.dart';
 import '../../../shared/models/route_master.dart';
 import '../../../shared/models/transporter.dart';
@@ -26,6 +27,7 @@ import '../../../shared/widgets/section_title.dart';
 import '../../lookups/data/lookup_value.dart';
 import '../../lookups/providers/lookups_provider.dart';
 import '../../masters/providers/master_providers.dart';
+import '../../masters/providers/part_descriptions_provider.dart';
 import '../../masters/widgets/master_actions.dart';
 import '../../masters/widgets/party_form_dialog.dart';
 import '../../shell/widgets/app_topbar.dart';
@@ -152,6 +154,9 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   Map<String, List<LookupValue>> get _lookups => ref.read(lookupsMapProvider);
 
   Future<void> _hydrate() async {
+    // Pull the latest Part Descriptions master so the picker reflects edits
+    // made elsewhere this session (e.g. an admin adding a new row).
+    ref.read(partDescriptionsProvider.notifier).refresh();
     final parties = ref.read(partiesProvider);
     final customers = ref.read(customerPartiesProvider);
     final vehicles = ref.read(vehiclesProvider);
@@ -2073,6 +2078,97 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     );
   }
 
+  // Part Description is master-backed: picking an entry auto-fills Nature of
+  // Goods + Package Type when those are still blank (manual overrides win).
+  // The pencil affordance keeps free-text entry for values not in the master,
+  // since part_description still ships to the API as plain text.
+  Widget _partDescriptionField(
+      _PartLineForm p, List<LookupValue> packageTypes) {
+    final parts = ref.watch(partDescriptionsProvider);
+    final text = p.partDescription.text;
+    final selected = parts.where((pd) => pd.name == text).firstOrNull;
+    // Render a custom-typed value (not in the master) as the field value too,
+    // so the picker still shows what the operator entered.
+    final display =
+        selected ?? (text.isEmpty ? null : PartDescription(name: text));
+
+    return Stack(
+      children: [
+        SearchableField<PartDescription>(
+          value: display,
+          options: parts,
+          labelOf: (pd) => pd.name,
+          subtitleOf: (pd) => pd.natureOfGoods ?? '',
+          hintText: 'Select part',
+          dialogTitle: 'Part Description',
+          onChanged: (picked) {
+            if (picked == null) return;
+            setState(() {
+              p.partDescription.text = picked.name;
+              if (p.nature.text.trim().isEmpty &&
+                  (picked.natureOfGoods?.isNotEmpty ?? false)) {
+                p.nature.text = picked.natureOfGoods!;
+              }
+              if (p.packageType == null &&
+                  picked.defaultPackageTypeId != null) {
+                p.packageType = packageTypes
+                    .where((lv) => lv.id == picked.defaultPackageTypeId)
+                    .firstOrNull;
+              }
+            });
+          },
+        ),
+        Positioned(
+          right: 34,
+          top: 0,
+          bottom: 0,
+          child: Center(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: () => _enterCustomPart(p),
+              child: const Padding(
+                padding: EdgeInsets.all(4),
+                child: Icon(Icons.edit_outlined,
+                    size: 16, color: AppColors.slate),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _enterCustomPart(_PartLineForm p) async {
+    final ctrl = TextEditingController(text: p.partDescription.text);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Custom Part Description'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration:
+              const InputDecoration(hintText: 'Type a part description'),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('Use'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (result != null && mounted) {
+      setState(() => p.partDescription.text = result);
+    }
+  }
+
   Widget _partBlock(_InvoiceForm inv, int j, List<LookupValue> packageTypes) {
     final p = inv.parts[j];
     return Container(
@@ -2114,7 +2210,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
           _grid(3, [
             LabeledField(
               label: 'Part Description',
-              child: TextFormField(controller: p.partDescription),
+              child: _partDescriptionField(p, packageTypes),
             ),
             LabeledField(
               label: 'Nature of Goods',
