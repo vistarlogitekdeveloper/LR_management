@@ -82,6 +82,12 @@ class AppUser {
   /// figure) is hidden from them. Admins, super admins and accounts still see it.
   bool get canViewCustomerRate => role != UserRole.operator;
 
+  /// The Accounts & Billing screen and the MIS export expose financial / margin
+  /// data, so they're limited to the accounts desk and super admins — regional
+  /// admins and operators don't get access.
+  bool get canViewAccounts =>
+      role == UserRole.accounts || role == UserRole.superAdmin;
+
   // Master management: the granular per-master permission OR the coarse
   // MASTERS_MANAGE umbrella — so this works whether the backend is the new
   // per-master scheme or the older umbrella-only one (keeps admins working

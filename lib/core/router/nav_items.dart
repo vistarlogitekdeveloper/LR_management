@@ -130,8 +130,9 @@ class AppNav {
           label: 'Accounts & Billing',
           icon: Icons.account_balance_wallet_outlined,
           path: '/accounts',
-          // Operators handle dispatch, not payouts — hide Accounts from them.
-          canAccess: (u) => u.canViewReports && u.role != UserRole.operator,
+          // Billing/payouts belong to the accounts desk (and super admins).
+          // Operators handle dispatch; regional admins don't get billing access.
+          canAccess: (u) => u.canViewAccounts,
         ),
       ],
     ),

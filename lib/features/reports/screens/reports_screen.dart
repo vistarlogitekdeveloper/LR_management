@@ -6,7 +6,6 @@ import '../../../core/utils/formatters.dart';
 import '../../../shared/models/lr_models.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
-import '../../../shared/models/user.dart';
 import '../../../shared/widgets/section_title.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../lr/providers/lr_providers.dart';
@@ -267,10 +266,10 @@ class _AccountsTab extends ConsumerWidget {
     final mobile = MediaQuery.of(context).size.width < 600;
     final pad = mobile ? 14.0 : 28.0;
     final gap = mobile ? 10.0 : 20.0;
-    // The MIS export carries accounts-owned billing / payment fields, so it is
-    // hidden from operators (and blocked server-side).
-    final isOperator =
-        ref.watch(currentUserProvider)?.role == UserRole.operator;
+    // The MIS export carries accounts-owned billing / payment fields, so it's
+    // limited to the accounts desk + super admins (and blocked server-side) —
+    // operators and regional admins don't see it.
+    final canViewMis = ref.watch(currentUserProvider)?.canViewAccounts ?? false;
     return SingleChildScrollView(
       padding: EdgeInsets.all(pad),
       child: Column(
@@ -325,7 +324,7 @@ class _AccountsTab extends ConsumerWidget {
               ],
             ),
           ),
-          if (!isOperator)
+          if (canViewMis)
             Padding(
               padding: EdgeInsets.only(top: gap),
               child: AppCard(
