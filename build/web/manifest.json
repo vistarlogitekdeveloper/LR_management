@@ -1,12 +1,12 @@
 {
-    "name": "lr_management",
-    "short_name": "lr_management",
+    "name": "Vistar Logitek — LR Generation",
+    "short_name": "Vistar LR",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#FFFFFF",
+    "theme_color": "#7A1F6E",
+    "description": "Generate lorry receipts, track consignments, manage masters and freight billing — all in one place.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {
