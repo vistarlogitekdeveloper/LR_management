@@ -1,12 +1,15 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/labeled_field.dart';
 import '../../../shared/widgets/section_title.dart';
+import '../../masters/widgets/master_actions.dart';
 import '../../shell/widgets/app_topbar.dart';
 import '../providers/auth_provider.dart';
 
@@ -24,6 +27,11 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
   final _newCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
 
+  bool _obscureCurrent = true;
+  bool _obscureNew = true;
+  bool _obscureConfirm = true;
+  bool _saving = false;
+
   @override
   void dispose() {
     _currentCtrl.dispose();
@@ -32,30 +40,86 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (_saving) return;
     if (!_formKey.currentState!.validate()) return;
-    final user = ref.read(currentUserProvider);
-    if (user == null) return;
-    if (_currentCtrl.text != user.password) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Current password is incorrect')),
+
+    setState(() => _saving = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(authProvider.notifier).changePassword(
+            currentPassword: _currentCtrl.text,
+            newPassword: _newCtrl.text,
+          );
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Password updated. Please sign in with your new password.'),
+          backgroundColor: AppColors.ok,
+        ),
       );
-      return;
+      // Changing the password revokes every refresh token server-side, so this
+      // session is dead. Sign out (clears stored tokens) — the router then
+      // redirects to /login.
+      await ref.read(authProvider.notifier).logout();
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(_errorMessage(e)),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
-    if (_newCtrl.text != _confirmCtrl.text) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Passwords do not match')));
-      return;
+  }
+
+  /// The backend returns a deliberately-generic "Password change failed." for a
+  /// wrong current password (code OLD_PASSWORD_MISMATCH) — translate it into a
+  /// clear, specific message. Everything else uses the server's own message.
+  String _errorMessage(Object e) {
+    final err = e is DioException ? e.error : e;
+    if (err is ApiException && err.code == 'OLD_PASSWORD_MISMATCH') {
+      return 'Current password is incorrect';
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Password change accepted — wire to backend in production',
+    return MasterActions.messageFor(e);
+  }
+
+  Widget _passwordField({
+    required String label,
+    required TextEditingController controller,
+    required bool obscure,
+    required VoidCallback onToggle,
+    required String? Function(String?) validator,
+    TextInputAction textInputAction = TextInputAction.next,
+    void Function(String)? onSubmitted,
+  }) {
+    return LabeledField(
+      label: label,
+      required: true,
+      child: TextFormField(
+        controller: controller,
+        obscureText: obscure,
+        enabled: !_saving,
+        textInputAction: textInputAction,
+        onFieldSubmitted: onSubmitted,
+        validator: validator,
+        decoration: InputDecoration(
+          suffixIcon: IconButton(
+            tooltip: obscure ? 'Show password' : 'Hide password',
+            icon: Icon(
+              obscure
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
+              color: AppColors.slate,
+              size: 20,
+            ),
+            onPressed: onToggle,
+          ),
         ),
       ),
     );
-    context.go('/profile');
   }
 
   @override
@@ -68,7 +132,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
         children: [
           AppTopbar(
             title: 'Change Password',
-            subtitle: 'Min 8 chars, 1 number',
+            subtitle: 'Min 10 chars, 1 number',
             actions: [
               AppButton(
                 label: 'Back',
@@ -96,50 +160,62 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                             icon: Icons.lock_outline_rounded,
                             title: 'Set new password',
                           ),
-                          LabeledField(
+                          _passwordField(
                             label: 'Current password',
-                            required: true,
-                            child: TextFormField(
-                              controller: _currentCtrl,
-                              obscureText: true,
-                              validator: (v) =>
-                                  (v?.isEmpty ?? true) ? 'Required' : null,
-                            ),
+                            controller: _currentCtrl,
+                            obscure: _obscureCurrent,
+                            onToggle: () => setState(
+                                () => _obscureCurrent = !_obscureCurrent),
+                            validator: (v) =>
+                                (v?.isEmpty ?? true) ? 'Required' : null,
                           ),
                           SizedBox(height: gap),
-                          LabeledField(
+                          _passwordField(
                             label: 'New password',
-                            required: true,
-                            child: TextFormField(
-                              controller: _newCtrl,
-                              obscureText: true,
-                              validator: (v) {
-                                if (v == null || v.length < 8) {
-                                  return 'Min 8 characters';
-                                }
-                                if (!RegExp(r'\d').hasMatch(v)) {
-                                  return 'Must contain a number';
-                                }
-                                return null;
-                              },
-                            ),
+                            controller: _newCtrl,
+                            obscure: _obscureNew,
+                            onToggle: () =>
+                                setState(() => _obscureNew = !_obscureNew),
+                            validator: (v) {
+                              if (v == null || v.length < 10) {
+                                return 'Min 10 characters';
+                              }
+                              if (v.length > 128) {
+                                return 'Max 128 characters';
+                              }
+                              if (!RegExp(r'\d').hasMatch(v)) {
+                                return 'Must contain a number';
+                              }
+                              if (v == _currentCtrl.text) {
+                                return 'New password must be different';
+                              }
+                              return null;
+                            },
                           ),
                           SizedBox(height: gap),
-                          LabeledField(
+                          _passwordField(
                             label: 'Confirm new password',
-                            required: true,
-                            child: TextFormField(
-                              controller: _confirmCtrl,
-                              obscureText: true,
-                              validator: (v) =>
-                                  (v?.isEmpty ?? true) ? 'Required' : null,
-                            ),
+                            controller: _confirmCtrl,
+                            obscure: _obscureConfirm,
+                            onToggle: () => setState(
+                                () => _obscureConfirm = !_obscureConfirm),
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => _submit(),
+                            validator: (v) {
+                              if (v?.isEmpty ?? true) return 'Required';
+                              if (v != _newCtrl.text) {
+                                return 'Passwords do not match';
+                              }
+                              return null;
+                            },
                           ),
                           SizedBox(height: isMobile ? 16 : 22),
                           AppButton(
-                            label: 'Update password',
+                            label:
+                                _saving ? 'Updating…' : 'Update password',
                             icon: Icons.save_outlined,
                             expanded: true,
+                            loading: _saving,
                             onPressed: _submit,
                           ),
                         ],

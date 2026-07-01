@@ -51,6 +51,11 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
   PlatformFile? _pickedTds;
   bool _saving = false;
 
+  // Inline "Required" messages for the two uploads — they aren't form fields,
+  // so they can't be covered by _formKey.validate().
+  String? _chequeError;
+  String? _tdsError;
+
   Transporter? get _existing => widget.existing;
 
   @override
@@ -81,7 +86,10 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
       withData: true,
     );
     if (picked == null || picked.files.isEmpty) return;
-    setState(() => _picked = picked.files.first);
+    setState(() {
+      _picked = picked.files.first;
+      _chequeError = null;
+    });
   }
 
   Future<void> _viewExisting() async {
@@ -110,7 +118,10 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
       withData: true,
     );
     if (picked == null || picked.files.isEmpty) return;
-    setState(() => _pickedTds = picked.files.first);
+    setState(() {
+      _pickedTds = picked.files.first;
+      _tdsError = null;
+    });
   }
 
   Future<void> _viewTds() async {
@@ -129,8 +140,23 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _saving = true);
+    final formValid = _formKey.currentState!.validate();
+    // Uploads are mandatory too — unless a document is already on file (edit).
+    final chequeMissing = _picked == null && !(_existing?.hasDocument ?? false);
+    final tdsMissing =
+        _pickedTds == null && !(_existing?.hasTdsDocument ?? false);
+    if (!formValid || chequeMissing || tdsMissing) {
+      setState(() {
+        _chequeError = chequeMissing ? 'Required' : null;
+        _tdsError = tdsMissing ? 'Required' : null;
+      });
+      return;
+    }
+    setState(() {
+      _chequeError = null;
+      _tdsError = null;
+      _saving = true;
+    });
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     try {
@@ -226,15 +252,23 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
                         ),
                       ),
                       SizedBox(width: w, child: _tdsField()),
-                      SizedBox(width: w, child: _text(_bank, 'Bank Name')),
                       SizedBox(
                         width: w,
-                        child: _text(_holder, 'Account Holder Name'),
+                        child: _text(_bank, 'Bank Name', required: true),
                       ),
-                      SizedBox(width: w, child: _text(_accNo, 'Account No')),
                       SizedBox(
                         width: w,
-                        child: _text(_ifsc, 'IFSC Code', upper: true),
+                        child: _text(_holder, 'Account Holder Name',
+                            required: true),
+                      ),
+                      SizedBox(
+                        width: w,
+                        child: _text(_accNo, 'Account No', required: true),
+                      ),
+                      SizedBox(
+                        width: w,
+                        child:
+                            _text(_ifsc, 'IFSC Code', upper: true, required: true),
                       ),
                       SizedBox(width: c.maxWidth, child: _chequeField()),
                       SizedBox(width: c.maxWidth, child: _tdsAttachmentField()),
@@ -301,6 +335,7 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
 
   Widget _tdsField() => LabeledField(
     label: 'TDS Applicable',
+    required: true,
     child: SearchableField<String>(
       value: _tds,
       options: const ['Yes', 'No'],
@@ -315,6 +350,8 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
     final hasExisting = _existing?.hasDocument ?? false;
     return LabeledField(
       label: 'Blank Cheque / Passbook Photo',
+      required: true,
+      errorText: _chequeError,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -376,6 +413,8 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
     final hasExisting = _existing?.hasTdsDocument ?? false;
     return LabeledField(
       label: 'TDS Attachment',
+      required: true,
+      errorText: _tdsError,
       child: Row(
         children: [
           AppButton(

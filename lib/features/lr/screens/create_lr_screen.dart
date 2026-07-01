@@ -90,6 +90,12 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   final _consigneeFieldKey = GlobalKey();
   final _payTypeFieldKey = GlobalKey();
   final _deliveryTypeFieldKey = GlobalKey();
+  final _customerFieldKey = GlobalKey();
+  final _vehicleFieldKey = GlobalKey();
+  final _transporterFieldKey = GlobalKey();
+  final _routeFieldKey = GlobalKey();
+  final _capacityFieldKey = GlobalKey();
+  final _freightFieldKey = GlobalKey();
 
   // Per-field validation messages shown inline under each mandatory field;
   // set on a failed save, cleared as soon as the field is filled.
@@ -660,6 +666,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   void _onVehicleSelected(Vehicle? v) {
     _vehicle = v;
     if (v == null) return;
+    _fieldErrors.remove('vehicle');
     final drivers = ref.read(driversProvider);
     final transporters = ref.read(transportersProvider);
     final routes = ref.read(routesProvider);
@@ -669,7 +676,10 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     }
     if (v.transporterId != null && v.transporterId!.isNotEmpty) {
       final t = _byId(transporters, v.transporterId, (x) => x.id);
-      if (t != null) _transporter = t;
+      if (t != null) {
+        _transporter = t;
+        _fieldErrors.remove('transporter');
+      }
     }
     if (v.routeId != null && v.routeId!.isNotEmpty) {
       final r = _byId(routes, v.routeId, (x) => x.id);
@@ -681,8 +691,11 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   /// operator can still edit it afterward). (Call inside setState.)
   void _selectRoute(RouteMaster? r) {
     _route = r;
-    if (r != null && r.baseRate > 0) {
+    if (r == null) return;
+    _fieldErrors.remove('route');
+    if (r.baseRate > 0) {
       _freightCtrl.text = r.baseRate.toStringAsFixed(0);
+      _fieldErrors.remove('freight');
     }
   }
 
@@ -694,6 +707,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     setState(() {
       _customer = created;
       _customerCtrl.text = created.name;
+      if (_customerCtrl.text.trim().isNotEmpty) _fieldErrors.remove('customer');
     });
   }
 
@@ -1046,15 +1060,27 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   // Mandatory fields, in the order they appear on the form — drives both the
   // error message and which field is scrolled to.
   static const _mandatoryOrder = [
+    'customer',
     'consignor',
     'consignee',
+    'vehicle',
+    'transporter',
+    'route',
     'deliveryType',
+    'capacity',
+    'freight',
     'payType',
   ];
   static const _mandatoryLabels = {
+    'customer': 'Customer Name',
     'consignor': 'Consignor / Sender',
     'consignee': 'Consignee / Receiver',
+    'vehicle': 'Vehicle Number',
+    'transporter': 'Transporter Name',
+    'route': 'Route',
     'deliveryType': 'Delivery Type',
+    'capacity': 'Vehicle Capacity',
+    'freight': 'Freight',
     'payType': 'Pay Type',
   };
 
@@ -1064,14 +1090,32 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   /// first one. Returns true only when the form is safe to submit.
   bool _validateMandatory() {
     final errors = <String, String>{};
+    if (_customerCtrl.text.trim().isEmpty) {
+      errors['customer'] = 'Enter a customer name.';
+    }
     if (_consignor == null) {
       errors['consignor'] = 'Select a consignor / sender.';
     }
     if (_consignee == null) {
       errors['consignee'] = 'Select a consignee / receiver.';
     }
+    if (_vehicle == null) {
+      errors['vehicle'] = 'Select a vehicle.';
+    }
+    if (_transporter == null) {
+      errors['transporter'] = 'Select a transporter.';
+    }
+    if (_route == null) {
+      errors['route'] = 'Select a route.';
+    }
     if (_deliveryType == null) {
       errors['deliveryType'] = 'Select a delivery type.';
+    }
+    if (_capacity == null) {
+      errors['capacity'] = 'Select a vehicle capacity.';
+    }
+    if (_toDouble(_freightCtrl) <= 0) {
+      errors['freight'] = 'Enter the freight amount.';
     }
     if (_payType == null) {
       errors['payType'] = 'Select a pay type.';
@@ -1116,9 +1160,15 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
   void _scrollToField(String fieldKey) {
     final keys = {
+      'customer': _customerFieldKey,
       'consignor': _consignorFieldKey,
       'consignee': _consigneeFieldKey,
+      'vehicle': _vehicleFieldKey,
+      'transporter': _transporterFieldKey,
+      'route': _routeFieldKey,
       'deliveryType': _deliveryTypeFieldKey,
+      'capacity': _capacityFieldKey,
+      'freight': _freightFieldKey,
       'payType': _payTypeFieldKey,
     };
     final ctx = keys[fieldKey]?.currentContext;
@@ -1499,7 +1549,10 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                             ),
                             _grid(2, [
                               LabeledField(
+                                key: _vehicleFieldKey,
                                 label: 'Vehicle',
+                                required: true,
+                                errorText: _fieldErrors['vehicle'],
                                 child: SearchableField<Vehicle>(
                                   value: _vehicle,
                                   options: vehicles,
@@ -1527,7 +1580,10 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                 ),
                               ),
                               LabeledField(
+                                key: _transporterFieldKey,
                                 label: 'Transporter',
+                                required: true,
+                                errorText: _fieldErrors['transporter'],
                                 child: SearchableField<Transporter>(
                                   value: _transporter,
                                   options: transporters,
@@ -1536,12 +1592,19 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                   subtitleOf: (t) => t.pan,
                                   hintText: 'Select transporter',
                                   dialogTitle: 'Select Transporter',
-                                  onChanged: (v) =>
-                                      setState(() => _transporter = v),
+                                  onChanged: (v) => setState(() {
+                                    _transporter = v;
+                                    if (v != null) {
+                                      _fieldErrors.remove('transporter');
+                                    }
+                                  }),
                                 ),
                               ),
                               LabeledField(
+                                key: _routeFieldKey,
                                 label: 'Route',
+                                required: true,
+                                errorText: _fieldErrors['route'],
                                 child: SearchableField<RouteMaster>(
                                   value: _route,
                                   options: routes,
@@ -1586,12 +1649,19 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                 ),
                               ),
                               LabeledField(
+                                key: _capacityFieldKey,
                                 label: 'Vehicle Capacity',
+                                required: true,
+                                errorText: _fieldErrors['capacity'],
                                 child: _lookupDropdown(
                                   value: _capacity,
                                   options: capacityList,
-                                  onChanged: (v) =>
-                                      setState(() => _capacity = v),
+                                  onChanged: (v) => setState(() {
+                                    _capacity = v;
+                                    if (v != null) {
+                                      _fieldErrors.remove('capacity');
+                                    }
+                                  }),
                                 ),
                               ),
                             ]),
@@ -1649,11 +1719,18 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                             ),
                             _grid(3, [
                               LabeledField(
+                                key: _freightFieldKey,
                                 label: 'Freight',
+                                required: true,
+                                errorText: _fieldErrors['freight'],
                                 child: TextFormField(
                                   controller: _freightCtrl,
                                   keyboardType: TextInputType.number,
-                                  onChanged: (_) => setState(() {}),
+                                  onChanged: (_) => setState(() {
+                                    if (_toDouble(_freightCtrl) > 0) {
+                                      _fieldErrors.remove('freight');
+                                    }
+                                  }),
                                 ),
                               ),
                               LabeledField(
@@ -1879,7 +1956,10 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
           ),
           _lrDateField(),
           LabeledField(
+            key: _customerFieldKey,
             label: 'Customer Name',
+            required: true,
+            errorText: _fieldErrors['customer'],
             child: SearchableField<Party>(
               value: selected,
               options: customers,
@@ -1891,9 +1971,13 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
               onChanged: (c) => setState(() {
                 _customer = c;
                 _customerCtrl.text = c?.name ?? '';
+                if (_customerCtrl.text.trim().isNotEmpty) {
+                  _fieldErrors.remove('customer');
+                }
               }),
             ),
           ),
+
           LabeledField(
             label: 'Order No. (Ord. by Mr.)',
             child: TextFormField(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:lr_management/core/network/api_providers.dart';
 import 'package:lr_management/core/network/token_storage.dart';
@@ -25,6 +26,7 @@ class _FakeTokenStorage extends TokenStorage {
 
 void main() {
   testWidgets('App boots into login screen', (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 

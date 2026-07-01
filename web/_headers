@@ -10,8 +10,14 @@
 /canvaskit/*
   Cache-Control: public, max-age=31536000, immutable
 
+# App icons + favicon keep the SAME name across deploys but their contents can
+# change on a rebrand, so they must revalidate — otherwise a returning browser
+# keeps the old icon forever (the same trap the entry files below avoid).
 /icons/*
-  Cache-Control: public, max-age=31536000, immutable
+  Cache-Control: public, max-age=0, must-revalidate
+
+/favicon.png
+  Cache-Control: public, max-age=0, must-revalidate
 
 # Flutter's entry files keep the SAME name every build but their contents change
 # on each deploy. They MUST always revalidate, otherwise a returning browser

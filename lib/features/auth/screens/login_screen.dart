@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/brand_logo.dart';
 import '../../../shared/widgets/labeled_field.dart';
+import '../data/login_prefs.dart';
 import '../providers/auth_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -16,8 +17,29 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _userCtrl = TextEditingController(text: 'admin');
-  final _passCtrl = TextEditingController(text: '123456');
+  final _formKey = GlobalKey<FormState>();
+  final _userCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
+
+  bool _rememberMe = false;
+  bool _prefsLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRemembered();
+  }
+
+  /// Prefill the username from the last "Remember me" sign-in, if any.
+  Future<void> _loadRemembered() async {
+    final saved = await LoginPrefs.load();
+    if (!mounted) return;
+    setState(() {
+      _rememberMe = saved.remember;
+      if (saved.username.isNotEmpty) _userCtrl.text = saved.username;
+      _prefsLoaded = true;
+    });
+  }
 
   @override
   void dispose() {
@@ -27,23 +49,40 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _submit() async {
+    // Client-side validation first — don't hit the network for an empty form.
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    final username = _userCtrl.text.trim();
     final ok = await ref
         .read(authProvider.notifier)
-        .login(_userCtrl.text, _passCtrl.text);
+        .login(username, _passCtrl.text);
     if (!mounted) return;
-    if (ok) context.go('/dashboard');
-  }
-
-  Future<void> _quickSignIn(String username, String password) async {
-    _userCtrl.text = username;
-    _passCtrl.text = password;
-    await _submit();
+    if (ok) {
+      // Persist (or clear) the remembered username only after a successful
+      // sign-in, so a failed attempt never changes what's stored.
+      await LoginPrefs.save(remember: _rememberMe, username: username);
+      if (!mounted) return;
+      context.go('/dashboard');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     final isWide = MediaQuery.of(context).size.width >= 900;
+
+    final form = _Form(
+      formKey: _formKey,
+      userCtrl: _userCtrl,
+      passCtrl: _passCtrl,
+      loading: auth.loading,
+      error: auth.error,
+      rememberMe: _rememberMe,
+      autofocusUsername: _prefsLoaded && _userCtrl.text.isEmpty,
+      onRememberChanged: (v) => setState(() => _rememberMe = v),
+      onSubmit: _submit,
+      compact: !isWide,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.mist,
@@ -74,33 +113,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                Expanded(child: _Hero()),
-                                Expanded(
-                                  child: _Form(
-                                    userCtrl: _userCtrl,
-                                    passCtrl: _passCtrl,
-                                    loading: auth.loading,
-                                    error: auth.error,
-                                    onSubmit: _submit,
-                                    onQuickSignIn: _quickSignIn,
-                                  ),
-                                ),
+                                const Expanded(child: _Hero()),
+                                Expanded(child: form),
                               ],
                             ),
                           )
                         : Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              _Hero(compact: true),
-                              _Form(
-                                userCtrl: _userCtrl,
-                                passCtrl: _passCtrl,
-                                loading: auth.loading,
-                                error: auth.error,
-                                compact: true,
-                                onSubmit: _submit,
-                                onQuickSignIn: _quickSignIn,
-                              ),
+                              const _Hero(compact: true),
+                              form,
                             ],
                           ),
                   ),
@@ -177,60 +199,73 @@ class _Hero extends StatelessWidget {
               height: 1.5,
             ),
           ),
-          SizedBox(height: compact ? 28 : 80),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
-              border:
-                  Border.all(color: Colors.white.withValues(alpha: 0.18)),
-            ),
-            child: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Demo logins',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                SizedBox(height: 6),
-                Text(
-                  'admin · operator · accounts  (password: 123456)',
-                  style: TextStyle(color: Colors.white70, fontSize: 12.5),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Tenant: VISTAR',
-                  style: TextStyle(color: Colors.white60, fontSize: 11.5),
-                ),
-              ],
-            ),
-          ),
+          const SizedBox(height: 40),
+          _TrustPoints(),
         ],
       ),
     );
   }
 }
 
+/// A short list of reassurance bullets on the hero panel — replaces the old
+/// demo-credentials card, which must not ship to a client.
+class _TrustPoints extends StatelessWidget {
+  static const _points = [
+    (Icons.verified_user_outlined, 'Role-based access & audit trail'),
+    (Icons.lock_outline_rounded, 'Encrypted sessions'),
+    (Icons.support_agent_outlined, 'Vistar Logitek support'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final (icon, text) in _points)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(
+              children: [
+                Icon(icon, color: Colors.white.withValues(alpha: 0.9), size: 18),
+                const SizedBox(width: 10),
+                Text(
+                  text,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class _Form extends StatefulWidget {
+  final GlobalKey<FormState> formKey;
   final TextEditingController userCtrl;
   final TextEditingController passCtrl;
   final bool loading;
   final String? error;
   final bool compact;
+  final bool rememberMe;
+  final bool autofocusUsername;
+  final ValueChanged<bool> onRememberChanged;
   final VoidCallback onSubmit;
-  final Future<void> Function(String username, String password) onQuickSignIn;
 
   const _Form({
+    required this.formKey,
     required this.userCtrl,
     required this.passCtrl,
     required this.loading,
     required this.error,
+    required this.rememberMe,
+    required this.autofocusUsername,
+    required this.onRememberChanged,
     required this.onSubmit,
-    required this.onQuickSignIn,
     this.compact = false,
   });
 
@@ -241,6 +276,16 @@ class _Form extends StatefulWidget {
 class _FormState extends State<_Form> {
   bool _obscurePassword = true; // hidden by default; the eye icon toggles it
 
+  String? _validateUsername(String? v) {
+    if ((v ?? '').trim().isEmpty) return 'Username is required';
+    return null;
+  }
+
+  String? _validatePassword(String? v) {
+    if ((v ?? '').isEmpty) return 'Password is required';
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final compact = widget.compact;
@@ -249,263 +294,164 @@ class _FormState extends State<_Form> {
         horizontal: compact ? 22 : 44,
         vertical: compact ? 26 : 56,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text(
-            'Welcome back',
-            style: TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
-              color: AppColors.ink,
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Sign in to continue dispatching',
-            style: TextStyle(color: AppColors.slate, fontSize: 14),
-          ),
-          SizedBox(height: compact ? 20 : 28),
-          LabeledField(
-            label: 'Username',
-            required: true,
-            child: TextField(
-              controller: widget.userCtrl,
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(hintText: 'admin'),
-            ),
-          ),
-          const SizedBox(height: 16),
-          LabeledField(
-            label: 'Password',
-            required: true,
-            child: TextField(
-              controller: widget.passCtrl,
-              obscureText: _obscurePassword,
-              onSubmitted: (_) => widget.onSubmit(),
-              decoration: InputDecoration(
-                hintText: '••••',
-                // Eye icon to show / hide the password.
-                suffixIcon: IconButton(
-                  tooltip:
-                      _obscurePassword ? 'Show password' : 'Hide password',
-                  icon: Icon(
-                    _obscurePassword
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                    color: AppColors.slate,
-                    size: 20,
-                  ),
-                  onPressed: () =>
-                      setState(() => _obscurePassword = !_obscurePassword),
-                ),
+      child: Form(
+        key: widget.formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              'Welcome back',
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+                color: AppColors.ink,
               ),
             ),
-          ),
-          if (widget.error != null) ...[
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.danger.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                widget.error!,
-                style: const TextStyle(
-                  color: AppColors.danger,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
+            const SizedBox(height: 6),
+            const Text(
+              'Sign in to continue dispatching',
+              style: TextStyle(color: AppColors.slate, fontSize: 14),
+            ),
+            SizedBox(height: compact ? 20 : 28),
+            LabeledField(
+              label: 'Username',
+              required: true,
+              child: TextFormField(
+                controller: widget.userCtrl,
+                autofocus: widget.autofocusUsername,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.username],
+                enabled: !widget.loading,
+                validator: _validateUsername,
+                decoration: const InputDecoration(hintText: 'Enter your username'),
               ),
             ),
-          ],
-          const SizedBox(height: 6),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: () => context.go('/forgot-password'),
-              child: const Text('Forgot password?'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          AppButton(
-            label: widget.loading ? 'Signing in…' : 'Sign in',
-            icon: Icons.login_rounded,
-            expanded: true,
-            onPressed: widget.loading ? null : widget.onSubmit,
-          ),
-          SizedBox(height: compact ? 16 : 22),
-          Row(
-            children: [
-              const Expanded(child: Divider(color: AppColors.line)),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  'or sign in as',
-                  style: TextStyle(
-                    color: AppColors.slate.withValues(alpha: 0.8),
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
+            const SizedBox(height: 16),
+            LabeledField(
+              label: 'Password',
+              required: true,
+              child: TextFormField(
+                controller: widget.passCtrl,
+                obscureText: _obscurePassword,
+                enabled: !widget.loading,
+                textInputAction: TextInputAction.done,
+                autofillHints: const [AutofillHints.password],
+                validator: _validatePassword,
+                onFieldSubmitted: (_) => widget.onSubmit(),
+                decoration: InputDecoration(
+                  hintText: 'Enter your password',
+                  // Eye icon to show / hide the password.
+                  suffixIcon: IconButton(
+                    tooltip:
+                        _obscurePassword ? 'Show password' : 'Hide password',
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      color: AppColors.slate,
+                      size: 20,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
                   ),
                 ),
               ),
-              const Expanded(child: Divider(color: AppColors.line)),
+            ),
+            if (widget.error != null) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.danger.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline_rounded,
+                        color: AppColors.danger, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        widget.error!,
+                        style: const TextStyle(
+                          color: AppColors.danger,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
-          ),
-          const SizedBox(height: 14),
-          _RoleQuickPicker(
-              loading: widget.loading, onPick: widget.onQuickSignIn),
-          SizedBox(height: compact ? 14 : 18),
-          const Center(
-            child: Text(
-              '© Vistar Logitek Pvt Ltd',
-              style: TextStyle(color: AppColors.slate, fontSize: 12),
+            const SizedBox(height: 10),
+            _RememberRow(
+              rememberMe: widget.rememberMe,
+              onChanged: widget.loading ? null : widget.onRememberChanged,
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RoleOption {
-  final String label;
-  final String username;
-  final String password;
-  final String displayName;
-  final IconData icon;
-  final Color tint;
-  const _RoleOption({
-    required this.label,
-    required this.username,
-    required this.password,
-    required this.displayName,
-    required this.icon,
-    required this.tint,
-  });
-}
-
-class _RoleQuickPicker extends StatelessWidget {
-  final bool loading;
-  final Future<void> Function(String username, String password) onPick;
-
-  const _RoleQuickPicker({required this.loading, required this.onPick});
-
-  static const _options = <_RoleOption>[
-    _RoleOption(
-      label: 'Admin',
-      username: 'admin',
-      password: '123456',
-      displayName: 'admin',
-      icon: Icons.shield_outlined,
-      tint: AppColors.plum,
-    ),
-    _RoleOption(
-      label: 'Operator',
-      username: 'operator',
-      password: '123456',
-      displayName: 'operator',
-      icon: Icons.local_shipping_outlined,
-      tint: AppColors.orange,
-    ),
-    _RoleOption(
-      label: 'Accounts',
-      username: 'accounts',
-      password: '123456',
-      displayName: 'accounts',
-      icon: Icons.account_balance_wallet_outlined,
-      tint: AppColors.ok,
-    ),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (var i = 0; i < _options.length; i++) ...[
-            if (i > 0) const SizedBox(width: 10),
-            Expanded(
-              child: _RoleTile(
-                option: _options[i],
-                disabled: loading,
-                onTap: () => onPick(
-                  _options[i].username,
-                  _options[i].password,
-                ),
+            const SizedBox(height: 14),
+            AppButton(
+              label: widget.loading ? 'Signing in…' : 'Sign in',
+              icon: Icons.login_rounded,
+              expanded: true,
+              loading: widget.loading,
+              onPressed: widget.onSubmit,
+            ),
+            SizedBox(height: compact ? 18 : 24),
+            const Center(
+              child: Text(
+                '© Vistar Logitek Pvt Ltd',
+                style: TextStyle(color: AppColors.slate, fontSize: 12),
               ),
             ),
           ],
-        ],
+        ),
       ),
     );
   }
 }
 
-class _RoleTile extends StatelessWidget {
-  final _RoleOption option;
-  final bool disabled;
-  final VoidCallback onTap;
+/// "Remember me" checkbox on the left, "Forgot password?" on the right.
+class _RememberRow extends StatelessWidget {
+  final bool rememberMe;
+  final ValueChanged<bool>? onChanged;
 
-  const _RoleTile({
-    required this.option,
-    required this.disabled,
-    required this.onTap,
-  });
+  const _RememberRow({required this.rememberMe, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
-    return Opacity(
-      opacity: disabled ? 0.5 : 1,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: disabled ? null : onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-            decoration: BoxDecoration(
-              color: option.tint.withValues(alpha: 0.06),
-              border: Border.all(color: option.tint.withValues(alpha: 0.3)),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
+    final enabled = onChanged != null;
+    return Row(
+      children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: enabled ? () => onChanged!(!rememberMe) : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: option.tint.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
+                SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: Checkbox(
+                    value: rememberMe,
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    activeColor: AppColors.plum,
+                    onChanged:
+                        enabled ? (v) => onChanged!(v ?? false) : null,
                   ),
-                  alignment: Alignment.center,
-                  child: Icon(option.icon, color: option.tint, size: 18),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  option.label,
+                const SizedBox(width: 8),
+                const Text(
+                  'Remember me',
                   style: TextStyle(
-                    color: option.tint,
-                    fontWeight: FontWeight.w800,
+                    color: AppColors.ink,
                     fontSize: 13,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  option.displayName,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.slate,
-                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -513,7 +459,12 @@ class _RoleTile extends StatelessWidget {
             ),
           ),
         ),
-      ),
+        const Spacer(),
+        TextButton(
+          onPressed: enabled ? () => context.go('/forgot-password') : null,
+          child: const Text('Forgot password?'),
+        ),
+      ],
     );
   }
 }

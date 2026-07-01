@@ -17,22 +17,13 @@ class BrandLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final image = Image.asset(
-      AppAssets.logo,
+    // wordmark: the full "Vi★tar" logo (app logo); otherwise the "S" symbol.
+    return Image.asset(
+      wordmark ? AppAssets.logo : AppAssets.logoSymbol,
       height: height,
       fit: BoxFit.contain,
       filterQuality: FilterQuality.high,
       errorBuilder: (_, _, _) => _Fallback(height: height, light: light),
-    );
-
-    if (!wordmark) return image;
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        image,
-      ],
     );
   }
 }
