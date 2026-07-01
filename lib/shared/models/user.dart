@@ -78,6 +78,10 @@ class AppUser {
   bool get canDeleteLr => can('LR_DELETE') || _lrAdminAccess;
   bool get canViewReports => can('REPORTS_VIEW');
 
+  /// Operators handle dispatch, not billing — the customer rate (a margin
+  /// figure) is hidden from them. Admins, super admins and accounts still see it.
+  bool get canViewCustomerRate => role != UserRole.operator;
+
   // Master management: the granular per-master permission OR the coarse
   // MASTERS_MANAGE umbrella — so this works whether the backend is the new
   // per-master scheme or the older umbrella-only one (keeps admins working

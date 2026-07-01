@@ -1,8 +1,22 @@
 class SystemConfig {
-  // LR numbering
+  // LR numbering (per-region: each region has its own numbering row, plus an
+  // optional tenant-wide fallback row used by super admins for region-less LRs).
   final String lrPrefix;
   final String lrFormat;
   final int nextLrNumber;
+
+  /// The region this numbering row belongs to. `null` = the tenant-wide
+  /// fallback row. Sent back on save so the correct row is edited.
+  final String? lrRegionId;
+
+  /// Region short code (e.g. `PUN`) — rendered by the `{REGION}` token.
+  final String lrRegionCode;
+
+  /// Region display name (e.g. `Pune`) — shown as context on the screen.
+  final String lrRegionName;
+
+  /// Reset cadence: `FINANCIAL_YEAR`, `YEARLY`, `MONTHLY`, or `NEVER`.
+  final String lrResetPeriod;
 
   // LR print format
   final String companyName;
@@ -24,8 +38,12 @@ class SystemConfig {
 
   const SystemConfig({
     this.lrPrefix = 'LR',
-    this.lrFormat = '{prefix}/{YY}/{MM}/{seq:05d}',
+    this.lrFormat = '{prefix}/{REGION}/{FY}/{seq:05d}',
     this.nextLrNumber = 1,
+    this.lrRegionId,
+    this.lrRegionCode = '',
+    this.lrRegionName = '',
+    this.lrResetPeriod = 'FINANCIAL_YEAR',
     this.companyName = 'Vistar Logitek Private Limited',
     this.companyTagline = 'Warehousing, Transportation & Contracts Logistics',
     this.companyAddress =
@@ -48,6 +66,10 @@ class SystemConfig {
     String? lrPrefix,
     String? lrFormat,
     int? nextLrNumber,
+    String? lrRegionId,
+    String? lrRegionCode,
+    String? lrRegionName,
+    String? lrResetPeriod,
     String? companyName,
     String? companyTagline,
     String? companyAddress,
@@ -67,6 +89,10 @@ class SystemConfig {
       lrPrefix: lrPrefix ?? this.lrPrefix,
       lrFormat: lrFormat ?? this.lrFormat,
       nextLrNumber: nextLrNumber ?? this.nextLrNumber,
+      lrRegionId: lrRegionId ?? this.lrRegionId,
+      lrRegionCode: lrRegionCode ?? this.lrRegionCode,
+      lrRegionName: lrRegionName ?? this.lrRegionName,
+      lrResetPeriod: lrResetPeriod ?? this.lrResetPeriod,
       companyName: companyName ?? this.companyName,
       companyTagline: companyTagline ?? this.companyTagline,
       companyAddress: companyAddress ?? this.companyAddress,

@@ -17,6 +17,8 @@ class RoutesScreen extends ConsumerWidget {
     final routes = ref.watch(routesProvider);
     final user = ref.watch(currentUserProvider);
     final canEdit = user?.canManageRoutes ?? false;
+    // Operators don't see the customer rate (margin); admins/super admins do.
+    final showCustomerRate = user?.canViewCustomerRate ?? false;
 
     Future<void> openForm({RouteMaster? existing}) =>
         RouteFormDialog.show(context, existing: existing);
@@ -47,12 +49,12 @@ class RoutesScreen extends ConsumerWidget {
               }
             }
           : null,
-      columns: const [
+      columns: [
         'From',
         'To',
         'Distance (km)',
         'Transporter Rate (₹)',
-        'Customer Rate',
+        if (showCustomerRate) 'Customer Rate',
       ],
       rows: [
         for (final r in routes)
@@ -63,7 +65,8 @@ class RoutesScreen extends ConsumerWidget {
               r.hasToCoords ? '📍 ${r.toCity}' : r.toCity,
               r.distanceKm.toStringAsFixed(0),
               inr(r.baseRate),
-              r.customerRate > 0 ? inr(r.customerRate) : '—',
+              if (showCustomerRate)
+                r.customerRate > 0 ? inr(r.customerRate) : '—',
             ],
           ),
       ],

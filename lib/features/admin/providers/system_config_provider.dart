@@ -11,15 +11,19 @@ final systemRepositoryProvider = Provider<SystemRepository>(
     (ref) => SystemRepository(ref.watch(apiClientProvider)));
 
 class SystemConfigNotifier extends StateNotifier<SystemConfig> {
-  SystemConfigNotifier(this._repo, {required bool authed})
+  SystemConfigNotifier(this._repo, {required bool authed, this.regionId})
       : super(const SystemConfig()) {
     if (authed) refresh();
   }
   final SystemRepository _repo;
 
+  /// The signed-in user's region — selects which numbering row to load/edit
+  /// (null for super admins → the tenant-wide fallback row).
+  final String? regionId;
+
   Future<void> refresh() async {
     try {
-      state = await _repo.getConfig();
+      state = await _repo.getConfig(regionId: regionId);
     } catch (_) {
       // keep defaults if the config endpoints are unreachable
     }
@@ -41,7 +45,10 @@ class SystemConfigNotifier extends StateNotifier<SystemConfig> {
 
 final systemConfigProvider =
     StateNotifierProvider<SystemConfigNotifier, SystemConfig>((ref) {
-  final authed = ref.watch(currentUserProvider) != null;
-  return SystemConfigNotifier(ref.watch(systemRepositoryProvider),
-      authed: authed);
+  final user = ref.watch(currentUserProvider);
+  return SystemConfigNotifier(
+    ref.watch(systemRepositoryProvider),
+    authed: user != null,
+    regionId: user?.regionId,
+  );
 });
