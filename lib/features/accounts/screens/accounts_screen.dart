@@ -35,7 +35,12 @@ class AccountsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final lrs = ref.watch(lrListProvider);
+    // Accounts only sees LRs an ops user has explicitly "sent for payment".
+    // (Legacy LRs from before this feature default to sent, so nothing is lost.)
+    final lrs = ref
+        .watch(lrListProvider)
+        .where((lr) => lr.sentForPayment)
+        .toList();
     final filter = ref.watch(_accountsFilterProvider);
 
     final sorted = [...lrs]..sort((a, b) => b.date.compareTo(a.date));

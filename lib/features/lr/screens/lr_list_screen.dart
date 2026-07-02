@@ -43,6 +43,35 @@ Future<void> _confirmDeleteLr(
   }
 }
 
+/// Confirm + send an LR to Accounts for payment. Reuses the same
+/// notifier.sendForPayment -> POST /lrs/:id/send-for-payment used by the detail
+/// screen; the row updates from state (the action then hides itself).
+Future<void> _confirmSendForPayment(
+  BuildContext context,
+  WidgetRef ref,
+  LorryReceipt lr,
+) async {
+  final ok = await showConfirmDialog(
+    context: context,
+    title: 'Send LR ${lr.number} for payment?',
+    message:
+        'This notifies the Accounts team by email and adds this LR to their '
+        'payment queue. This can only be done once.',
+    confirmLabel: 'Send for payment',
+  );
+  if (!ok || !context.mounted) return;
+  try {
+    await ref.read(lrListProvider.notifier).sendForPayment(lr.id, lr.version);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('LR ${lr.number} sent to Accounts for payment')),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) MasterActions.showError(context, e);
+  }
+}
+
 class LrListScreen extends ConsumerWidget {
   const LrListScreen({super.key});
 
@@ -50,7 +79,10 @@ class LrListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final lrs = ref.watch(filteredLrsProvider);
     final filter = ref.watch(lrFilterProvider);
-    final canDelete = ref.watch(currentUserProvider)?.canDeleteLr ?? false;
+    final user = ref.watch(currentUserProvider);
+    final canDelete = user?.canDeleteLr ?? false;
+    // The ops user who creates/manages LRs is the one who sends it to Accounts.
+    final canSend = (user?.canCreateLr ?? false) || (user?.canEditLr ?? false);
     final mobile = MediaQuery.of(context).size.width < 600;
 
     return Scaffold(
@@ -82,6 +114,9 @@ class LrListScreen extends ConsumerWidget {
                       lrs: lrs,
                       onDelete: canDelete
                           ? (lr) => _confirmDeleteLr(context, ref, lr)
+                          : null,
+                      onSendForPayment: canSend
+                          ? (lr) => _confirmSendForPayment(context, ref, lr)
                           : null,
                     ),
                   ],
@@ -187,7 +222,8 @@ class _FilterBar extends ConsumerWidget {
 class _LrTable extends StatefulWidget {
   final List<LorryReceipt> lrs;
   final void Function(LorryReceipt lr)? onDelete;
-  const _LrTable({required this.lrs, this.onDelete});
+  final void Function(LorryReceipt lr)? onSendForPayment;
+  const _LrTable({required this.lrs, this.onDelete, this.onSendForPayment});
 
   @override
   State<_LrTable> createState() => _LrTableState();
@@ -228,6 +264,9 @@ class _LrTableState extends State<_LrTable> {
                   onDelete: widget.onDelete == null
                       ? null
                       : () => widget.onDelete!(lr),
+                  onSendForPayment: widget.onSendForPayment == null
+                      ? null
+                      : () => widget.onSendForPayment!(lr),
                 ),
             ],
           );
@@ -285,6 +324,17 @@ class _LrTableState extends State<_LrTable> {
                               onPressed: () =>
                                   context.go('/lrs/${lr.id}/print'),
                             ),
+                            if (widget.onSendForPayment != null &&
+                                !lr.sentForPayment)
+                              IconButton(
+                                tooltip: 'Send for Payment',
+                                icon: const Icon(
+                                  Icons.forward_to_inbox_outlined,
+                                  color: AppColors.ok,
+                                  size: 18,
+                                ),
+                                onPressed: () => widget.onSendForPayment!(lr),
+                              ),
                             if (widget.onDelete != null)
                               IconButton(
                                 tooltip: 'Delete',
@@ -336,7 +386,12 @@ class _LrTableState extends State<_LrTable> {
 class _LrMobileCard extends StatelessWidget {
   final LorryReceipt lr;
   final VoidCallback? onDelete;
-  const _LrMobileCard({required this.lr, this.onDelete});
+  final VoidCallback? onSendForPayment;
+  const _LrMobileCard({
+    required this.lr,
+    this.onDelete,
+    this.onSendForPayment,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -394,6 +449,17 @@ class _LrMobileCard extends StatelessWidget {
                   ),
                   onPressed: () => context.go('/lrs/${lr.id}/print'),
                 ),
+                if (onSendForPayment != null && !lr.sentForPayment)
+                  IconButton(
+                    tooltip: 'Send for Payment',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(
+                      Icons.forward_to_inbox_outlined,
+                      color: AppColors.ok,
+                      size: 18,
+                    ),
+                    onPressed: onSendForPayment,
+                  ),
                 if (onDelete != null)
                   IconButton(
                     tooltip: 'Delete',

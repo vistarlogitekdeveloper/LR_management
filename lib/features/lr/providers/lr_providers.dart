@@ -85,6 +85,14 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
     return updated;
   }
 
+  /// Sends the LR to Accounts for payment (backend flips the flag + emails
+  /// Accounts), then refreshes the LR in local state.
+  Future<LorryReceipt> sendForPayment(String id, int version) async {
+    final updated = await _repo.sendForPayment(id, version);
+    state = [for (final lr in state) lr.id == updated.id ? updated : lr];
+    return updated;
+  }
+
   Future<void> changeStatus(String id, LrStatus to, {String? reason}) async {
     await _repo.changeStatus(id, to.code, reason: reason);
     final fresh = await _repo.getById(id);

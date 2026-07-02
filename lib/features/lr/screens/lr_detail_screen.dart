@@ -28,6 +28,8 @@ class LrDetailScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final canEdit = user?.canEditLr ?? false;
     final canDelete = user?.canDeleteLr ?? false;
+    // The ops user who creates/manages LRs is the one who sends it to Accounts.
+    final canSend = (user?.canCreateLr ?? false) || (user?.canEditLr ?? false);
 
     return asyncLr.when(
       loading: () => const Scaffold(
@@ -72,7 +74,8 @@ class LrDetailScreen extends ConsumerWidget {
           ],
         ),
       ),
-      data: (lr) => _buildLoaded(context, ref, lr, canEdit, canDelete),
+      data: (lr) =>
+          _buildLoaded(context, ref, lr, canEdit, canDelete, canSend),
     );
   }
 
@@ -82,6 +85,7 @@ class LrDetailScreen extends ConsumerWidget {
     LorryReceipt lr,
     bool canEdit,
     bool canDelete,
+    bool canSend,
   ) {
     return Scaffold(
       backgroundColor: AppColors.mist,
@@ -118,8 +122,15 @@ class LrDetailScreen extends ConsumerWidget {
                   icon: Icons.delete_outline,
                   onPressed: () => _delete(context, ref, lr),
                 ),
+              if (canSend && !lr.sentForPayment)
+                AppButton(
+                  label: 'Send for Payment',
+                  icon: Icons.forward_to_inbox_outlined,
+                  onPressed: () => _sendForPayment(context, ref, lr),
+                ),
               AppButton(
                 label: 'Print',
+                kind: BtnKind.soft,
                 icon: Icons.print_outlined,
                 onPressed: () => context.go('/lrs/${lr.id}/print'),
               ),
@@ -204,6 +215,33 @@ class LrDetailScreen extends ConsumerWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Status updated to ${next.label}')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) MasterActions.showError(context, e);
+    }
+  }
+
+  Future<void> _sendForPayment(
+    BuildContext context,
+    WidgetRef ref,
+    LorryReceipt lr,
+  ) async {
+    final ok = await showConfirmDialog(
+      context: context,
+      title: 'Send LR ${lr.number} for payment?',
+      message:
+          'This notifies the Accounts team by email and adds this LR to their '
+          'payment queue. This can only be done once.',
+      confirmLabel: 'Send for payment',
+    );
+    if (!ok || !context.mounted) return;
+    try {
+      await ref.read(lrListProvider.notifier).sendForPayment(lr.id, lr.version);
+      ref.invalidate(lrDetailProvider(lr.id));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sent to Accounts for payment')),
         );
       }
     } catch (e) {
@@ -379,6 +417,43 @@ class _RightColumn extends StatelessWidget {
   final bool mobile;
   const _RightColumn({required this.lr, this.mobile = false});
 
+  /// Shows whether this LR has been sent to Accounts for payment.
+  Widget _paymentSentChip() {
+    final sent = lr.sentForPayment;
+    final color = sent ? AppColors.ok : AppColors.slate;
+    final label = sent
+        ? (lr.sentForPaymentAt != null
+            ? 'Sent for payment · ${formatDate(lr.sentForPaymentAt!)}'
+            : 'Sent for payment')
+        : 'Not yet sent to Accounts';
+    final icon =
+        sent ? Icons.check_circle_outline : Icons.schedule_send_outlined;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: color),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cardPad = EdgeInsets.all(mobile ? 12 : 20);
@@ -402,6 +477,8 @@ class _RightColumn extends StatelessWidget {
                   PayPill(pay: lr.payType),
                 ],
               ),
+              const SizedBox(height: 10),
+              _paymentSentChip(),
               const SizedBox(height: 12),
               _KeyValueGrid(
                 items: [

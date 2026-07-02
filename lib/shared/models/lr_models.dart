@@ -331,6 +331,13 @@ class LorryReceipt {
   final DateTime? podSoftCopyDate;
   final DateTime? advancePaidAt;
   final DateTime? balancePaidAt;
+  // Two-step payment hand-off: an LR is created NOT sent to Accounts; an ops
+  // user explicitly "sends for payment", which (server-side) flips this flag
+  // and triggers the Accounts email. When the field is ABSENT (older backend)
+  // it is treated as already sent, so existing LRs never disappear from the
+  // Accounts queue and no non-functional button appears.
+  final bool sentForPayment;
+  final DateTime? sentForPaymentAt;
 
   const LorryReceipt({
     required this.id,
@@ -370,6 +377,8 @@ class LorryReceipt {
     this.podSoftCopyDate,
     this.advancePaidAt,
     this.balancePaidAt,
+    this.sentForPayment = false,
+    this.sentForPaymentAt,
   });
 
   int get totalPackages => items.fold(0, (sum, item) => sum + item.packages);
@@ -494,6 +503,10 @@ class LorryReceipt {
           DateTime.tryParse(json['advance_paid_at']?.toString() ?? ''),
       balancePaidAt:
           DateTime.tryParse(json['balance_paid_at']?.toString() ?? ''),
+      // Absent → true (older backend): keep legacy LRs visible in Accounts.
+      sentForPayment: (json['sent_for_payment'] as bool?) ?? true,
+      sentForPaymentAt:
+          DateTime.tryParse(json['sent_for_payment_at']?.toString() ?? ''),
     );
   }
 
@@ -511,6 +524,8 @@ class LorryReceipt {
     DateTime? podSoftCopyDate,
     DateTime? advancePaidAt,
     DateTime? balancePaidAt,
+    bool? sentForPayment,
+    DateTime? sentForPaymentAt,
   }) {
     return LorryReceipt(
       id: id,
@@ -550,6 +565,8 @@ class LorryReceipt {
       podSoftCopyDate: podSoftCopyDate ?? this.podSoftCopyDate,
       advancePaidAt: advancePaidAt ?? this.advancePaidAt,
       balancePaidAt: balancePaidAt ?? this.balancePaidAt,
+      sentForPayment: sentForPayment ?? this.sentForPayment,
+      sentForPaymentAt: sentForPaymentAt ?? this.sentForPaymentAt,
     );
   }
 }

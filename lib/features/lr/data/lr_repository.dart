@@ -148,6 +148,18 @@ class LrRepository {
     return getById(id);
   }
 
+  /// Sends the LR to Accounts for payment: flips `sent_for_payment` server-side
+  /// and triggers the Accounts notification email. Until this is called the LR
+  /// is NOT emailed and does NOT appear in the Accounts payment queue. Idempotent
+  /// server-side (re-sending an already-sent LR must not email twice).
+  Future<LorryReceipt> sendForPayment(String id, int version) async {
+    await _api.dio.post(
+      '/lrs/$id/send-for-payment',
+      options: Options(headers: {'If-Match': version.toString()}),
+    );
+    return getById(id);
+  }
+
   Future<void> changeStatus(String id, String toCode, {String? reason}) async {
     await _api.dio.post('/lrs/$id/status', data: {
       'to': toCode,
