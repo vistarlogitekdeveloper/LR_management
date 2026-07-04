@@ -210,6 +210,17 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
       }
       await ref.read(transportersProvider.notifier).refresh();
       if (!mounted) return;
+      // Success feedback via the app-level messenger so it survives the dialog
+      // closing. The refresh above already updated the list in place, so no
+      // page reload is needed.
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(_existing == null
+              ? 'Transporter "${t.name}" added successfully'
+              : 'Transporter "${t.name}" updated successfully'),
+          backgroundColor: AppColors.ok,
+        ),
+      );
       navigator.pop(true);
     } catch (e) {
       if (!mounted) return;
