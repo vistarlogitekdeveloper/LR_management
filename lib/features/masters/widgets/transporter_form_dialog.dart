@@ -193,7 +193,10 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
           t.id,
           fileName: _picked!.name,
           bytes: _picked!.bytes,
-          filePath: _picked!.path,
+          // On web PlatformFile.path is unavailable and throws when read; we
+          // upload via bytes (picked with withData: true), so only fall back to
+          // path when bytes are absent (native).
+          filePath: _picked!.bytes == null ? _picked!.path : null,
         );
       }
       if (_pickedTds != null) {
@@ -201,7 +204,7 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
           t.id,
           fileName: _pickedTds!.name,
           bytes: _pickedTds!.bytes,
-          filePath: _pickedTds!.path,
+          filePath: _pickedTds!.bytes == null ? _pickedTds!.path : null,
           type: 'tds',
         );
       }
