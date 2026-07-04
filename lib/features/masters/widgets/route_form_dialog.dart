@@ -6,6 +6,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../shared/models/route_master.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/labeled_field.dart';
+import '../../../shared/widgets/searchable_field.dart';
+import '../../lookups/data/lookup_value.dart';
+import '../../lookups/providers/lookups_provider.dart';
 import '../../maps/widgets/location_picker_field.dart';
 import '../providers/master_providers.dart';
 import 'master_actions.dart';
@@ -44,6 +47,7 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
   late final TextEditingController _customerRate;
   PickedLocation? _fromLoc;
   PickedLocation? _toLoc;
+  String? _vehicleTypeId;
   bool _saving = false;
 
   RouteMaster? get _existing => widget.existing;
@@ -67,6 +71,7 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
           ? r.customerRate.toStringAsFixed(0)
           : '',
     );
+    _vehicleTypeId = r?.vehicleTypeId;
     if (r != null && r.hasFromCoords) {
       _fromLoc = PickedLocation(
         placeId: r.fromPlaceId,
@@ -114,6 +119,7 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
         distanceKm: parse(_distance),
         baseRate: parse(_baseRate),
         customerRate: parse(_customerRate),
+        vehicleTypeId: _vehicleTypeId,
         fromPlaceId: _fromLoc?.placeId ?? '',
         fromLat: _fromLoc?.lat,
         fromLng: _fromLoc?.lng,
@@ -142,6 +148,20 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final vehicleTypes =
+        lookupList(ref.watch(lookupsMapProvider), 'VEHICLE_TYPE');
+    // Resolve the selected option from the loaded lookups by id; fall back to a
+    // synthetic value (from the edited route) while lookups are still loading.
+    LookupValue? selectedVt =
+        vehicleTypes.where((v) => v.id == _vehicleTypeId).firstOrNull;
+    if (selectedVt == null && (_vehicleTypeId ?? '').isNotEmpty) {
+      selectedVt = LookupValue(
+        id: _vehicleTypeId!,
+        category: 'VEHICLE_TYPE',
+        code: _existing?.vehicleTypeCode ?? '',
+        label: _existing?.vehicleTypeLabel ?? '',
+      );
+    }
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -235,6 +255,22 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
                           'Customer Rate (₹)',
                           number: true,
                           hint: 'Used for Vistar margin',
+                        ),
+                      ),
+                      SizedBox(
+                        width: half,
+                        child: LabeledField(
+                          label: 'Vehicle Type',
+                          child: SearchableField<LookupValue>(
+                            value: selectedVt,
+                            options: vehicleTypes,
+                            labelOf: (v) => v.label,
+                            hintText: 'Select vehicle type',
+                            dialogTitle: 'Select Vehicle Type',
+                            clearable: true,
+                            onChanged: (v) =>
+                                setState(() => _vehicleTypeId = v?.id),
+                          ),
                         ),
                       ),
                     ],

@@ -83,6 +83,7 @@ class SystemRepository {
     await _api.dio.patch('/system/numbering', data: {
       'prefix': cfg.lrPrefix,
       'format_template': cfg.lrFormat,
+      'reset_period': cfg.lrResetPeriod,
       // Which row to edit — null targets the tenant-wide fallback row.
       'region_id': cfg.lrRegionId,
     });

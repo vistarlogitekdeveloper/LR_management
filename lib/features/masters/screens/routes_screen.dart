@@ -53,6 +53,7 @@ class RoutesScreen extends ConsumerWidget {
         'From',
         'To',
         'Distance (km)',
+        'Vehicle Type',
         'Transporter Rate (₹)',
         if (showCustomerRate) 'Customer Rate',
       ],
@@ -64,6 +65,9 @@ class RoutesScreen extends ConsumerWidget {
               r.hasFromCoords ? '📍 ${r.fromCity}' : r.fromCity,
               r.hasToCoords ? '📍 ${r.toCity}' : r.toCity,
               r.distanceKm.toStringAsFixed(0),
+              (r.vehicleTypeLabel?.isNotEmpty ?? false)
+                  ? r.vehicleTypeLabel!
+                  : '—',
               inr(r.baseRate),
               if (showCustomerRate)
                 r.customerRate > 0 ? inr(r.customerRate) : '—',

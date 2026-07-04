@@ -29,7 +29,9 @@ class LrDetailScreen extends ConsumerWidget {
     final canEdit = user?.canEditLr ?? false;
     final canDelete = user?.canDeleteLr ?? false;
     // The ops user who creates/manages LRs is the one who sends it to Accounts.
-    final canSend = (user?.canCreateLr ?? false) || (user?.canEditLr ?? false);
+    final canSend = (user?.canCreateLr ?? false) ||
+        (user?.canEditLr ?? false) ||
+        (user?.canAdmin ?? false);
 
     return asyncLr.when(
       loading: () => const Scaffold(

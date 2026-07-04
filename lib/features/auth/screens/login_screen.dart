@@ -63,8 +63,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await LoginPrefs.save(remember: _rememberMe, username: username);
       if (!mounted) return;
       context.go('/dashboard');
+    } else {
+      // Clear the password on a failed attempt (standard login UX) but keep
+      // the username so the user doesn't have to retype their email.
+      _passCtrl.clear();
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -323,7 +328,10 @@ class _FormState extends State<_Form> {
                 autofocus: widget.autofocusUsername,
                 textInputAction: TextInputAction.next,
                 autofillHints: const [AutofillHints.username],
-                enabled: !widget.loading,
+                // Use readOnly instead of enabled:false — on Flutter Web,
+                // disabling a TextField forces a DOM rebuild that wipes the
+                // displayed value, making it look like the field cleared.
+                readOnly: widget.loading,
                 validator: _validateUsername,
                 decoration: const InputDecoration(hintText: 'Enter your username'),
               ),
@@ -335,11 +343,13 @@ class _FormState extends State<_Form> {
               child: TextFormField(
                 controller: widget.passCtrl,
                 obscureText: _obscurePassword,
-                enabled: !widget.loading,
+                // readOnly keeps the value visible during the API call;
+                // enabled:false would visually wipe it on Flutter Web.
+                readOnly: widget.loading,
                 textInputAction: TextInputAction.done,
                 autofillHints: const [AutofillHints.password],
                 validator: _validatePassword,
-                onFieldSubmitted: (_) => widget.onSubmit(),
+                onFieldSubmitted: (_) => widget.loading ? null : widget.onSubmit(),
                 decoration: InputDecoration(
                   hintText: 'Enter your password',
                   // Eye icon to show / hide the password.
@@ -353,8 +363,10 @@ class _FormState extends State<_Form> {
                       color: AppColors.slate,
                       size: 20,
                     ),
-                    onPressed: () =>
-                        setState(() => _obscurePassword = !_obscurePassword),
+                    onPressed: widget.loading
+                        ? null
+                        : () => setState(
+                            () => _obscurePassword = !_obscurePassword),
                   ),
                 ),
               ),

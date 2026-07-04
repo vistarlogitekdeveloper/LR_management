@@ -6,6 +6,7 @@ import '../../../core/utils/lr_number_format.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/labeled_field.dart';
+import '../../../shared/widgets/searchable_field.dart';
 import '../../../shared/widgets/section_title.dart';
 import '../../shell/widgets/app_topbar.dart';
 import '../providers/system_config_provider.dart';
@@ -21,6 +22,7 @@ class _NumberingScreenState extends ConsumerState<NumberingScreen> {
   late TextEditingController _prefixCtrl;
   late TextEditingController _formatCtrl;
   late TextEditingController _nextCtrl;
+  late String _resetPeriod;
 
   // The config the controllers were last seeded from — lets us re-seed when the
   // backend row lands without clobbering edits the admin has already made.
@@ -33,6 +35,7 @@ class _NumberingScreenState extends ConsumerState<NumberingScreen> {
     _prefixCtrl = TextEditingController(text: cfg.lrPrefix);
     _formatCtrl = TextEditingController(text: cfg.lrFormat);
     _nextCtrl = TextEditingController(text: '${cfg.nextLrNumber}');
+    _resetPeriod = cfg.lrResetPeriod;
     _seeded = cfg;
   }
 
@@ -50,12 +53,14 @@ class _NumberingScreenState extends ConsumerState<NumberingScreen> {
   void _onConfig(SystemConfig next) {
     if (!mounted) return;
     final untouched = _prefixCtrl.text == (_seeded?.lrPrefix ?? '') &&
-        _formatCtrl.text == (_seeded?.lrFormat ?? '');
+        _formatCtrl.text == (_seeded?.lrFormat ?? '') &&
+        _resetPeriod == (_seeded?.lrResetPeriod ?? _resetPeriod);
     setState(() {
       _nextCtrl.text = '${next.nextLrNumber}';
       if (untouched) {
         _prefixCtrl.text = next.lrPrefix;
         _formatCtrl.text = next.lrFormat;
+        _resetPeriod = next.lrResetPeriod;
       }
       _seeded = next;
     });
@@ -66,6 +71,7 @@ class _NumberingScreenState extends ConsumerState<NumberingScreen> {
     final next = cfg.copyWith(
       lrPrefix: _prefixCtrl.text.trim(),
       lrFormat: _formatCtrl.text.trim(),
+      lrResetPeriod: _resetPeriod,
     );
     final messenger = ScaffoldMessenger.of(context);
     try {
@@ -101,6 +107,17 @@ class _NumberingScreenState extends ConsumerState<NumberingScreen> {
         'NEVER' => 'Never resets',
         _ => period,
       };
+
+  /// Short label for the reset-period picker options.
+  String _resetOption(String period) => switch (period) {
+        'FINANCIAL_YEAR' => 'Financial Year (Apr–Mar)',
+        'YEARLY' => 'Calendar Year',
+        'MONTHLY' => 'Monthly',
+        'NEVER' => 'Never',
+        _ => period,
+      };
+
+  static const _resetPeriods = ['FINANCIAL_YEAR', 'YEARLY', 'MONTHLY', 'NEVER'];
 
   @override
   Widget build(BuildContext context) {
@@ -165,6 +182,18 @@ class _NumberingScreenState extends ConsumerState<NumberingScreen> {
                                   readOnly: true,
                                   enabled: false,
                                   keyboardType: TextInputType.number,
+                                ),
+                              ),
+                              LabeledField(
+                                label: 'Reset sequence',
+                                child: SearchableField<String>(
+                                  value: _resetPeriod,
+                                  options: _resetPeriods,
+                                  labelOf: _resetOption,
+                                  hintText: 'Select reset period',
+                                  dialogTitle: 'Reset sequence',
+                                  onChanged: (v) => setState(
+                                      () => _resetPeriod = v ?? _resetPeriod),
                                 ),
                               ),
                             ])
@@ -261,7 +290,7 @@ class _NumberingScreenState extends ConsumerState<NumberingScreen> {
                   ),
                 ),
                 Text(
-                  _resetLabel(cfg.lrResetPeriod),
+                  _resetLabel(_resetPeriod),
                   style: const TextStyle(color: AppColors.slate, fontSize: 12),
                 ),
               ],

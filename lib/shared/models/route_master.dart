@@ -7,6 +7,10 @@ class RouteMaster {
   final double distanceKm;
   final double baseRate;
   final double customerRate;
+  // Vehicle type (VEHICLE_TYPE lookup) — nullable; a route may have none.
+  final String? vehicleTypeId;
+  final String? vehicleTypeCode;
+  final String? vehicleTypeLabel;
   // Map-picked endpoints (Google Places). place_id is the stable key; lat/lng
   // + formatted address power the map and (later) geofencing.
   final String fromPlaceId;
@@ -26,6 +30,9 @@ class RouteMaster {
     required this.distanceKm,
     required this.baseRate,
     this.customerRate = 0,
+    this.vehicleTypeId,
+    this.vehicleTypeCode,
+    this.vehicleTypeLabel,
     this.fromPlaceId = '',
     this.fromLat,
     this.fromLng,
@@ -48,6 +55,10 @@ class RouteMaster {
     distanceKm: asDouble(json['distance_km']),
     baseRate: asDouble(json['base_rate']),
     customerRate: asDouble(json['customer_rate']),
+    vehicleTypeId: (json['vehicle_type_id'] as String?) ??
+        ((json['vehicleType'] as Map?)?['id'] as String?),
+    vehicleTypeCode: (json['vehicleType'] as Map?)?['code'] as String?,
+    vehicleTypeLabel: (json['vehicleType'] as Map?)?['label'] as String?,
     fromPlaceId: (json['from_place_id'] as String?) ?? '',
     fromLat: asDoubleOrNull(json['from_lat']),
     fromLng: asDoubleOrNull(json['from_lng']),
@@ -65,6 +76,8 @@ class RouteMaster {
     if (distanceKm > 0) 'distance_km': distanceKm,
     if (baseRate > 0) 'base_rate': baseRate,
     'customer_rate': customerRate > 0 ? customerRate : null,
+    // Always sent (even null) so clearing the vehicle type sticks on PATCH.
+    'vehicle_type_id': vehicleTypeId,
     // Always sent (even null) so clearing a pin sticks on PATCH.
     'from_place_id': fromPlaceId.isEmpty ? null : fromPlaceId,
     'from_lat': fromLat,
@@ -82,6 +95,9 @@ class RouteMaster {
     double? distanceKm,
     double? baseRate,
     double? customerRate,
+    String? vehicleTypeId,
+    String? vehicleTypeCode,
+    String? vehicleTypeLabel,
     String? fromPlaceId,
     double? fromLat,
     double? fromLng,
@@ -99,6 +115,9 @@ class RouteMaster {
       distanceKm: distanceKm ?? this.distanceKm,
       baseRate: baseRate ?? this.baseRate,
       customerRate: customerRate ?? this.customerRate,
+      vehicleTypeId: vehicleTypeId ?? this.vehicleTypeId,
+      vehicleTypeCode: vehicleTypeCode ?? this.vehicleTypeCode,
+      vehicleTypeLabel: vehicleTypeLabel ?? this.vehicleTypeLabel,
       fromPlaceId: fromPlaceId ?? this.fromPlaceId,
       fromLat: fromLat ?? this.fromLat,
       fromLng: fromLng ?? this.fromLng,
