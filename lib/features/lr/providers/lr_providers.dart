@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_providers.dart';
 import '../../../shared/models/lr_models.dart';
+import '../../../shared/models/user.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../lookups/providers/lookups_provider.dart';
 import '../data/lr_repository.dart';
 
@@ -32,14 +34,29 @@ final lrRepositoryProvider = Provider<LrRepository>((ref) {
 });
 
 class LrNotifier extends StateNotifier<List<LorryReceipt>> {
-  LrNotifier(this._repo) : super(const []) {
+  LrNotifier(this._repo, this._user) : super(const []) {
     refresh();
   }
   final LrRepository _repo;
+  final AppUser? _user;
+
+  /// Operators may only see the LRs they created — region scope alone still
+  /// exposes peers' consignments. Admins / super admins / accounts see the full
+  /// (backend-scoped) set.
+  ///
+  /// NOTE: this is a UI-side filter. For true enforcement the backend must also
+  /// scope GET /lrs and GET /lrs/:id by created_by for operators.
+  List<LorryReceipt> _scoped(List<LorryReceipt> all) {
+    final u = _user;
+    if (u != null && u.isOperator) {
+      return all.where((lr) => lr.enteredBy == u.id).toList();
+    }
+    return all;
+  }
 
   Future<void> refresh() async {
     try {
-      state = await _repo.list();
+      state = _scoped(await _repo.list());
     } catch (_) {
       // A transient backend/DB error shouldn't crash the UI; keep prior state.
     }
@@ -114,7 +131,10 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
 
 final lrListProvider =
     StateNotifierProvider<LrNotifier, List<LorryReceipt>>((ref) {
-  return LrNotifier(ref.watch(lrRepositoryProvider));
+  return LrNotifier(
+    ref.watch(lrRepositoryProvider),
+    ref.watch(currentUserProvider),
+  );
 });
 
 final lrFilterProvider = StateProvider<LrFilter>((ref) => const LrFilter());

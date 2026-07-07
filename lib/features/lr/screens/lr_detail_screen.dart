@@ -76,8 +76,48 @@ class LrDetailScreen extends ConsumerWidget {
           ],
         ),
       ),
-      data: (lr) =>
-          _buildLoaded(context, ref, lr, canEdit, canDelete, canSend),
+      data: (lr) {
+        // Operators may only open their own LRs. The list is already filtered;
+        // this blocks deep-linking to a peer's LR by id. (Server-side scoping is
+        // still required to make this airtight.)
+        if ((user?.isOperator ?? false) && lr.enteredBy != user!.id) {
+          return _accessDenied(context);
+        }
+        return _buildLoaded(context, ref, lr, canEdit, canDelete, canSend);
+      },
+    );
+  }
+
+  Widget _accessDenied(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.mist,
+      body: Column(
+        children: [
+          const AppTopbar(title: 'LR Detail'),
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.lock_outline_rounded,
+                      size: 48, color: AppColors.slate),
+                  const SizedBox(height: 12),
+                  const Text(
+                    "You don't have access to this Lorry Receipt.",
+                    style: TextStyle(color: AppColors.slate),
+                  ),
+                  const SizedBox(height: 16),
+                  AppButton(
+                    label: 'Back to list',
+                    kind: BtnKind.ghost,
+                    onPressed: () => context.go('/lrs'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -206,19 +246,25 @@ class LrDetailScreen extends ConsumerWidget {
     String? reason;
     if (next == LrStatus.cancelled) {
       reason = await _promptReason(context);
-      if (reason == null) return; // cancelled the prompt
+      // After the prompt await the widget may have been popped — bail before
+      // touching ref / context or Flutter throws
+      // "element._lifecycleState == _ElementLifecycle.active is not true".
+      if (reason == null || !context.mounted) return;
     }
 
     try {
       await ref
           .read(lrListProvider.notifier)
           .changeStatus(lr.id, next, reason: reason);
+      // The widget may have been disposed while the mutation was in flight
+      // (route pop, tab switch, auth 401 → refresh replay). Using `ref` or
+      // `context` on a disposed widget throws the framework assertions we
+      // otherwise see on the LR list page.
+      if (!context.mounted) return;
       ref.invalidate(lrDetailProvider(lr.id));
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Status updated to ${next.label}')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Status updated to ${next.label}')),
+      );
     } catch (e) {
       if (context.mounted) MasterActions.showError(context, e);
     }
@@ -240,12 +286,15 @@ class LrDetailScreen extends ConsumerWidget {
     if (!ok || !context.mounted) return;
     try {
       await ref.read(lrListProvider.notifier).sendForPayment(lr.id, lr.version);
+      // See _changeStatus above — the widget can go away while the request
+      // is in flight (auth refresh, route pop) and ref.invalidate on a
+      // disposed WidgetRef throws the framework assertion visible on the
+      // LR list page after a save-and-navigate cycle.
+      if (!context.mounted) return;
       ref.invalidate(lrDetailProvider(lr.id));
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Sent to Accounts for payment')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sent to Accounts for payment')),
+      );
     } catch (e) {
       if (context.mounted) MasterActions.showError(context, e);
     }

@@ -23,11 +23,15 @@ class ReportsScreen extends ConsumerStatefulWidget {
 class _ReportsScreenState extends ConsumerState<ReportsScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tab;
+  // Operators see no monetary figures, so the all-financial "Accounts" tab is
+  // dropped for them (2 tabs instead of 3).
+  late final bool _canAmounts;
 
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 3, vsync: this);
+    _canAmounts = ref.read(currentUserProvider)?.canViewAmounts ?? false;
+    _tab = TabController(length: _canAmounts ? 3 : 2, vsync: this);
   }
 
   @override
@@ -46,17 +50,21 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
         children: [
           AppTopbar(
             title: 'Reports',
-            subtitle: 'Daily · Monthly · Accounts',
+            subtitle: _canAmounts ? 'Daily · Monthly · Accounts' : 'Daily · Monthly',
             actions: [
               AppButton(
-                label: 'Export CSV',
+                label: 'Download Excel',
                 icon: Icons.file_download_outlined,
                 kind: BtnKind.soft,
                 onPressed: () async {
-                  await ExportService.exportLrsCsv(lrs);
+                  final messenger = ScaffoldMessenger.of(context);
+                  await ExportService.exportLrsExcel(
+                    lrs,
+                    includeAmounts: _canAmounts,
+                  );
                   if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('LRs exported as CSV')),
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('LRs exported as Excel')),
                   );
                 },
               ),
@@ -73,10 +81,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
                 fontWeight: FontWeight.w800,
                 fontSize: 13.5,
               ),
-              tabs: const [
-                Tab(text: 'Daily'),
-                Tab(text: 'Monthly'),
-                Tab(text: 'Accounts'),
+              tabs: [
+                const Tab(text: 'Daily'),
+                const Tab(text: 'Monthly'),
+                if (_canAmounts) const Tab(text: 'Accounts'),
               ],
             ),
           ),
@@ -85,8 +93,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
               controller: _tab,
               children: [
                 _DailyTab(lrs: lrs),
-                _MonthlyTab(lrs: lrs),
-                _AccountsTab(lrs: lrs),
+                _MonthlyTab(lrs: lrs, canAmounts: _canAmounts),
+                if (_canAmounts) _AccountsTab(lrs: lrs),
               ],
             ),
           ),
@@ -158,7 +166,8 @@ class _DailyTab extends StatelessWidget {
 
 class _MonthlyTab extends StatelessWidget {
   final List<LorryReceipt> lrs;
-  const _MonthlyTab({required this.lrs});
+  final bool canAmounts;
+  const _MonthlyTab({required this.lrs, required this.canAmounts});
 
   @override
   Widget build(BuildContext context) {
@@ -185,7 +194,7 @@ class _MonthlyTab extends StatelessWidget {
         children: [
           _StatRow(
             items: [
-              ('Total Freight', inr(totalFreight)),
+              if (canAmounts) ('Total Freight', inr(totalFreight)),
               ('Customers Active', '${customerCount.length}'),
               ('Vehicles Used', '${vehicleUtilization.length}'),
             ],
@@ -198,46 +207,49 @@ class _MonthlyTab extends StatelessWidget {
                 .map((e) => (e.key, '${e.value}'))
                 .toList(),
           ),
-          SizedBox(height: gap2),
-          AppCard(
-            padding: EdgeInsets.all(mobile ? 12 : 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SectionTitle(
-                  icon: Icons.workspace_premium_outlined,
-                  title: 'Customer freight summary',
-                ),
-                for (final entry in customerFreight.entries)
-                  Padding(
-                    padding: EdgeInsets.symmetric(vertical: mobile ? 4 : 6),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            entry.key,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AppColors.ink,
-                              fontWeight: FontWeight.w700,
+          // Customer freight summary is amount data — hidden from operators.
+          if (canAmounts) ...[
+            SizedBox(height: gap2),
+            AppCard(
+              padding: EdgeInsets.all(mobile ? 12 : 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SectionTitle(
+                    icon: Icons.workspace_premium_outlined,
+                    title: 'Customer freight summary',
+                  ),
+                  for (final entry in customerFreight.entries)
+                    Padding(
+                      padding: EdgeInsets.symmetric(vertical: mobile ? 4 : 6),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              entry.key,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.ink,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          inr(entry.value),
-                          style: const TextStyle(
-                            color: AppColors.plum,
-                            fontWeight: FontWeight.w800,
+                          const SizedBox(width: 8),
+                          Text(
+                            inr(entry.value),
+                            style: const TextStyle(
+                              color: AppColors.plum,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
           SizedBox(height: gap2),
           _BreakdownCard(
             title: 'Vehicle utilization',

@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:excel/excel.dart';
 import 'package:printing/printing.dart';
 
 import '../../../core/utils/formatters.dart';
@@ -8,54 +9,57 @@ import '../../../shared/models/lr_models.dart';
 class ExportService {
   ExportService._();
 
-  static Future<void> exportLrsCsv(List<LorryReceipt> lrs) async {
-    final buf = StringBuffer();
-    buf.writeln(
-      [
-        'LR No',
-        'Date',
-        'Consignor',
-        'Consignee',
-        'Vehicle',
-        'Route',
-        'Freight',
-        'Door Delivery',
-        'Handling',
-        'Insurance',
-        'Mathadi',
-        'Advance',
-        'Total',
-        'Balance',
-        'Vistar Margin',
-        'Pay Type',
-        'Status',
-        'EWB',
-      ].join(','),
+  /// Exports the LR list as a real Excel workbook (.xlsx). When [includeAmounts]
+  /// is false (operator role) every monetary column is omitted so no figures
+  /// leak into the file.
+  static Future<void> exportLrsExcel(
+    List<LorryReceipt> lrs, {
+    bool includeAmounts = true,
+  }) async {
+    final excel = Excel.createExcel();
+    final sheet = excel[excel.getDefaultSheet() ?? 'Sheet1'];
+
+    final headers = <String>[
+      'LR No', 'Date', 'Consignor', 'Consignee', 'Vehicle', 'Route',
+      if (includeAmounts) ...[
+        'Freight', 'Door Delivery', 'Handling', 'Insurance', 'Mathadi',
+        'Advance', 'Total', 'Balance', 'Vistar Margin',
+      ],
+      'Pay Type', 'Status', 'EWB',
+    ];
+    sheet.appendRow(
+      headers.map<CellValue?>((h) => TextCellValue(h)).toList(),
     );
+
     for (final lr in lrs) {
-      buf.writeln([
-        _csv(lr.number),
-        _csv(formatDate(lr.date)),
-        _csv(lr.consignor.name),
-        _csv(lr.consignee.name),
-        _csv(lr.vehicle.number),
-        _csv(lr.route),
-        lr.freight.freight.toStringAsFixed(0),
-        lr.freight.doorDelivery.toStringAsFixed(0),
-        lr.freight.handling.toStringAsFixed(0),
-        lr.freight.insurance.toStringAsFixed(0),
-        lr.freight.mathadi.toStringAsFixed(0),
-        lr.freight.advance.toStringAsFixed(0),
-        lr.freight.total.toStringAsFixed(0),
-        lr.freight.balance.toStringAsFixed(0),
-        lr.freight.vistarMargin.toStringAsFixed(0),
-        _csv(lr.payType.label),
-        _csv(lr.status.label),
-        _csv(lr.ewb?.number ?? ''),
-      ].join(','));
+      sheet.appendRow(<CellValue?>[
+        TextCellValue(lr.number),
+        TextCellValue(formatDate(lr.date)),
+        TextCellValue(lr.consignor.name),
+        TextCellValue(lr.consignee.name),
+        TextCellValue(lr.vehicle.number),
+        TextCellValue(lr.route),
+        if (includeAmounts) ...[
+          DoubleCellValue(lr.freight.freight),
+          DoubleCellValue(lr.freight.doorDelivery),
+          DoubleCellValue(lr.freight.handling),
+          DoubleCellValue(lr.freight.insurance),
+          DoubleCellValue(lr.freight.mathadi),
+          DoubleCellValue(lr.freight.advance),
+          DoubleCellValue(lr.freight.total),
+          DoubleCellValue(lr.freight.balance),
+          DoubleCellValue(lr.freight.vistarMargin),
+        ],
+        TextCellValue(lr.payType.label),
+        TextCellValue(lr.status.label),
+        TextCellValue(lr.ewb?.number ?? ''),
+      ]);
     }
-    final bytes = Uint8List.fromList(buf.toString().codeUnits);
-    await _share(bytes, 'vistar_lrs_${_now()}.csv');
+
+    final bytes = excel.encode();
+    if (bytes != null) {
+      await shareBytes(bytes, 'vistar_lrs_${_now()}.xlsx');
+    }
   }
 
   static Future<void> exportTally(List<LorryReceipt> lrs) async {

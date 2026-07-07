@@ -133,7 +133,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     try {
-      await _api.dio.post('/auth/logout');
+      // Send the refresh token so the backend REVOKES it server-side (verified:
+      // logout without it returns 200 but leaves the session usable). This makes
+      // logout a real session kill, not just a client-side token wipe.
+      final refresh = await _tokens.readRefresh();
+      await _api.dio.post('/auth/logout', data: {
+        if (refresh != null && refresh.isNotEmpty) 'refresh_token': refresh,
+      });
     } catch (_) {
       // best-effort; clear local session regardless
     }

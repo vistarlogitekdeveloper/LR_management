@@ -61,6 +61,7 @@ class AppUser {
   });
 
   bool get isSuperAdmin => role == UserRole.superAdmin;
+  bool get isOperator => role == UserRole.operator;
 
   /// True if the user holds [permission] in their effective set (role defaults
   /// ± per-user overrides, as computed by the backend). Strict membership —
@@ -81,6 +82,10 @@ class AppUser {
   /// Operators handle dispatch, not billing — the customer rate (a margin
   /// figure) is hidden from them. Admins, super admins and accounts still see it.
   bool get canViewCustomerRate => role != UserRole.operator;
+
+  /// Operators must not see any monetary/amount figures (freight, margin,
+  /// advances, balances) in reports. Everyone else may.
+  bool get canViewAmounts => role != UserRole.operator;
 
   /// The Accounts & Billing screen and the MIS export expose financial / margin
   /// data, so they're limited to the accounts desk and super admins — regional

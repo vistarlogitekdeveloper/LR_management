@@ -51,6 +51,9 @@ dependencies:
   flutter_map: ^7.0.2
   latlong2: ^0.9.1
 
+  # Client-side .xlsx generation for the Reports "Download Excel" export.
+  excel: ^4.0.6
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
