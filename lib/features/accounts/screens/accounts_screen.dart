@@ -65,7 +65,7 @@ class AccountsScreen extends ConsumerWidget {
 
     final sorted = [...lrs]..sort((a, b) => b.date.compareTo(a.date));
     // Region options (region_id -> short code embedded in the LR number) for
-    // the region filter. Shown only when there are 2+ regions to choose from.
+    // the region filter. Shown whenever at least one region is present.
     final regionCodes = <String, String>{};
     for (final lr in sorted) {
       final rid = lr.regionId;
@@ -77,7 +77,7 @@ class AccountsScreen extends ConsumerWidget {
     }
     final regionIds = regionCodes.keys.toList()
       ..sort((a, b) => regionCodes[a]!.compareTo(regionCodes[b]!));
-    final hasRegions = regionIds.length >= 2;
+    final hasRegions = regionIds.isNotEmpty;
     // Accounts pays the transporter, so payment state is tracked against the
     // transporter freight (90% advance / 10% against POD), not the customer
     // total. `balance` here means the transporter freight still unpaid.

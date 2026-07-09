@@ -195,9 +195,8 @@ class _FilterBar extends ConsumerWidget {
 
         // Region options derived from the loaded LRs: region_id -> short code
         // embedded in the LR number ({prefix}/{REGION}/{FY}/{seq}). Same source
-        // as the MIS region filter — no backend field needed. Shown only when
-        // there is an actual choice (2+ regions), so single-region users (e.g.
-        // a regional admin) see no extra, useless filter.
+        // as the MIS region filter — no backend field needed. Shown whenever
+        // at least one region is present in the loaded LRs.
         final regionCodes = <String, String>{};
         for (final lr in ref.watch(lrListProvider)) {
           final rid = lr.regionId;
@@ -210,7 +209,7 @@ class _FilterBar extends ConsumerWidget {
         }
         final regionIds = regionCodes.keys.toList()
           ..sort((a, b) => regionCodes[a]!.compareTo(regionCodes[b]!));
-        final hasRegions = regionIds.length >= 2;
+        final hasRegions = regionIds.isNotEmpty;
         final region = SearchableField<String>(
           value: filter.region,
           options: regionIds,
