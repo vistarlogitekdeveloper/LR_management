@@ -307,6 +307,7 @@ class LorryReceipt {
   final Transporter transporter;
   final String? driverId;
   final String? routeId;
+  final String? regionId;
   final String route;
   final String fromCity;
   final String toCity;
@@ -356,6 +357,7 @@ class LorryReceipt {
     required this.transporter,
     this.driverId,
     this.routeId,
+    this.regionId,
     required this.route,
     required this.fromCity,
     required this.toCity,
@@ -427,7 +429,9 @@ class LorryReceipt {
           DateTime.tryParse(json['lr_date']?.toString() ?? '') ??
           DateTime.now(),
       enteredBy: (json['entered_by'] as String?) ?? '',
-      enteredByName: (nested('enteredBy')?['name'] as String?) ?? '',
+      enteredByName: (nested('enteredBy')?['name'] as String?) ??
+          (json['entered_by_name'] as String?) ??
+          '',
       version: asInt(json['version']),
       customerName: (json['customer_name'] as String?) ?? '',
       orderNo: (json['order_no'] as String?) ?? '',
@@ -469,6 +473,7 @@ class LorryReceipt {
             ),
       driverId: json['driver_id'] as String? ?? driverJson?['id'] as String?,
       routeId: json['route_id'] as String?,
+      regionId: json['region_id'] as String?,
       route: (fromCity.isNotEmpty || toCity.isNotEmpty)
           ? '$fromCity → $toCity'
           : '',
@@ -544,6 +549,7 @@ class LorryReceipt {
       transporter: transporter,
       driverId: driverId,
       routeId: routeId,
+      regionId: regionId,
       route: route,
       fromCity: fromCity,
       toCity: toCity,

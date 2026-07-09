@@ -17,7 +17,9 @@ class RoutesScreen extends ConsumerWidget {
     final routes = ref.watch(routesProvider);
     final user = ref.watch(currentUserProvider);
     final canEdit = user?.canManageRoutes ?? false;
-    // Operators don't see the customer rate (margin); admins/super admins do.
+    // Per-field visibility perms (migration 072): the transporter (base) rate
+    // and the customer rate each hide independently when the perm is revoked.
+    final showTransporterRate = user?.canViewTransporterRate ?? false;
     final showCustomerRate = user?.canViewCustomerRate ?? false;
 
     Future<void> openForm({RouteMaster? existing}) =>
@@ -54,7 +56,7 @@ class RoutesScreen extends ConsumerWidget {
         'To',
         'Distance (km)',
         'Vehicle Type',
-        'Transporter Rate (₹)',
+        if (showTransporterRate) 'Transporter Rate (₹)',
         if (showCustomerRate) 'Customer Rate',
       ],
       rows: [
@@ -68,7 +70,7 @@ class RoutesScreen extends ConsumerWidget {
               (r.vehicleTypeLabel?.isNotEmpty ?? false)
                   ? r.vehicleTypeLabel!
                   : '—',
-              inr(r.baseRate),
+              if (showTransporterRate) inr(r.baseRate),
               if (showCustomerRate)
                 r.customerRate > 0 ? inr(r.customerRate) : '—',
             ],

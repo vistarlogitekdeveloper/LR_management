@@ -81,6 +81,8 @@ class LrListScreen extends ConsumerWidget {
     final filter = ref.watch(lrFilterProvider);
     final user = ref.watch(currentUserProvider);
     final canDelete = user?.canDeleteLr ?? false;
+    // Transporter-side amount (the Freight column) hides without the perm.
+    final canViewTransporterRate = user?.canViewTransporterRate ?? false;
     // The ops user who creates/manages LRs is the one who sends it to Accounts.
     final canSend = (user?.canCreateLr ?? false) ||
         (user?.canEditLr ?? false) ||
@@ -114,6 +116,7 @@ class LrListScreen extends ConsumerWidget {
                     const SizedBox(height: 14),
                     _LrTable(
                       lrs: lrs,
+                      canViewTransporterRate: canViewTransporterRate,
                       onDelete: canDelete
                           ? (lr) => _confirmDeleteLr(context, ref, lr)
                           : null,
@@ -190,6 +193,38 @@ class _FilterBar extends ConsumerWidget {
               ),
         );
 
+        // Region options derived from the loaded LRs: region_id -> short code
+        // embedded in the LR number ({prefix}/{REGION}/{FY}/{seq}). Same source
+        // as the MIS region filter — no backend field needed. Shown only when
+        // there is an actual choice (2+ regions), so single-region users (e.g.
+        // a regional admin) see no extra, useless filter.
+        final regionCodes = <String, String>{};
+        for (final lr in ref.watch(lrListProvider)) {
+          final rid = lr.regionId;
+          if (rid == null || rid.isEmpty) continue;
+          final parts = lr.number.split('/');
+          if (parts.length > 1 &&
+              RegExp(r'^[A-Za-z]{2,6}$').hasMatch(parts[1])) {
+            regionCodes[rid] = parts[1].toUpperCase();
+          }
+        }
+        final regionIds = regionCodes.keys.toList()
+          ..sort((a, b) => regionCodes[a]!.compareTo(regionCodes[b]!));
+        final hasRegions = regionIds.length >= 2;
+        final region = SearchableField<String>(
+          value: filter.region,
+          options: regionIds,
+          labelOf: (id) => regionCodes[id] ?? id,
+          hintText: 'All regions',
+          dialogTitle: 'Select region',
+          clearable: true,
+          onChanged: (v) => ref.read(lrFilterProvider.notifier).update(
+                (s) => v == null
+                    ? s.copyWith(clearRegion: true)
+                    : s.copyWith(region: v),
+              ),
+        );
+
         if (mobile) {
           // All three filters in a single row — no wasted blank space, no
           // horizontal scroll. Flexible widths share the available space.
@@ -201,6 +236,10 @@ class _FilterBar extends ConsumerWidget {
               Expanded(flex: 4, child: status),
               const SizedBox(width: 8),
               Expanded(flex: 4, child: route),
+              if (hasRegions) ...[
+                const SizedBox(width: 8),
+                Expanded(flex: 4, child: region),
+              ],
             ],
           );
         }
@@ -214,6 +253,7 @@ class _FilterBar extends ConsumerWidget {
             SizedBox(width: 280, child: search),
             SizedBox(width: 180, child: status),
             SizedBox(width: 220, child: route),
+            if (hasRegions) SizedBox(width: 180, child: region),
           ],
         );
       },
@@ -223,9 +263,15 @@ class _FilterBar extends ConsumerWidget {
 
 class _LrTable extends StatefulWidget {
   final List<LorryReceipt> lrs;
+  final bool canViewTransporterRate;
   final void Function(LorryReceipt lr)? onDelete;
   final void Function(LorryReceipt lr)? onSendForPayment;
-  const _LrTable({required this.lrs, this.onDelete, this.onSendForPayment});
+  const _LrTable({
+    required this.lrs,
+    required this.canViewTransporterRate,
+    this.onDelete,
+    this.onSendForPayment,
+  });
 
   @override
   State<_LrTable> createState() => _LrTableState();
@@ -263,6 +309,7 @@ class _LrTableState extends State<_LrTable> {
               for (final lr in lrs)
                 _LrMobileCard(
                   lr: lr,
+                  canViewTransporterRate: widget.canViewTransporterRate,
                   onDelete: widget.onDelete == null
                       ? null
                       : () => widget.onDelete!(lr),
@@ -287,17 +334,18 @@ class _LrTableState extends State<_LrTable> {
               columnSpacing: 24,
               dataRowMinHeight: 52,
               dataRowMaxHeight: 56,
-              columns: const [
-                DataColumn(label: Text('')),
-                DataColumn(label: Text('LR Number')),
-                DataColumn(label: Text('Date')),
-                DataColumn(label: Text('Consignor')),
-                DataColumn(label: Text('Consignee')),
-                DataColumn(label: Text('Vehicle')),
-                DataColumn(label: Text('Route')),
-                DataColumn(label: Text('Freight')),
-                DataColumn(label: Text('Status')),
-                DataColumn(label: Text('Pay')),
+              columns: [
+                const DataColumn(label: Text('')),
+                const DataColumn(label: Text('LR Number')),
+                const DataColumn(label: Text('Date')),
+                const DataColumn(label: Text('Consignor')),
+                const DataColumn(label: Text('Consignee')),
+                const DataColumn(label: Text('Vehicle')),
+                const DataColumn(label: Text('Route')),
+                if (widget.canViewTransporterRate)
+                  const DataColumn(label: Text('Freight')),
+                const DataColumn(label: Text('Status')),
+                const DataColumn(label: Text('Pay')),
               ],
               rows: [
                 for (final lr in lrs)
@@ -316,16 +364,18 @@ class _LrTableState extends State<_LrTable> {
                               ),
                               onPressed: () => context.go('/lrs/${lr.id}'),
                             ),
-                            IconButton(
-                              tooltip: 'Print',
-                              icon: const Icon(
-                                Icons.print_outlined,
-                                color: AppColors.plum,
-                                size: 18,
+                            // Print unlocks only after the LR is sent for payment.
+                            if (lr.sentForPayment)
+                              IconButton(
+                                tooltip: 'Print',
+                                icon: const Icon(
+                                  Icons.print_outlined,
+                                  color: AppColors.plum,
+                                  size: 18,
+                                ),
+                                onPressed: () =>
+                                    context.go('/lrs/${lr.id}/print'),
                               ),
-                              onPressed: () =>
-                                  context.go('/lrs/${lr.id}/print'),
-                            ),
                             if (widget.onSendForPayment != null &&
                                 !lr.sentForPayment)
                               IconButton(
@@ -337,7 +387,8 @@ class _LrTableState extends State<_LrTable> {
                                 ),
                                 onPressed: () => widget.onSendForPayment!(lr),
                               ),
-                            if (widget.onDelete != null)
+                            // Sent-for-payment LRs are locked from deletion.
+                            if (widget.onDelete != null && !lr.sentForPayment)
                               IconButton(
                                 tooltip: 'Delete',
                                 icon: const Icon(
@@ -371,7 +422,8 @@ class _LrTableState extends State<_LrTable> {
                       ),
                       DataCell(Text(lr.vehicle.number)),
                       DataCell(Text(lr.route)),
-                      DataCell(Text(inr(lr.freight.total))),
+                      if (widget.canViewTransporterRate)
+                        DataCell(Text(inr(lr.freight.total))),
                       DataCell(StatusPill(status: lr.status)),
                       DataCell(PayPill(pay: lr.payType)),
                     ],
@@ -387,10 +439,12 @@ class _LrTableState extends State<_LrTable> {
 
 class _LrMobileCard extends StatelessWidget {
   final LorryReceipt lr;
+  final bool canViewTransporterRate;
   final VoidCallback? onDelete;
   final VoidCallback? onSendForPayment;
   const _LrMobileCard({
     required this.lr,
+    required this.canViewTransporterRate,
     this.onDelete,
     this.onSendForPayment,
   });
@@ -441,16 +495,18 @@ class _LrMobileCard extends StatelessWidget {
                   ),
                   onPressed: () => context.go('/lrs/${lr.id}'),
                 ),
-                IconButton(
-                  tooltip: 'Print',
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(
-                    Icons.print_outlined,
-                    color: AppColors.plum,
-                    size: 18,
+                // Print unlocks only after the LR is sent for payment.
+                if (lr.sentForPayment)
+                  IconButton(
+                    tooltip: 'Print',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(
+                      Icons.print_outlined,
+                      color: AppColors.plum,
+                      size: 18,
+                    ),
+                    onPressed: () => context.go('/lrs/${lr.id}/print'),
                   ),
-                  onPressed: () => context.go('/lrs/${lr.id}/print'),
-                ),
                 if (onSendForPayment != null && !lr.sentForPayment)
                   IconButton(
                     tooltip: 'Send for Payment',
@@ -462,7 +518,8 @@ class _LrMobileCard extends StatelessWidget {
                     ),
                     onPressed: onSendForPayment,
                   ),
-                if (onDelete != null)
+                // Sent-for-payment LRs are locked from deletion.
+                if (onDelete != null && !lr.sentForPayment)
                   IconButton(
                     tooltip: 'Delete',
                     visualDensity: VisualDensity.compact,
@@ -507,7 +564,7 @@ class _LrMobileCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  inr(lr.freight.total),
+                  canViewTransporterRate ? inr(lr.freight.total) : '—',
                   style: TextStyle(
                     fontWeight: FontWeight.w800,
                     color: cleared ? AppColors.ok : AppColors.ink,

@@ -65,12 +65,19 @@ class ReportsRepository {
 
   /// Fetches the server-generated MIS workbook (`.xlsx`) as raw bytes. Optional
   /// `from`/`to` are `YYYY-MM-DD` LR-date bounds.
-  Future<List<int>> misXlsx({String? from, String? to}) async {
+  Future<List<int>> misXlsx({
+    String? from,
+    String? to,
+    String? regionId,
+    String? createdBy,
+  }) async {
     final res = await _api.dio.get(
       '/reports/mis.xlsx',
       queryParameters: {
         if (from != null && from.isNotEmpty) 'from': from,
         if (to != null && to.isNotEmpty) 'to': to,
+        if (regionId != null && regionId.isNotEmpty) 'region_id': regionId,
+        if (createdBy != null && createdBy.isNotEmpty) 'created_by': createdBy,
       },
       options: Options(responseType: ResponseType.bytes),
     );

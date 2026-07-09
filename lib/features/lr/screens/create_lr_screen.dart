@@ -24,6 +24,7 @@ import '../../../shared/widgets/labeled_field.dart';
 import '../../../shared/widgets/master_form_dialog.dart';
 import '../../../shared/widgets/searchable_field.dart';
 import '../../../shared/widgets/section_title.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../lookups/data/lookup_value.dart';
 import '../../lookups/providers/lookups_provider.dart';
 import '../../masters/providers/master_providers.dart';
@@ -412,6 +413,14 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       _toDouble(_insuranceCtrl);
 
   double get _balance => _total - _toDouble(_advanceCtrl);
+
+  // Visibility gates (migration 072): a user who cannot see transporter-side
+  // amounts / the Vistar margin gets those inputs and preview rows hidden. Read
+  // (not watched) — the signed-in user is stable for the life of this screen.
+  bool get _canViewTransporterRate =>
+      ref.read(currentUserProvider)?.canViewTransporterRate ?? false;
+  bool get _canViewVistarMargin =>
+      ref.read(currentUserProvider)?.canViewVistarMargin ?? false;
 
   /// Auto-calculated Vistar margin = route customer rate − freight.
   /// (Zero when the selected route has no customer rate set.)
@@ -1114,7 +1123,11 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     if (_capacity == null) {
       errors['capacity'] = 'Select a vehicle capacity.';
     }
-    if (_toDouble(_freightCtrl) <= 0) {
+    // Only require freight from users who can see the transporter-side amount.
+    // When the Freight input is hidden (no VIEW_TRANSPORTER_RATE) the backend
+    // strips the field on save, so demanding it here would make save impossible
+    // and scroll to a field that isn't rendered.
+    if (_canViewTransporterRate && _toDouble(_freightCtrl) <= 0) {
       errors['freight'] = 'Enter the freight amount.';
     }
     if (_payType == null) {
@@ -1184,6 +1197,16 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   }
 
   Future<void> _save() async {
+    // Guardrail: an LR that has been sent to Accounts for payment is locked and
+    // cannot be edited (the Edit button is hidden, but this also blocks a direct
+    // /edit deep-link). The backend is the ultimate enforcer.
+    if (_isEdit && (_editing?.sentForPayment ?? false)) {
+      MasterActions.showError(
+        context,
+        'This LR has been sent for payment and can no longer be edited.',
+      );
+      return;
+    }
     if (!_validateMandatory()) return;
 
     setState(() => _saving = true);
@@ -1416,6 +1439,9 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     final advancePaidByList = lookupList(lookups, 'ADVANCE_PAID_BY');
     final tripLeadByList = lookupList(lookups, 'TRIP_LEAD_BY');
     final ewbLoadList = lookupList(lookups, 'EWB_LOAD_TYPE');
+
+    final canViewTransporterRate = _canViewTransporterRate;
+    final canViewVistarMargin = _canViewVistarMargin;
 
     final previewNumber = _isEdit
         ? (_editing?.number ?? '')
@@ -1718,60 +1744,66 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                               title: 'Freight & Payment',
                             ),
                             _grid(3, [
-                              LabeledField(
-                                key: _freightFieldKey,
-                                label: 'Freight',
-                                required: true,
-                                errorText: _fieldErrors['freight'],
-                                child: TextFormField(
-                                  controller: _freightCtrl,
-                                  keyboardType: TextInputType.number,
-                                  onChanged: (_) => setState(() {
-                                    if (_toDouble(_freightCtrl) > 0) {
-                                      _fieldErrors.remove('freight');
-                                    }
-                                  }),
+                              if (canViewTransporterRate)
+                                LabeledField(
+                                  key: _freightFieldKey,
+                                  label: 'Freight',
+                                  required: true,
+                                  errorText: _fieldErrors['freight'],
+                                  child: TextFormField(
+                                    controller: _freightCtrl,
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (_) => setState(() {
+                                      if (_toDouble(_freightCtrl) > 0) {
+                                        _fieldErrors.remove('freight');
+                                      }
+                                    }),
+                                  ),
                                 ),
-                              ),
-                              LabeledField(
-                                label: 'Door Delivery',
-                                child: TextFormField(
-                                  controller: _doorCtrl,
-                                  keyboardType: TextInputType.number,
-                                  onChanged: (_) => setState(() {}),
+                              if (canViewTransporterRate)
+                                LabeledField(
+                                  label: 'Door Delivery',
+                                  child: TextFormField(
+                                    controller: _doorCtrl,
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (_) => setState(() {}),
+                                  ),
                                 ),
-                              ),
-                              LabeledField(
-                                label: 'Handling',
-                                child: TextFormField(
-                                  controller: _handlingCtrl,
-                                  keyboardType: TextInputType.number,
-                                  onChanged: (_) => setState(() {}),
+                              if (canViewTransporterRate)
+                                LabeledField(
+                                  label: 'Handling',
+                                  child: TextFormField(
+                                    controller: _handlingCtrl,
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (_) => setState(() {}),
+                                  ),
                                 ),
-                              ),
-                              LabeledField(
-                                label: 'Insurance',
-                                child: TextFormField(
-                                  controller: _insuranceCtrl,
-                                  keyboardType: TextInputType.number,
-                                  onChanged: (_) => setState(() {}),
+                              if (canViewTransporterRate)
+                                LabeledField(
+                                  label: 'Insurance',
+                                  child: TextFormField(
+                                    controller: _insuranceCtrl,
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (_) => setState(() {}),
+                                  ),
                                 ),
-                              ),
-                              LabeledField(
-                                label: 'Mathadi',
-                                child: TextFormField(
-                                  controller: _mathadiCtrl,
-                                  keyboardType: TextInputType.number,
+                              if (canViewTransporterRate)
+                                LabeledField(
+                                  label: 'Mathadi',
+                                  child: TextFormField(
+                                    controller: _mathadiCtrl,
+                                    keyboardType: TextInputType.number,
+                                  ),
                                 ),
-                              ),
-                              LabeledField(
-                                label: 'Advance',
-                                child: TextFormField(
-                                  controller: _advanceCtrl,
-                                  keyboardType: TextInputType.number,
-                                  onChanged: (_) => setState(() {}),
+                              if (canViewTransporterRate)
+                                LabeledField(
+                                  label: 'Advance',
+                                  child: TextFormField(
+                                    controller: _advanceCtrl,
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (_) => setState(() {}),
+                                  ),
                                 ),
-                              ),
                               LabeledField(
                                 label: 'Advance Paid By',
                                 child: _lookupDropdown(
@@ -1818,33 +1850,39 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 12),
-                            Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: AppColors.plum.withValues(alpha: 0.05),
-                                borderRadius: BorderRadius.circular(12),
+                            if (canViewTransporterRate ||
+                                canViewVistarMargin) ...[
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: AppColors.plum.withValues(alpha: 0.05),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Column(
+                                  children: [
+                                    if (canViewVistarMargin)
+                                      _summaryRow(
+                                        'Vistar Margin (auto)',
+                                        inr(_vistarMargin),
+                                      ),
+                                    if (canViewTransporterRate) ...[
+                                      _summaryRow(
+                                        'Total',
+                                        inr(_total),
+                                        emphasis: true,
+                                      ),
+                                      _summaryRow(
+                                        'Balance',
+                                        inr(_balance),
+                                        emphasis: true,
+                                        color: AppColors.red,
+                                      ),
+                                    ],
+                                  ],
+                                ),
                               ),
-                              child: Column(
-                                children: [
-                                  _summaryRow(
-                                    'Vistar Margin (auto)',
-                                    inr(_vistarMargin),
-                                  ),
-                                  _summaryRow(
-                                    'Total',
-                                    inr(_total),
-                                    emphasis: true,
-                                  ),
-                                  _summaryRow(
-                                    'Balance',
-                                    inr(_balance),
-                                    emphasis: true,
-                                    color: AppColors.red,
-                                  ),
-                                ],
-                              ),
-                            ),
+                            ],
                           ],
                         ),
                       ),

@@ -9,22 +9,27 @@ import '../../../shared/models/lr_models.dart';
 class ExportService {
   ExportService._();
 
-  /// Exports the LR list as a real Excel workbook (.xlsx). When [includeAmounts]
-  /// is false (operator role) every monetary column is omitted so no figures
-  /// leak into the file.
+  /// Exports the LR list as a real Excel workbook (.xlsx). The transporter-side
+  /// columns (freight … balance) are emitted only when [canViewTransporterRate]
+  /// is true, and the Vistar Margin column only when [canViewVistarMargin] is
+  /// true (migration 072 visibility perms). Callers pass the current user's
+  /// flags; both default true so unrestricted callers are unaffected. Header
+  /// and row cells share the same guards so columns stay aligned.
   static Future<void> exportLrsExcel(
     List<LorryReceipt> lrs, {
-    bool includeAmounts = true,
+    bool canViewTransporterRate = true,
+    bool canViewVistarMargin = true,
   }) async {
     final excel = Excel.createExcel();
     final sheet = excel[excel.getDefaultSheet() ?? 'Sheet1'];
 
     final headers = <String>[
       'LR No', 'Date', 'Consignor', 'Consignee', 'Vehicle', 'Route',
-      if (includeAmounts) ...[
+      if (canViewTransporterRate) ...[
         'Freight', 'Door Delivery', 'Handling', 'Insurance', 'Mathadi',
-        'Advance', 'Total', 'Balance', 'Vistar Margin',
+        'Advance', 'Total', 'Balance',
       ],
+      if (canViewVistarMargin) 'Vistar Margin',
       'Pay Type', 'Status', 'EWB',
     ];
     sheet.appendRow(
@@ -39,7 +44,7 @@ class ExportService {
         TextCellValue(lr.consignee.name),
         TextCellValue(lr.vehicle.number),
         TextCellValue(lr.route),
-        if (includeAmounts) ...[
+        if (canViewTransporterRate) ...[
           DoubleCellValue(lr.freight.freight),
           DoubleCellValue(lr.freight.doorDelivery),
           DoubleCellValue(lr.freight.handling),
@@ -48,8 +53,8 @@ class ExportService {
           DoubleCellValue(lr.freight.advance),
           DoubleCellValue(lr.freight.total),
           DoubleCellValue(lr.freight.balance),
-          DoubleCellValue(lr.freight.vistarMargin),
         ],
+        if (canViewVistarMargin) DoubleCellValue(lr.freight.vistarMargin),
         TextCellValue(lr.payType.label),
         TextCellValue(lr.status.label),
         TextCellValue(lr.ewb?.number ?? ''),

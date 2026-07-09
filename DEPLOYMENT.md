@@ -52,7 +52,7 @@ Every `git push origin main` triggers:
 
 1. Flutter setup (cached)
 2. `flutter pub get` · `flutter analyze` · `flutter test`
-3. `flutter build web --release`
+3. `flutter build web --release` (emits a self-unregistering cleanup service worker)
 4. Upload `build/web` to Cloudflare Pages
 
 You'll get a deployment URL like `https://lr-management.pages.dev` plus a per-commit preview URL.
@@ -64,8 +64,9 @@ You'll get a deployment URL like `https://lr-management.pages.dev` plus a per-co
 For ad-hoc deploys from your laptop:
 
 ```bash
-# Build locally
-flutter build web --release
+# Build locally. The build emits a self-unregistering cleanup service worker
+# that removes any caching worker an older build installed (see "Stale UI" below).
+flutter build web --release --base-href "/"
 
 # Install Wrangler if you haven't
 npm install -g wrangler
@@ -91,7 +92,8 @@ In the Pages project settings → **Custom domains** → add `lr.vistarlogitek.c
 
 - **Path URL strategy** ([lib/main.dart](lib/main.dart)) — clean URLs (`/lrs/new` not `/#/lrs/new`)
 - **SPA fallback** ([web/_redirects](web/_redirects)) — any unknown path serves `index.html` so go_router can handle it
-- **Cache headers** ([web/_headers](web/_headers)) — long-cache for hashed assets, no-cache for `index.html` and the service worker so updates roll out immediately
+- **Cache headers** ([web/_headers](web/_headers)) — long-cache for hashed assets, no-cache for `index.html`, the entry JS, and the service worker so updates roll out immediately
+- **No caching service worker** — current Flutter no longer keeps a cache-first service worker; `flutter build web` emits a self-unregistering *cleanup* `flutter_service_worker.js` instead (do not overwrite it — `flutter.js` version-coordinates with it). A browser re-fetches `/flutter_service_worker.js` on its own (the service-worker update check, independent of the page), so a browser still carrying a caching worker from an **older** build fetches this cleanup worker, unregisters the old one, and reloads — every user picks up the new build without clearing their cache. This, together with the `no-cache` header on that file, is what fixes "some users stuck on the old build after deploy."
 
 ---
 
@@ -99,5 +101,5 @@ In the Pages project settings → **Custom domains** → add `lr.vistarlogitek.c
 
 - **`wrangler: command not found`** — install Node 18+ and run `npm install -g wrangler`
 - **404 on deep links** — confirm `web/_redirects` was included in the build (it should auto-copy to `build/web/_redirects`)
-- **Stale UI after deploy** — the `_headers` rule for `index.html` should fix this; if not, hard-reload (Ctrl+Shift+R)
+- **Stale UI after deploy** — should no longer happen: `flutter build web` emits a self-unregistering cleanup service worker that removes any caching worker older builds installed, so returning users pick up the new build automatically (at most one extra reload, no manual cache clear). The critical requirement is that [web/_headers](web/_headers) serves `/flutter_service_worker.js` with `no-cache` (it does) so the browser always re-checks it. If a specific browser is *still* stuck, it hasn't re-fetched the worker yet — one hard-reload (Ctrl+Shift+R) forces it; after that it self-heals. Do **not** add a caching service worker (an older Flutter's `--pwa-strategy=offline-first`, or a hand-rolled Workbox cache) or this returns.
 - **Workflow fails on `flutter test`** — run `flutter test` locally first; the workflow blocks deploy on test failure

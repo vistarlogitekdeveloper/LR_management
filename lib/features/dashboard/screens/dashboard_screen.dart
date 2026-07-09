@@ -27,8 +27,11 @@ class DashboardScreen extends ConsumerWidget {
 
     final flow = user == null ? null : RoleFlows.flows[user.role];
     final canCreate = user?.canCreateLr ?? false;
-    // Vistar margin is an internal profit figure — hide it from operators.
-    final showMargin = user?.role != UserRole.operator;
+    // Vistar margin (VIEW_VISTAR_MARGIN) and transporter-side amounts
+    // (VIEW_TRANSPORTER_RATE) are permission-driven (migration 072): every role
+    // holds them by default, so they show unless a super admin revokes the perm.
+    final showMargin = user?.canViewVistarMargin ?? false;
+    final canViewTransporterRate = user?.canViewTransporterRate ?? false;
 
     final today = lrs.take(6).toList();
     final pendingFreightLocal = lrs
@@ -123,22 +126,28 @@ class DashboardScreen extends ConsumerWidget {
                           sub: 'On the road',
                           compact: true,
                         ),
-                        _StatTile(
-                          icon: Icons.account_balance_wallet_outlined,
-                          tint: AppColors.red,
-                          label: 'Pending Freight',
-                          value: inr(pendingFreight),
-                          sub: 'across open LRs',
-                          compact: true,
-                        ),
+                        if (canViewTransporterRate)
+                          _StatTile(
+                            icon: Icons.account_balance_wallet_outlined,
+                            tint: AppColors.red,
+                            label: 'Pending Freight',
+                            value: inr(pendingFreight),
+                            sub: 'across open LRs',
+                            compact: true,
+                          ),
                       ];
+                      // Distribute the tiles that actually render across the
+                      // row — a gated-out tile shouldn't leave a blank slot.
+                      final effCols = stats.length < cols ? stats.length : cols;
                       return Wrap(
                         spacing: spacing,
                         runSpacing: spacing,
                         children: [
                           for (final s in stats)
                             SizedBox(
-                              width: (c.maxWidth - spacing * (cols - 1)) / cols,
+                              width:
+                                  (c.maxWidth - spacing * (effCols - 1)) /
+                                  effCols,
                               child: s,
                             ),
                         ],
@@ -161,28 +170,43 @@ class DashboardScreen extends ConsumerWidget {
                                 child: const Text('View all'),
                               ),
                             ),
-                            for (final lr in today) _RecentLrRow(lr: lr),
+                            for (final lr in today)
+                              _RecentLrRow(
+                                lr: lr,
+                                canViewTransporterRate: canViewTransporterRate,
+                              ),
                           ],
                         ),
                       );
+                      // Right column (Top Customers + Vistar margin) only exists
+                      // if the viewer can see at least one of them; otherwise the
+                      // Recent LRs card takes the full width instead of pairing
+                      // with an empty Expanded.
+                      final hasSide = canViewTransporterRate || showMargin;
+                      if (!hasSide) return left;
                       final right = Column(
                         children: [
                           AppCard(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const SectionTitle(
-                                  icon: Icons.trending_up_rounded,
-                                  title: 'Top Customers',
-                                ),
-                                for (final entry in topFour)
-                                  _TopCustomerRow(
-                                    name: entry.key,
-                                    value: entry.value,
-                                    max: maxCust,
+                                // Top Customers ranks per-customer freight
+                                // totals (transporter-side amount).
+                                if (canViewTransporterRate) ...[
+                                  const SectionTitle(
+                                    icon: Icons.trending_up_rounded,
+                                    title: 'Top Customers',
                                   ),
+                                  for (final entry in topFour)
+                                    _TopCustomerRow(
+                                      name: entry.key,
+                                      value: entry.value,
+                                      max: maxCust,
+                                    ),
+                                ],
                                 if (showMargin) ...[
-                                  const SizedBox(height: 16),
+                                  if (canViewTransporterRate)
+                                    const SizedBox(height: 16),
                                   _MarginCard(
                                     margin: marginMtd,
                                     consignments: lrs.length,
@@ -558,7 +582,8 @@ class _StatTile extends StatelessWidget {
 
 class _RecentLrRow extends StatelessWidget {
   final LorryReceipt lr;
-  const _RecentLrRow({required this.lr});
+  final bool canViewTransporterRate;
+  const _RecentLrRow({required this.lr, this.canViewTransporterRate = false});
 
   @override
   Widget build(BuildContext context) {
@@ -633,7 +658,9 @@ class _RecentLrRow extends StatelessWidget {
                 StatusPill(status: lr.status),
                 const SizedBox(height: 6),
                 Text(
-                  cleared ? 'Cleared' : inr(lr.freight.balance),
+                  !canViewTransporterRate
+                      ? '—'
+                      : (cleared ? 'Cleared' : inr(lr.freight.balance)),
                   maxLines: 1,
                   style: TextStyle(
                     fontWeight: FontWeight.w800,

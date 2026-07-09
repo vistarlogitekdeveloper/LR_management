@@ -186,10 +186,20 @@ class UsersAdminScreen extends ConsumerWidget {
 
   bool _canManagePermissions(AppUser? current, AppUser row) {
     if (current == null) return false;
+    // Only admins / super admins manage per-user access (defense in depth; the
+    // /admin route already gates this).
+    if (!current.canAdmin) return false;
+    // Never your own account — the backend rejects with SELF_LOCKOUT.
     if (current.id == row.id) return false;
-    // Per-user toggles target operators / accounts (the role defaults the
-    // toggle set is built around). Super admins and region admins may both
-    // manage them; the backend enforces region scope.
+    // Super-admin permissions are role-managed — the backend rejects with
+    // SUPERADMIN_LOCKED, so never offer the entry point.
+    if (row.role == UserRole.superAdmin) return false;
+    // Only a super admin may restrict an ADMIN. Operators / accounts can be
+    // managed by a super admin OR a regional admin (the backend enforces the
+    // region scope and returns 403 on a cross-region edit).
+    if (row.role == UserRole.admin) {
+      return current.role == UserRole.superAdmin;
+    }
     return row.role == UserRole.operator || row.role == UserRole.accounts;
   }
 

@@ -31,12 +31,20 @@ class LrCopyView extends StatelessWidget {
   final LorryReceipt lr;
   final String copyName;
   final LrCopyFormat format;
+  // Visibility perms (migration 072): drop the transporter-side amount rows /
+  // the Vistar-margin row when the viewing user lacks the perm. Default true so
+  // callers that render fixed sample data (e.g. the print-format preview) are
+  // unaffected; real callers pass the current user's flags.
+  final bool canViewTransporterRate;
+  final bool canViewVistarMargin;
 
   const LrCopyView({
     super.key,
     required this.lr,
     required this.copyName,
     required this.format,
+    this.canViewTransporterRate = true,
+    this.canViewVistarMargin = true,
   });
 
   bool get _isInternalCopy =>
@@ -309,19 +317,23 @@ class LrCopyView extends StatelessWidget {
               padding: const EdgeInsets.all(8),
               child: Column(
                 children: [
-                  _moneyRow('Freight', lr.freight.freight),
-                  _moneyRow('Door Delivery', lr.freight.doorDelivery),
-                  _moneyRow('Handling', lr.freight.handling),
-                  if (format.showInsurance)
-                    _moneyRow('Insurance', lr.freight.insurance),
-                  if (format.showMathadi)
-                    _moneyRow('Mathadi', lr.freight.mathadi),
-                  const Divider(),
-                  _moneyRow('Total', lr.freight.total, bold: true),
-                  _moneyRow('Advance', lr.freight.advance),
-                  _moneyRow('Balance', lr.freight.balance,
-                      bold: true, color: AppColors.red),
-                  if (format.showVistarMargin && _isInternalCopy) ...[
+                  if (canViewTransporterRate) ...[
+                    _moneyRow('Freight', lr.freight.freight),
+                    _moneyRow('Door Delivery', lr.freight.doorDelivery),
+                    _moneyRow('Handling', lr.freight.handling),
+                    if (format.showInsurance)
+                      _moneyRow('Insurance', lr.freight.insurance),
+                    if (format.showMathadi)
+                      _moneyRow('Mathadi', lr.freight.mathadi),
+                    const Divider(),
+                    _moneyRow('Total', lr.freight.total, bold: true),
+                    _moneyRow('Advance', lr.freight.advance),
+                    _moneyRow('Balance', lr.freight.balance,
+                        bold: true, color: AppColors.red),
+                  ],
+                  if (canViewVistarMargin &&
+                      format.showVistarMargin &&
+                      _isInternalCopy) ...[
                     const Divider(),
                     _moneyRow(
                       'Vistar Margin',

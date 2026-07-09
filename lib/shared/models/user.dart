@@ -79,12 +79,26 @@ class AppUser {
   bool get canDeleteLr => can('LR_DELETE') || _lrAdminAccess;
   bool get canViewReports => can('REPORTS_VIEW');
 
-  /// Operators handle dispatch, not billing — the customer rate (a margin
-  /// figure) is hidden from them. Admins, super admins and accounts still see it.
-  bool get canViewCustomerRate => role != UserRole.operator;
+  // ---- Visibility of sensitive money fields (migration 072) ----
+  // Three server-side visibility perms gate WHICH money fields a user may see
+  // on LRs and Routes. The backend redacts (null) the matching fields in every
+  // response (list, detail, print, MIS, reports, route master) and strips them
+  // from writes; these getters mirror that so the UI hides the same cells /
+  // inputs / columns. An ADMIN_ACCESS / SUPERADMIN_ACCESS user keeps full
+  // visibility by default (mirrors canEditLr / canDeleteLr); a super admin
+  // revokes ADMIN_ACCESS + the visibility perm to restrict a specific admin.
+  bool get canViewVistarMargin => can('VIEW_VISTAR_MARGIN') || _lrAdminAccess;
+  bool get canViewTransporterRate =>
+      can('VIEW_TRANSPORTER_RATE') || _lrAdminAccess;
+
+  /// Customer-side rate (route customer rate + LR billing no/date). Formerly a
+  /// role gate (operators hidden); now backed by the VIEW_CUSTOMER_RATE perm,
+  /// which migration 072 grants to every role by default.
+  bool get canViewCustomerRate => can('VIEW_CUSTOMER_RATE') || _lrAdminAccess;
 
   /// Operators must not see any monetary/amount figures (freight, margin,
-  /// advances, balances) in reports. Everyone else may.
+  /// advances, balances) in reports. Everyone else may. This is an independent
+  /// coarse gate that layers ON TOP OF the per-field visibility perms above.
   bool get canViewAmounts => role != UserRole.operator;
 
   /// The Accounts & Billing screen and the MIS export expose financial / margin

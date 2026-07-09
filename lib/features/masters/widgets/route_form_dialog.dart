@@ -7,6 +7,7 @@ import '../../../shared/models/route_master.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/labeled_field.dart';
 import '../../../shared/widgets/searchable_field.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../lookups/data/lookup_value.dart';
 import '../../lookups/providers/lookups_provider.dart';
 import '../../maps/widgets/location_picker_field.dart';
@@ -150,6 +151,12 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
   Widget build(BuildContext context) {
     final vehicleTypes =
         lookupList(ref.watch(lookupsMapProvider), 'VEHICLE_TYPE');
+    // Visibility perms (migration 072): hide the rate inputs the user may not
+    // see. Controllers stay initialised — only the fields are dropped — and the
+    // backend strips any redacted value on save.
+    final user = ref.watch(currentUserProvider);
+    final canViewTransporterRate = user?.canViewTransporterRate ?? false;
+    final canViewCustomerRate = user?.canViewCustomerRate ?? false;
     // Resolve the selected option from the loaded lookups by id; fall back to a
     // synthetic value (from the edited route) while lookups are still loading.
     LookupValue? selectedVt =
@@ -239,24 +246,26 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
                           number: true,
                         ),
                       ),
-                      SizedBox(
-                        width: half,
-                        child: _text(
-                          _baseRate,
-                          'Transporter Rate (₹)',
-                          required: true,
-                          number: true,
+                      if (canViewTransporterRate)
+                        SizedBox(
+                          width: half,
+                          child: _text(
+                            _baseRate,
+                            'Transporter Rate (₹)',
+                            required: true,
+                            number: true,
+                          ),
                         ),
-                      ),
-                      SizedBox(
-                        width: half,
-                        child: _text(
-                          _customerRate,
-                          'Customer Rate (₹)',
-                          number: true,
-                          hint: 'Used for Vistar margin',
+                      if (canViewCustomerRate)
+                        SizedBox(
+                          width: half,
+                          child: _text(
+                            _customerRate,
+                            'Customer Rate (₹)',
+                            number: true,
+                            hint: 'Used for Vistar margin',
+                          ),
                         ),
-                      ),
                       SizedBox(
                         width: half,
                         child: LabeledField(

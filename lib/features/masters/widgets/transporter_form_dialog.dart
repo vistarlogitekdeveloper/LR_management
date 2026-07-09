@@ -51,10 +51,9 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
   PlatformFile? _pickedTds;
   bool _saving = false;
 
-  // Inline "Required" messages for the two uploads — they aren't form fields,
-  // so they can't be covered by _formKey.validate().
+  // Inline "Required" message for the mandatory cheque upload — it isn't a form
+  // field, so it can't be covered by _formKey.validate().
   String? _chequeError;
-  String? _tdsError;
 
   Transporter? get _existing => widget.existing;
 
@@ -120,7 +119,6 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
     if (picked == null || picked.files.isEmpty) return;
     setState(() {
       _pickedTds = picked.files.first;
-      _tdsError = null;
     });
   }
 
@@ -141,20 +139,16 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
 
   Future<void> _save() async {
     final formValid = _formKey.currentState!.validate();
-    // Uploads are mandatory too — unless a document is already on file (edit).
+    // Blank cheque / passbook is mandatory; the TDS attachment is optional.
     final chequeMissing = _picked == null && !(_existing?.hasDocument ?? false);
-    final tdsMissing =
-        _pickedTds == null && !(_existing?.hasTdsDocument ?? false);
-    if (!formValid || chequeMissing || tdsMissing) {
+    if (!formValid || chequeMissing) {
       setState(() {
         _chequeError = chequeMissing ? 'Required' : null;
-        _tdsError = tdsMissing ? 'Required' : null;
       });
       return;
     }
     setState(() {
       _chequeError = null;
-      _tdsError = null;
       _saving = true;
     });
     final messenger = ScaffoldMessenger.of(context);
@@ -427,8 +421,6 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
     final hasExisting = _existing?.hasTdsDocument ?? false;
     return LabeledField(
       label: 'TDS Attachment',
-      required: true,
-      errorText: _tdsError,
       child: Row(
         children: [
           AppButton(

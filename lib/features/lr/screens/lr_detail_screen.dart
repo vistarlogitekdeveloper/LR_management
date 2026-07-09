@@ -32,6 +32,10 @@ class LrDetailScreen extends ConsumerWidget {
     final canSend = (user?.canCreateLr ?? false) ||
         (user?.canEditLr ?? false) ||
         (user?.canAdmin ?? false);
+    // Visibility perms (migration 072): redact the freight/amount rows and the
+    // Vistar-margin box for users who lack the corresponding perm.
+    final canViewTransporterRate = user?.canViewTransporterRate ?? false;
+    final canViewVistarMargin = user?.canViewVistarMargin ?? false;
 
     return asyncLr.when(
       loading: () => const Scaffold(
@@ -83,7 +87,16 @@ class LrDetailScreen extends ConsumerWidget {
         if ((user?.isOperator ?? false) && lr.enteredBy != user!.id) {
           return _accessDenied(context);
         }
-        return _buildLoaded(context, ref, lr, canEdit, canDelete, canSend);
+        return _buildLoaded(
+          context,
+          ref,
+          lr,
+          canEdit,
+          canDelete,
+          canSend,
+          canViewTransporterRate,
+          canViewVistarMargin,
+        );
       },
     );
   }
@@ -128,6 +141,8 @@ class LrDetailScreen extends ConsumerWidget {
     bool canEdit,
     bool canDelete,
     bool canSend,
+    bool canViewTransporterRate,
+    bool canViewVistarMargin,
   ) {
     return Scaffold(
       backgroundColor: AppColors.mist,
@@ -150,14 +165,17 @@ class LrDetailScreen extends ConsumerWidget {
                   icon: Icons.flag_outlined,
                   onPressed: () => _changeStatus(context, ref, lr),
                 ),
-              if (canEdit)
+              // Once an LR is sent to Accounts for payment it is locked — no
+              // more edits or deletes (status changes are still allowed so the
+              // LR can be progressed/delivered).
+              if (canEdit && !lr.sentForPayment)
                 AppButton(
                   label: 'Edit',
                   kind: BtnKind.soft,
                   icon: Icons.edit_outlined,
                   onPressed: () => context.go('/lrs/${lr.id}/edit'),
                 ),
-              if (canDelete)
+              if (canDelete && !lr.sentForPayment)
                 AppButton(
                   label: 'Delete',
                   kind: BtnKind.danger,
@@ -170,12 +188,15 @@ class LrDetailScreen extends ConsumerWidget {
                   icon: Icons.forward_to_inbox_outlined,
                   onPressed: () => _sendForPayment(context, ref, lr),
                 ),
-              AppButton(
-                label: 'Print',
-                kind: BtnKind.soft,
-                icon: Icons.print_outlined,
-                onPressed: () => context.go('/lrs/${lr.id}/print'),
-              ),
+              // Print unlocks only once the LR has been sent to Accounts (which
+              // triggers the accounts email) — not before.
+              if (lr.sentForPayment)
+                AppButton(
+                  label: 'Print',
+                  kind: BtnKind.soft,
+                  icon: Icons.print_outlined,
+                  onPressed: () => context.go('/lrs/${lr.id}/print'),
+                ),
             ],
           ),
           Expanded(
@@ -184,7 +205,12 @@ class LrDetailScreen extends ConsumerWidget {
                 final wide = c.maxWidth >= 1000;
                 final mobile = c.maxWidth < 600;
                 final left = _LeftColumn(lr: lr, mobile: mobile);
-                final right = _RightColumn(lr: lr, mobile: mobile);
+                final right = _RightColumn(
+                  lr: lr,
+                  mobile: mobile,
+                  canViewTransporterRate: canViewTransporterRate,
+                  canViewVistarMargin: canViewVistarMargin,
+                );
                 return SingleChildScrollView(
                   padding: EdgeInsets.all(mobile ? 14 : 28),
                   child: wide
@@ -466,7 +492,14 @@ class _LeftColumn extends StatelessWidget {
 class _RightColumn extends StatelessWidget {
   final LorryReceipt lr;
   final bool mobile;
-  const _RightColumn({required this.lr, this.mobile = false});
+  final bool canViewTransporterRate;
+  final bool canViewVistarMargin;
+  const _RightColumn({
+    required this.lr,
+    this.mobile = false,
+    this.canViewTransporterRate = false,
+    this.canViewVistarMargin = false,
+  });
 
   /// Shows whether this LR has been sent to Accounts for payment.
   Widget _paymentSentChip() {
@@ -554,25 +587,44 @@ class _RightColumn extends StatelessWidget {
                 title: 'Freight',
                 mobile: mobile,
               ),
-              _FreightRow(label: 'Freight', value: lr.freight.freight),
+              _FreightRow(
+                label: 'Freight',
+                value: lr.freight.freight,
+                hidden: !canViewTransporterRate,
+              ),
               _FreightRow(
                 label: 'Door Delivery',
                 value: lr.freight.doorDelivery,
+                hidden: !canViewTransporterRate,
               ),
-              _FreightRow(label: 'Handling', value: lr.freight.handling),
-              _FreightRow(label: 'Insurance', value: lr.freight.insurance),
+              _FreightRow(
+                label: 'Handling',
+                value: lr.freight.handling,
+                hidden: !canViewTransporterRate,
+              ),
+              _FreightRow(
+                label: 'Insurance',
+                value: lr.freight.insurance,
+                hidden: !canViewTransporterRate,
+              ),
               const Divider(),
               _FreightRow(
                 label: 'Total',
                 value: lr.freight.total,
                 emphasis: true,
+                hidden: !canViewTransporterRate,
               ),
-              _FreightRow(label: 'Advance', value: lr.freight.advance),
+              _FreightRow(
+                label: 'Advance',
+                value: lr.freight.advance,
+                hidden: !canViewTransporterRate,
+              ),
               _FreightRow(
                 label: 'Balance',
                 value: lr.freight.balance,
                 emphasis: true,
                 color: AppColors.red,
+                hidden: !canViewTransporterRate,
               ),
               const SizedBox(height: 12),
               Container(
@@ -603,7 +655,9 @@ class _RightColumn extends StatelessWidget {
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.centerRight,
                         child: Text(
-                          inr(lr.freight.vistarMargin),
+                          canViewVistarMargin
+                              ? inr(lr.freight.vistarMargin)
+                              : '—',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w800,
@@ -618,7 +672,8 @@ class _RightColumn extends StatelessWidget {
               const SizedBox(height: 10),
               _KeyValueGrid(
                 items: [
-                  ('Mathadi', inr(lr.freight.mathadi)),
+                  if (canViewTransporterRate)
+                    ('Mathadi', inr(lr.freight.mathadi)),
                   if (lr.freight.advancePaidBy.isNotEmpty)
                     ('Advance Paid By', lr.freight.advancePaidBy),
                   if (lr.freight.tripLeadBy.isNotEmpty)
@@ -812,12 +867,15 @@ class _FreightRow extends StatelessWidget {
   final double value;
   final bool emphasis;
   final Color? color;
+  // When true the amount is redacted to an em-dash (no VIEW_TRANSPORTER_RATE).
+  final bool hidden;
 
   const _FreightRow({
     required this.label,
     required this.value,
     this.emphasis = false,
     this.color,
+    this.hidden = false,
   });
 
   @override
@@ -837,7 +895,7 @@ class _FreightRow extends StatelessWidget {
             ),
           ),
           Text(
-            inr(value),
+            hidden ? '—' : inr(value),
             style: TextStyle(
               color: color ?? AppColors.ink,
               fontWeight: emphasis ? FontWeight.w800 : FontWeight.w700,

@@ -39,6 +39,12 @@ jobs:
         run: flutter test
 
       - name: Build web (release)
+        # Current Flutter no longer keeps a caching service worker: the build
+        # emits a self-unregistering CLEANUP flutter_service_worker.js that
+        # removes any worker an older build installed and reloads the tab. Paired
+        # with the no-cache headers on that file (web/_headers), every deploy
+        # reaches every user — no manual cache clearing. Do NOT overwrite the
+        # generated worker; flutter.js coordinates its version with it.
         run: flutter build web --release --base-href "/"
 
       - name: Publish to Cloudflare Pages

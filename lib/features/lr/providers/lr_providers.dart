@@ -11,19 +11,23 @@ class LrFilter {
   final String query;
   final LrStatus? status;
   final String? route;
+  final String? region; // region_id; null = all regions
 
-  const LrFilter({this.query = '', this.status, this.route});
+  const LrFilter({this.query = '', this.status, this.route, this.region});
 
   LrFilter copyWith(
       {String? query,
       LrStatus? status,
       String? route,
+      String? region,
       bool clearStatus = false,
-      bool clearRoute = false}) {
+      bool clearRoute = false,
+      bool clearRegion = false}) {
     return LrFilter(
       query: query ?? this.query,
       status: clearStatus ? null : (status ?? this.status),
       route: clearRoute ? null : (route ?? this.route),
+      region: clearRegion ? null : (region ?? this.region),
     );
   }
 }
@@ -145,6 +149,7 @@ final filteredLrsProvider = Provider<List<LorryReceipt>>((ref) {
   return list.where((lr) {
     if (filter.status != null && lr.status != filter.status) return false;
     if (filter.route != null && lr.route != filter.route) return false;
+    if (filter.region != null && lr.regionId != filter.region) return false;
     if (filter.query.isNotEmpty) {
       final q = filter.query.toLowerCase();
       final hay = [

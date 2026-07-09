@@ -6,12 +6,22 @@ import '../../../core/utils/formatters.dart';
 import '../../../shared/models/lr_models.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/searchable_field.dart';
 import '../../../shared/widgets/section_title.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../lr/providers/lr_providers.dart';
 import '../../shell/widgets/app_topbar.dart';
 import '../providers/reports_providers.dart';
 import '../services/export_service.dart';
+
+// Optional date-range for the MIS download. The backend applies ?from&to
+// (verified); region / user-wise filtering still needs backend support.
+final _misRangeProvider = StateProvider<DateTimeRange?>((ref) => null);
+// MIS region_id / created_by filters. Options are derived from the
+// accounts-visible LRs (the /admin regions & users endpoints are 403 for the
+// accounts role).
+final _misRegionProvider = StateProvider<String?>((ref) => null);
+final _misCreatorProvider = StateProvider<String?>((ref) => null);
 
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
@@ -23,14 +33,25 @@ class ReportsScreen extends ConsumerStatefulWidget {
 class _ReportsScreenState extends ConsumerState<ReportsScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tab;
-  // Operators see no monetary figures, so the all-financial "Accounts" tab is
-  // dropped for them (2 tabs instead of 3).
+  // The all-financial "Accounts" tab is dropped for users without amount access
+  // (operators) — 2 tabs instead of 3. This is the pre-existing coarse role gate
+  // (canViewAmounts); the per-field visibility perms below are separate.
   late final bool _canAmounts;
+  // Per-field visibility (migration 072) — purely permission-driven: migration
+  // grants these perms to every role, so an operator who holds them sees the
+  // amounts too, and a super admin revokes per user to hide. Independent of
+  // _canAmounts, which only decides whether the all-financial Accounts tab
+  // exists (that stays role-gated via canViewAmounts).
+  late final bool _showFreight; // transporter-side amounts (freight/total/…)
+  late final bool _showMargin; // Vistar margin
 
   @override
   void initState() {
     super.initState();
-    _canAmounts = ref.read(currentUserProvider)?.canViewAmounts ?? false;
+    final user = ref.read(currentUserProvider);
+    _canAmounts = user?.canViewAmounts ?? false;
+    _showFreight = user?.canViewTransporterRate ?? false;
+    _showMargin = user?.canViewVistarMargin ?? false;
     _tab = TabController(length: _canAmounts ? 3 : 2, vsync: this);
   }
 
@@ -60,7 +81,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
                   final messenger = ScaffoldMessenger.of(context);
                   await ExportService.exportLrsExcel(
                     lrs,
-                    includeAmounts: _canAmounts,
+                    canViewTransporterRate: _showFreight,
+                    canViewVistarMargin: _showMargin,
                   );
                   if (!context.mounted) return;
                   messenger.showSnackBar(
@@ -93,7 +115,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
               controller: _tab,
               children: [
                 _DailyTab(lrs: lrs),
-                _MonthlyTab(lrs: lrs, canAmounts: _canAmounts),
+                _MonthlyTab(lrs: lrs, showFreight: _showFreight),
                 if (_canAmounts) _AccountsTab(lrs: lrs),
               ],
             ),
@@ -166,8 +188,10 @@ class _DailyTab extends StatelessWidget {
 
 class _MonthlyTab extends StatelessWidget {
   final List<LorryReceipt> lrs;
-  final bool canAmounts;
-  const _MonthlyTab({required this.lrs, required this.canAmounts});
+  // Already AND-ed with canViewAmounts by the parent — true only when the user
+  // may see amounts AND holds VIEW_TRANSPORTER_RATE.
+  final bool showFreight;
+  const _MonthlyTab({required this.lrs, required this.showFreight});
 
   @override
   Widget build(BuildContext context) {
@@ -194,7 +218,7 @@ class _MonthlyTab extends StatelessWidget {
         children: [
           _StatRow(
             items: [
-              if (canAmounts) ('Total Freight', inr(totalFreight)),
+              if (showFreight) ('Total Freight', inr(totalFreight)),
               ('Customers Active', '${customerCount.length}'),
               ('Vehicles Used', '${vehicleUtilization.length}'),
             ],
@@ -207,8 +231,9 @@ class _MonthlyTab extends StatelessWidget {
                 .map((e) => (e.key, '${e.value}'))
                 .toList(),
           ),
-          // Customer freight summary is amount data — hidden from operators.
-          if (canAmounts) ...[
+          // Customer freight summary is transporter-side amount data — hidden
+          // from operators and anyone lacking VIEW_TRANSPORTER_RATE.
+          if (showFreight) ...[
             SizedBox(height: gap2),
             AppCard(
               padding: EdgeInsets.all(mobile ? 12 : 20),
@@ -282,6 +307,32 @@ class _AccountsTab extends ConsumerWidget {
     // limited to the accounts desk + super admins (and blocked server-side) —
     // operators and regional admins don't see it.
     final canViewMis = ref.watch(currentUserProvider)?.canViewAccounts ?? false;
+    // This tab is only built when canViewAmounts is true, so the per-field
+    // perms alone are the right gate here (no extra AND needed).
+    final canT =
+        ref.watch(currentUserProvider)?.canViewTransporterRate ?? false;
+    final canMargin =
+        ref.watch(currentUserProvider)?.canViewVistarMargin ?? false;
+    final misRange = ref.watch(_misRangeProvider);
+    final misRegion = ref.watch(_misRegionProvider);
+    final misCreator = ref.watch(_misCreatorProvider);
+    // Derive the MIS filter options from the visible LRs. Region label = the
+    // short code embedded in the LR number ({prefix}/{REGION}/{FY}/{seq});
+    // creator label = the creator name (populated once /lrs returns it).
+    final misRegions = <String, String>{}; // region_id -> short code
+    final misCreators = <String, String>{}; // entered_by -> name
+    for (final l in lrs) {
+      final rid = l.regionId;
+      if (rid != null && rid.isNotEmpty) {
+        final parts = l.number.split('/');
+        if (parts.length > 1 && RegExp(r'^[A-Za-z]{2,6}$').hasMatch(parts[1])) {
+          misRegions[rid] = parts[1].toUpperCase();
+        }
+      }
+      if (l.enteredBy.isNotEmpty && l.enteredByName.isNotEmpty) {
+        misCreators[l.enteredBy] = l.enteredByName;
+      }
+    }
     return SingleChildScrollView(
       padding: EdgeInsets.all(pad),
       child: Column(
@@ -289,53 +340,57 @@ class _AccountsTab extends ConsumerWidget {
         children: [
           _StatRow(
             items: [
-              ('Advance Received', inr(totalAdvance)),
-              ('Pending Freight', inr(totalPending)),
-              ('Margin (MTD)', inr(margin)),
+              if (canT) ('Advance Received', inr(totalAdvance)),
+              if (canT) ('Pending Freight', inr(totalPending)),
+              if (canMargin) ('Margin (MTD)', inr(margin)),
             ],
           ),
-          SizedBox(height: gap),
-          AppCard(
-            padding: EdgeInsets.all(mobile ? 12 : 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SectionTitle(
-                  icon: Icons.book_outlined,
-                  title: 'Customer ledger',
-                ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Export per-customer freight ledger for accounting.',
-                        style: const TextStyle(
-                          color: AppColors.slate,
-                          fontSize: 13,
+          // The Tally ledger export is built client-side from freight amounts,
+          // so the whole card is hidden without VIEW_TRANSPORTER_RATE.
+          if (canT) ...[
+            SizedBox(height: gap),
+            AppCard(
+              padding: EdgeInsets.all(mobile ? 12 : 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SectionTitle(
+                    icon: Icons.book_outlined,
+                    title: 'Customer ledger',
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Export per-customer freight ledger for accounting.',
+                          style: const TextStyle(
+                            color: AppColors.slate,
+                            fontSize: 13,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    AppButton(
-                      label: 'Tally export',
-                      icon: Icons.file_download_outlined,
-                      kind: BtnKind.soft,
-                      small: true,
-                      onPressed: () async {
-                        await ExportService.exportTally(lrs);
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Tally-format file generated'),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 12),
+                      AppButton(
+                        label: 'Tally export',
+                        icon: Icons.file_download_outlined,
+                        kind: BtnKind.soft,
+                        small: true,
+                        onPressed: () async {
+                          await ExportService.exportTally(lrs);
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Tally-format file generated'),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
           if (canViewMis)
             Padding(
               padding: EdgeInsets.only(top: gap),
@@ -348,19 +403,87 @@ class _AccountsTab extends ConsumerWidget {
                       icon: Icons.table_view_outlined,
                       title: 'MIS report',
                     ),
-                    Row(
+                    Text(
+                      misRange == null
+                          ? 'Download the Transport Business Tracker MIS (Excel) — '
+                              'all LRs with billing, payment and POD details.'
+                          : 'MIS (Excel) for ${formatDate(misRange.start)} – '
+                              '${formatDate(misRange.end)} — billing, payment '
+                              'and POD details.',
+                      style:
+                          const TextStyle(color: AppColors.slate, fontSize: 13),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        const Expanded(
-                          child: Text(
-                            'Download the Transport Business Tracker MIS (Excel) — '
-                            'all LRs with billing, payment and POD details.',
-                            style: TextStyle(
-                              color: AppColors.slate,
-                              fontSize: 13,
-                            ),
+                        OutlinedButton.icon(
+                          onPressed: () async {
+                            final now = DateTime.now();
+                            final picked = await showDateRangePicker(
+                              context: context,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(now.year + 1, 12, 31),
+                              initialDateRange: misRange,
+                              helpText: 'MIS date range',
+                              saveText: 'Apply',
+                            );
+                            if (picked != null) {
+                              ref.read(_misRangeProvider.notifier).state =
+                                  picked;
+                            }
+                          },
+                          icon: const Icon(Icons.date_range_rounded, size: 16),
+                          label: Text(
+                            misRange == null
+                                ? 'All dates'
+                                : '${formatDate(misRange.start)} – '
+                                    '${formatDate(misRange.end)}',
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        if (misRange != null)
+                          TextButton(
+                            onPressed: () => ref
+                                .read(_misRangeProvider.notifier)
+                                .state = null,
+                            child: const Text('Clear'),
+                          ),
+                        if (misRegions.isNotEmpty)
+                          SizedBox(
+                            width: 170,
+                            child: SearchableField<String>(
+                              value: misRegion,
+                              options: misRegions.keys.toList()
+                                ..sort((a, b) =>
+                                    misRegions[a]!.compareTo(misRegions[b]!)),
+                              labelOf: (id) => misRegions[id] ?? id,
+                              hintText: 'All regions',
+                              dialogTitle: 'Region',
+                              clearable: true,
+                              onChanged: (v) => ref
+                                  .read(_misRegionProvider.notifier)
+                                  .state = v,
+                            ),
+                          ),
+                        if (misCreators.isNotEmpty)
+                          SizedBox(
+                            width: 200,
+                            child: SearchableField<String>(
+                              value: misCreator,
+                              options: misCreators.keys.toList()
+                                ..sort((a, b) =>
+                                    misCreators[a]!.compareTo(misCreators[b]!)),
+                              labelOf: (id) => misCreators[id] ?? id,
+                              hintText: 'All creators',
+                              dialogTitle: 'Created by',
+                              clearable: true,
+                              onChanged: (v) => ref
+                                  .read(_misCreatorProvider.notifier)
+                                  .state = v,
+                            ),
+                          ),
                         AppButton(
                           label: 'Download MIS (Excel)',
                           icon: Icons.download_outlined,
@@ -368,10 +491,20 @@ class _AccountsTab extends ConsumerWidget {
                           small: true,
                           onPressed: () async {
                             final messenger = ScaffoldMessenger.of(context);
+                            final range = ref.read(_misRangeProvider);
                             try {
                               final bytes = await ref
                                   .read(reportsRepositoryProvider)
-                                  .misXlsx();
+                                  .misXlsx(
+                                    from: range?.start
+                                        .toIso8601String()
+                                        .substring(0, 10),
+                                    to: range?.end
+                                        .toIso8601String()
+                                        .substring(0, 10),
+                                    regionId: ref.read(_misRegionProvider),
+                                    createdBy: ref.read(_misCreatorProvider),
+                                  );
                               await ExportService.shareBytes(
                                 bytes,
                                 'Transport_MIS_${ExportService.stamp()}.xlsx',

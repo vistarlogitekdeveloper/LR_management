@@ -44,7 +44,8 @@ void main() {
     await tester.pump();
 
     // 6 required text fields (Name, PAN, Bank, Holder, Account No, IFSC) plus
-    // the two required uploads (Cheque, TDS) each show a "Required" message.
-    expect(find.text('Required'), findsNWidgets(8));
+    // the mandatory Cheque upload each show a "Required" message. The TDS
+    // attachment is optional, so it does NOT.
+    expect(find.text('Required'), findsNWidgets(7));
   });
 }

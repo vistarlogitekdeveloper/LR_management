@@ -10,7 +10,9 @@ import '../../../shared/models/transporter.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/pills.dart';
+import '../../../shared/widgets/searchable_field.dart';
 import '../../../shared/widgets/section_title.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../lr/providers/lr_providers.dart';
 import '../../masters/providers/master_providers.dart';
 import '../../shell/widgets/app_topbar.dart';
@@ -30,6 +32,16 @@ final _accountsFilterProvider = StateProvider<_PayFilter>(
   (ref) => _PayFilter.all,
 );
 
+// Free-text search over the LR payment list (LR no / party / vehicle / route).
+final _accountsSearchProvider = StateProvider<String>((ref) => '');
+
+// Optional date-range filter on the LR date. null = no date filter (a single
+// day is a range with the same start & end).
+final _accountsDateRangeProvider = StateProvider<DateTimeRange?>((ref) => null);
+
+// Region filter (region_id). null = all regions.
+final _accountsRegionProvider = StateProvider<String?>((ref) => null);
+
 class AccountsScreen extends ConsumerWidget {
   const AccountsScreen({super.key});
 
@@ -42,24 +54,59 @@ class AccountsScreen extends ConsumerWidget {
         .where((lr) => lr.sentForPayment)
         .toList();
     final filter = ref.watch(_accountsFilterProvider);
+    final query = ref.watch(_accountsSearchProvider).trim().toLowerCase();
+    final range = ref.watch(_accountsDateRangeProvider);
+    final region = ref.watch(_accountsRegionProvider);
+    // The two money totals are transporter-side amounts (VIEW_TRANSPORTER_RATE);
+    // the status-count tiles are not gated.
+    final canT = ref.watch(currentUserProvider)?.canViewTransporterRate ?? false;
+    final rangeStart = range == null ? null : DateUtils.dateOnly(range.start);
+    final rangeEnd = range == null ? null : DateUtils.dateOnly(range.end);
 
     final sorted = [...lrs]..sort((a, b) => b.date.compareTo(a.date));
+    // Region options (region_id -> short code embedded in the LR number) for
+    // the region filter. Shown only when there are 2+ regions to choose from.
+    final regionCodes = <String, String>{};
+    for (final lr in sorted) {
+      final rid = lr.regionId;
+      if (rid == null || rid.isEmpty) continue;
+      final parts = lr.number.split('/');
+      if (parts.length > 1 && RegExp(r'^[A-Za-z]{2,6}$').hasMatch(parts[1])) {
+        regionCodes[rid] = parts[1].toUpperCase();
+      }
+    }
+    final regionIds = regionCodes.keys.toList()
+      ..sort((a, b) => regionCodes[a]!.compareTo(regionCodes[b]!));
+    final hasRegions = regionIds.length >= 2;
     // Accounts pays the transporter, so payment state is tracked against the
     // transporter freight (90% advance / 10% against POD), not the customer
     // total. `balance` here means the transporter freight still unpaid.
     final filtered = sorted.where((lr) {
       final freight = lr.freight.freight;
       final balance = freight - lr.freight.advance;
-      switch (filter) {
-        case _PayFilter.all:
-          return true;
-        case _PayFilter.awaitingAdvance:
-          return lr.freight.advance <= 0 && freight > 0;
-        case _PayFilter.awaitingBalance:
-          return lr.freight.advance > 0 && balance > 0.01;
-        case _PayFilter.paid:
-          return freight > 0 && balance <= 0.01;
+      final matchesPay = switch (filter) {
+        _PayFilter.all => true,
+        _PayFilter.awaitingAdvance => lr.freight.advance <= 0 && freight > 0,
+        _PayFilter.awaitingBalance => lr.freight.advance > 0 && balance > 0.01,
+        _PayFilter.paid => freight > 0 && balance <= 0.01,
+      };
+      if (!matchesPay) return false;
+      if (region != null && lr.regionId != region) return false;
+      if (rangeStart != null) {
+        final d = DateUtils.dateOnly(lr.date);
+        if (d.isBefore(rangeStart) || d.isAfter(rangeEnd!)) return false;
       }
+      if (query.isEmpty) return true;
+      final hay = [
+        lr.number,
+        lr.consignor.name,
+        lr.consignee.name,
+        lr.customerName,
+        lr.vehicle.number,
+        lr.route,
+        lr.transporter.name,
+      ].join(' ').toLowerCase();
+      return hay.contains(query);
     }).toList();
 
     final totalAdvance = lrs.fold<double>(0, (s, l) => s + l.freight.advance);
@@ -104,7 +151,8 @@ class AccountsScreen extends ConsumerWidget {
                   LayoutBuilder(
                     builder: (context, c) {
                       final mobile = c.maxWidth < 600;
-                      // 5 tiles (2 money totals + 3 status counts): all in a row
+                      // Up to 5 tiles (2 money totals — hidden without
+                      // VIEW_TRANSPORTER_RATE — + 3 status counts): all in a row
                       // on wide screens, 3-up on tablets, 2-up on phones.
                       final cols = c.maxWidth >= 1040
                           ? 5
@@ -113,20 +161,22 @@ class AccountsScreen extends ConsumerWidget {
                           : 2;
                       final gap = mobile ? 10.0 : 16.0;
                       final tiles = <Widget>[
-                        _MiniTile(
-                          label: 'Advance Received',
-                          value: inr(totalAdvance),
-                          icon: Icons.savings_outlined,
-                          color: AppColors.ok,
-                          compact: mobile,
-                        ),
-                        _MiniTile(
-                          label: 'Pending Balance',
-                          value: inr(totalPending),
-                          icon: Icons.pending_actions_outlined,
-                          color: AppColors.red,
-                          compact: mobile,
-                        ),
+                        if (canT)
+                          _MiniTile(
+                            label: 'Advance Received',
+                            value: inr(totalAdvance),
+                            icon: Icons.savings_outlined,
+                            color: AppColors.ok,
+                            compact: mobile,
+                          ),
+                        if (canT)
+                          _MiniTile(
+                            label: 'Pending Balance',
+                            value: inr(totalPending),
+                            icon: Icons.pending_actions_outlined,
+                            color: AppColors.red,
+                            compact: mobile,
+                          ),
                         _MiniTile(
                           label: 'Pending',
                           value: '$countPending',
@@ -149,13 +199,16 @@ class AccountsScreen extends ConsumerWidget {
                           compact: mobile,
                         ),
                       ];
+                      // Spread the tiles that actually render across the row so
+                      // hiding the money totals doesn't leave a trailing gap.
+                      final effCols = tiles.length < cols ? tiles.length : cols;
                       return Wrap(
                         spacing: gap,
                         runSpacing: gap,
                         children: [
                           for (final t in tiles)
                             SizedBox(
-                              width: (c.maxWidth - gap * (cols - 1)) / cols,
+                              width: (c.maxWidth - gap * (effCols - 1)) / effCols,
                               child: t,
                             ),
                         ],
@@ -168,10 +221,52 @@ class AccountsScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const SectionTitle(
+                        SectionTitle(
                           icon: Icons.receipt_long_outlined,
                           title: 'LR Payments',
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.plum.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              filtered.length == lrs.length
+                                  ? '${lrs.length} LRs'
+                                  : '${filtered.length} of ${lrs.length} LRs',
+                              style: const TextStyle(
+                                color: AppColors.plum,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12.5,
+                              ),
+                            ),
+                          ),
                         ),
+                        SizedBox(height: isMobile ? 10 : 12),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 420),
+                            child: TextField(
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                hintText:
+                                    'Search LR, party, vehicle, route…',
+                                prefixIcon: Icon(
+                                  Icons.search,
+                                  color: AppColors.slate,
+                                ),
+                              ),
+                              onChanged: (v) => ref
+                                  .read(_accountsSearchProvider.notifier)
+                                  .state = v,
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: isMobile ? 10 : 12),
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
@@ -187,6 +282,29 @@ class AccountsScreen extends ConsumerWidget {
                                             )
                                             .state =
                                         f,
+                              ),
+                            _DateRangeChip(
+                              range: range,
+                              onTap: () =>
+                                  _pickDateRange(context, ref, range),
+                              onClear: () => ref
+                                  .read(_accountsDateRangeProvider.notifier)
+                                  .state = null,
+                            ),
+                            if (hasRegions)
+                              SizedBox(
+                                width: 180,
+                                child: SearchableField<String>(
+                                  value: region,
+                                  options: regionIds,
+                                  labelOf: (id) => regionCodes[id] ?? id,
+                                  hintText: 'All regions',
+                                  dialogTitle: 'Region',
+                                  clearable: true,
+                                  onChanged: (v) => ref
+                                      .read(_accountsRegionProvider.notifier)
+                                      .state = v,
+                                ),
                               ),
                           ],
                         ),
@@ -229,6 +347,96 @@ class AccountsScreen extends ConsumerWidget {
       ),
     );
   }
+
+  Future<void> _pickDateRange(
+    BuildContext context,
+    WidgetRef ref,
+    DateTimeRange? current,
+  ) async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year + 1, 12, 31),
+      initialDateRange: current,
+      helpText: 'Filter LRs by date',
+      saveText: 'Apply',
+    );
+    if (picked != null) {
+      ref.read(_accountsDateRangeProvider.notifier).state = picked;
+    }
+  }
+}
+
+/// A pill that opens a date-range picker; when a range is set it shows it and a
+/// clear (×). Sits alongside the payment-status filter chips.
+class _DateRangeChip extends StatelessWidget {
+  final DateTimeRange? range;
+  final VoidCallback onTap;
+  final VoidCallback onClear;
+  const _DateRangeChip({
+    required this.range,
+    required this.onTap,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final r = range;
+    final active = r != null;
+    final label =
+        active ? '${formatDate(r.start)} – ${formatDate(r.end)}' : 'Date range';
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: active ? AppColors.plum : AppColors.white,
+            borderRadius: BorderRadius.circular(999),
+            border:
+                Border.all(color: active ? AppColors.plum : AppColors.line),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.date_range_rounded,
+                size: 15,
+                color: active ? Colors.white : AppColors.slate,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: active ? Colors.white : AppColors.ink,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5,
+                ),
+              ),
+              if (active) ...[
+                const SizedBox(width: 4),
+                InkWell(
+                  onTap: onClear,
+                  borderRadius: BorderRadius.circular(999),
+                  child: const Padding(
+                    padding: EdgeInsets.all(1),
+                    child: Icon(
+                      Icons.close_rounded,
+                      size: 15,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _LrPaymentCard extends ConsumerWidget {
@@ -245,6 +453,12 @@ class _LrPaymentCard extends ConsumerWidget {
     final hasAdvance = advance > 0;
     final hasBalance = transBalance > 0.01;
     final fullyPaid = freight > 0 && !hasBalance;
+    // Visibility perms (migration 072): redact transporter-side amounts and the
+    // customer-side billing fields when the perm is revoked. (The backend also
+    // zeroes/blanks these, which already auto-hides the payment actions below.)
+    final canT = ref.watch(currentUserProvider)?.canViewTransporterRate ?? false;
+    final canCust =
+        ref.watch(currentUserProvider)?.canViewCustomerRate ?? false;
     // Resolve the full transporter (with bank details) from the masters list so
     // accounts can pay the correct party.
     final transporter = ref
@@ -318,17 +532,23 @@ class _LrPaymentCard extends ConsumerWidget {
             spacing: 18,
             runSpacing: 8,
             children: [
-              _Amount(label: 'Transporter Freight', value: freight),
+              _Amount(
+                label: 'Transporter Freight',
+                value: freight,
+                hidden: !canT,
+              ),
               _Amount(
                 label: 'Advance',
                 value: advance,
                 color: AppColors.ok,
+                hidden: !canT,
               ),
               _Amount(
                 label: 'Balance (after POD)',
                 value: transBalance,
                 color: hasBalance ? AppColors.red : AppColors.ok,
                 emphasis: true,
+                hidden: !canT,
               ),
             ],
           );
@@ -399,8 +619,9 @@ class _LrPaymentCard extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               main,
-              _advancePlan(context),
-              _billingMisInfo(context),
+              // The 90/10 advance plan is a transporter-freight breakdown.
+              if (canT) _advancePlan(context),
+              _billingMisInfo(context, canViewCustomerRate: canCust),
               _payInfo(context, ref, transporter),
             ],
           );
@@ -567,11 +788,19 @@ class _LrPaymentCard extends ConsumerWidget {
 
   /// Read-only summary of the accounts-owned billing / MIS fields, shown only
   /// in the Accounts view. Empty (hidden) until Accounts fills them in.
-  Widget _billingMisInfo(BuildContext context) {
+  Widget _billingMisInfo(
+    BuildContext context, {
+    required bool canViewCustomerRate,
+  }) {
     final chips = <Widget>[];
-    if (lr.vistarBillNo.isNotEmpty) chips.add(_kvChip('Bill No', lr.vistarBillNo));
-    if (lr.vistarBillDate != null) {
-      chips.add(_kvChip('Bill Date', formatDate(lr.vistarBillDate!)));
+    // Bill No / Bill Date are customer-side billing fields (VIEW_CUSTOMER_RATE).
+    if (canViewCustomerRate) {
+      if (lr.vistarBillNo.isNotEmpty) {
+        chips.add(_kvChip('Bill No', lr.vistarBillNo));
+      }
+      if (lr.vistarBillDate != null) {
+        chips.add(_kvChip('Bill Date', formatDate(lr.vistarBillDate!)));
+      }
     }
     if (lr.podSoftCopyDate != null) {
       chips.add(_kvChip('POD Recd', formatDate(lr.podSoftCopyDate!)));
@@ -850,6 +1079,10 @@ class _LrPaymentCard extends ConsumerWidget {
   /// POD soft-copy date, and the advance/balance paid dates. Saved through the
   /// payment PATCH path, which the backend restricts to the Accounts role.
   Future<void> _editBillingMis(BuildContext context, WidgetRef ref) async {
+    // Bill No / Bill Date are customer-side fields — hide their inputs from a
+    // user without VIEW_CUSTOMER_RATE (the backend also strips them on save).
+    final canViewCustomerRate =
+        ref.read(currentUserProvider)?.canViewCustomerRate ?? false;
     final billNoCtrl = TextEditingController(text: lr.vistarBillNo);
     DateTime? billDate = lr.vistarBillDate;
     DateTime? podDate = lr.podSoftCopyDate;
@@ -915,21 +1148,23 @@ class _LrPaymentCard extends ConsumerWidget {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      TextField(
-                        controller: billNoCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Vistar Bill No',
-                          border: OutlineInputBorder(),
-                          isDense: true,
+                      if (canViewCustomerRate) ...[
+                        TextField(
+                          controller: billNoCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Vistar Bill No',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 6),
-                      dateRow(
-                        'Vistar Bill Date',
-                        billDate,
-                        (d) => billDate = d,
-                        () => billDate = null,
-                      ),
+                        const SizedBox(height: 6),
+                        dateRow(
+                          'Vistar Bill Date',
+                          billDate,
+                          (d) => billDate = d,
+                          () => billDate = null,
+                        ),
+                      ],
                       dateRow(
                         'POD Soft-Copy Date',
                         podDate,
@@ -972,8 +1207,8 @@ class _LrPaymentCard extends ConsumerWidget {
 
     String? dateOnly(DateTime? d) => d?.toIso8601String().substring(0, 10);
     final payload = <String, dynamic>{
-      'vistar_bill_no': billNoCtrl.text.trim(),
-      'vistar_bill_date': dateOnly(billDate),
+      if (canViewCustomerRate) 'vistar_bill_no': billNoCtrl.text.trim(),
+      if (canViewCustomerRate) 'vistar_bill_date': dateOnly(billDate),
       'pod_soft_copy_date': dateOnly(podDate),
       // Date-only (not full ISO) so the picked calendar day round-trips without
       // a timezone shift, same as the bill/POD dates above.
@@ -1072,12 +1307,15 @@ class _Amount extends StatelessWidget {
   final double value;
   final Color? color;
   final bool emphasis;
+  // Redact the amount to an em-dash when the user lacks VIEW_TRANSPORTER_RATE.
+  final bool hidden;
 
   const _Amount({
     required this.label,
     required this.value,
     this.color,
     this.emphasis = false,
+    this.hidden = false,
   });
 
   @override
@@ -1097,7 +1335,7 @@ class _Amount extends StatelessWidget {
         ),
         const SizedBox(height: 2),
         Text(
-          inr(value),
+          hidden ? '—' : inr(value),
           style: TextStyle(
             color: color ?? AppColors.ink,
             fontWeight: emphasis ? FontWeight.w800 : FontWeight.w700,

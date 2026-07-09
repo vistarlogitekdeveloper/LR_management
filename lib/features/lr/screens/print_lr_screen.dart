@@ -58,6 +58,52 @@ class _PrintLrScreenState extends ConsumerState<PrintLrScreen> {
         ),
       ),
       data: (lr) {
+        // An LR can only be printed once it has been sent for payment (which
+        // notifies the accounts team). Guards against a direct /print deep-link
+        // before the Print action is unlocked on the list/detail screens.
+        if (!lr.sentForPayment) {
+          return Scaffold(
+            backgroundColor: AppColors.mist,
+            body: Column(
+              children: [
+                AppTopbar(
+                  title: 'Print LR ${lr.number}',
+                  subtitle: 'Goods Consignment Note',
+                ),
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.lock_clock_outlined,
+                          size: 40,
+                          color: AppColors.slate,
+                        ),
+                        const SizedBox(height: 12),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            'This LR can be printed only after it is sent for '
+                            'payment, which notifies the accounts team.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: AppColors.slate),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        AppButton(
+                          label: 'Back to LR',
+                          icon: Icons.arrow_back_rounded,
+                          onPressed: () => context.go('/lrs/${lr.id}'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
         Future<void> doPrint() async {
           if (_printing) return;
           setState(() => _printing = true);
