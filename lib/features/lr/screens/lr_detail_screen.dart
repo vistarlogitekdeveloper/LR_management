@@ -188,15 +188,14 @@ class LrDetailScreen extends ConsumerWidget {
                   icon: Icons.forward_to_inbox_outlined,
                   onPressed: () => _sendForPayment(context, ref, lr),
                 ),
-              // Print unlocks only once the LR has been sent to Accounts (which
-              // triggers the accounts email) — not before.
-              if (lr.sentForPayment)
-                AppButton(
-                  label: 'Print',
-                  kind: BtnKind.soft,
-                  icon: Icons.print_outlined,
-                  onPressed: () => context.go('/lrs/${lr.id}/print'),
-                ),
+              // Print is available as soon as the LR is saved/created — it no
+              // longer waits for the LR to be sent to Accounts for payment.
+              AppButton(
+                label: 'Print',
+                kind: BtnKind.soft,
+                icon: Icons.print_outlined,
+                onPressed: () => context.go('/lrs/${lr.id}/print'),
+              ),
             ],
           ),
           Expanded(

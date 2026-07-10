@@ -363,18 +363,17 @@ class _LrTableState extends State<_LrTable> {
                               ),
                               onPressed: () => context.go('/lrs/${lr.id}'),
                             ),
-                            // Print unlocks only after the LR is sent for payment.
-                            if (lr.sentForPayment)
-                              IconButton(
-                                tooltip: 'Print',
-                                icon: const Icon(
-                                  Icons.print_outlined,
-                                  color: AppColors.plum,
-                                  size: 18,
-                                ),
-                                onPressed: () =>
-                                    context.go('/lrs/${lr.id}/print'),
+                            // Print is available as soon as the LR is saved.
+                            IconButton(
+                              tooltip: 'Print',
+                              icon: const Icon(
+                                Icons.print_outlined,
+                                color: AppColors.plum,
+                                size: 18,
                               ),
+                              onPressed: () =>
+                                  context.go('/lrs/${lr.id}/print'),
+                            ),
                             if (widget.onSendForPayment != null &&
                                 !lr.sentForPayment)
                               IconButton(
@@ -494,18 +493,17 @@ class _LrMobileCard extends StatelessWidget {
                   ),
                   onPressed: () => context.go('/lrs/${lr.id}'),
                 ),
-                // Print unlocks only after the LR is sent for payment.
-                if (lr.sentForPayment)
-                  IconButton(
-                    tooltip: 'Print',
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(
-                      Icons.print_outlined,
-                      color: AppColors.plum,
-                      size: 18,
-                    ),
-                    onPressed: () => context.go('/lrs/${lr.id}/print'),
+                // Print is available as soon as the LR is saved.
+                IconButton(
+                  tooltip: 'Print',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(
+                    Icons.print_outlined,
+                    color: AppColors.plum,
+                    size: 18,
                   ),
+                  onPressed: () => context.go('/lrs/${lr.id}/print'),
+                ),
                 if (onSendForPayment != null && !lr.sentForPayment)
                   IconButton(
                     tooltip: 'Send for Payment',
