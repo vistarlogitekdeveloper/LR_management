@@ -12,22 +12,36 @@ class LrFilter {
   final LrStatus? status;
   final String? route;
   final String? region; // region_id; null = all regions
+  final DateTime? fromDate; // inclusive lower bound (date-only); null = no min
+  final DateTime? toDate; // inclusive upper bound (date-only); null = no max
 
-  const LrFilter({this.query = '', this.status, this.route, this.region});
+  const LrFilter({
+    this.query = '',
+    this.status,
+    this.route,
+    this.region,
+    this.fromDate,
+    this.toDate,
+  });
 
   LrFilter copyWith(
       {String? query,
       LrStatus? status,
       String? route,
       String? region,
+      DateTime? fromDate,
+      DateTime? toDate,
       bool clearStatus = false,
       bool clearRoute = false,
-      bool clearRegion = false}) {
+      bool clearRegion = false,
+      bool clearDates = false}) {
     return LrFilter(
       query: query ?? this.query,
       status: clearStatus ? null : (status ?? this.status),
       route: clearRoute ? null : (route ?? this.route),
       region: clearRegion ? null : (region ?? this.region),
+      fromDate: clearDates ? null : (fromDate ?? this.fromDate),
+      toDate: clearDates ? null : (toDate ?? this.toDate),
     );
   }
 }
@@ -150,6 +164,20 @@ final filteredLrsProvider = Provider<List<LorryReceipt>>((ref) {
     if (filter.status != null && lr.status != filter.status) return false;
     if (filter.route != null && lr.route != filter.route) return false;
     if (filter.region != null && lr.regionId != filter.region) return false;
+    if (filter.fromDate != null || filter.toDate != null) {
+      // Compare by calendar day so both endpoints are inclusive regardless of
+      // any time component on lr.date / the picked bounds.
+      final d = DateTime(lr.date.year, lr.date.month, lr.date.day);
+      final from = filter.fromDate;
+      final to = filter.toDate;
+      if (from != null &&
+          d.isBefore(DateTime(from.year, from.month, from.day))) {
+        return false;
+      }
+      if (to != null && d.isAfter(DateTime(to.year, to.month, to.day))) {
+        return false;
+      }
+    }
     if (filter.query.isNotEmpty) {
       final q = filter.query.toLowerCase();
       final hay = [

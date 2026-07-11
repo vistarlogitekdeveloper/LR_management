@@ -97,6 +97,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   final _routeFieldKey = GlobalKey();
   final _capacityFieldKey = GlobalKey();
   final _freightFieldKey = GlobalKey();
+  final _incentiveFieldKey = GlobalKey();
 
   // Per-field validation messages shown inline under each mandatory field;
   // set on a failed save, cleared as soon as the field is filled.
@@ -127,6 +128,12 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   final _doorCtrl = TextEditingController(text: '0');
   final _handlingCtrl = TextEditingController(text: '0');
   final _insuranceCtrl = TextEditingController(text: '0');
+  final _additionalFreightCtrl = TextEditingController(text: '0');
+  final _expressChargesCtrl = TextEditingController(text: '0');
+  final _expressDriverCtrl = TextEditingController(text: '0');
+  final _extraPointDeliveryCtrl = TextEditingController(text: '0');
+  final _extraPointDriverCtrl = TextEditingController(text: '0');
+  final _haltingChargeCtrl = TextEditingController(text: '0');
   final _advanceCtrl = TextEditingController(text: '0');
   final _mathadiCtrl = TextEditingController(text: '0');
   final _remarksCtrl = TextEditingController();
@@ -257,6 +264,16 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         _doorCtrl.text = lr.freight.doorDelivery.toStringAsFixed(0);
         _handlingCtrl.text = lr.freight.handling.toStringAsFixed(0);
         _insuranceCtrl.text = lr.freight.insurance.toStringAsFixed(0);
+        _additionalFreightCtrl.text = lr.freight.additionalFreight
+            .toStringAsFixed(0);
+        _expressChargesCtrl.text = lr.freight.expressCharges.toStringAsFixed(0);
+        _expressDriverCtrl.text = lr.freight.expressChargesDriverShare
+            .toStringAsFixed(0);
+        _extraPointDeliveryCtrl.text = lr.freight.extraPointDelivery
+            .toStringAsFixed(0);
+        _extraPointDriverCtrl.text = lr.freight.extraPointDeliveryDriverShare
+            .toStringAsFixed(0);
+        _haltingChargeCtrl.text = lr.freight.haltingCharge.toStringAsFixed(0);
         _advanceCtrl.text = lr.freight.advance.toStringAsFixed(0);
         _mathadiCtrl.text = lr.freight.mathadi.toStringAsFixed(0);
         _remarksCtrl.text = lr.remarks ?? '';
@@ -307,6 +324,12 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       _doorCtrl,
       _handlingCtrl,
       _insuranceCtrl,
+      _additionalFreightCtrl,
+      _expressChargesCtrl,
+      _expressDriverCtrl,
+      _extraPointDeliveryCtrl,
+      _extraPointDriverCtrl,
+      _haltingChargeCtrl,
       _advanceCtrl,
       _mathadiCtrl,
       _remarksCtrl,
@@ -406,11 +429,38 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   double _toDouble(TextEditingController c) =>
       double.tryParse(c.text.trim()) ?? 0;
 
+  // Mirrors the backend-authoritative `total` so the preview matches what will
+  // actually be saved: freight + charges + mathadi + the auto Vistar margin.
+  // (gst & collection aren't editable on this form, so they are 0 for LRs
+  // created here.) Client incentive charges (express / extra-point delivery)
+  // are excluded — they are tracked separately below.
   double get _total =>
       _toDouble(_freightCtrl) +
       _toDouble(_doorCtrl) +
       _toDouble(_handlingCtrl) +
-      _toDouble(_insuranceCtrl);
+      _toDouble(_insuranceCtrl) +
+      _toDouble(_mathadiCtrl) +
+      _vistarMargin +
+      _toDouble(_additionalFreightCtrl) +
+      _toDouble(_haltingChargeCtrl);
+
+  // ---- Client incentive charges split (live preview) -----------------------
+  double get _expressVistarMargin {
+    final m = _toDouble(_expressChargesCtrl) - _toDouble(_expressDriverCtrl);
+    return m > 0 ? m : 0;
+  }
+
+  double get _extraPointVistarMargin {
+    final m =
+        _toDouble(_extraPointDeliveryCtrl) - _toDouble(_extraPointDriverCtrl);
+    return m > 0 ? m : 0;
+  }
+
+  double get _driverIncentiveTotal =>
+      _toDouble(_expressDriverCtrl) + _toDouble(_extraPointDriverCtrl);
+
+  double get _incentiveVistarMargin =>
+      _expressVistarMargin + _extraPointVistarMargin;
 
   double get _balance => _total - _toDouble(_advanceCtrl);
 
@@ -518,6 +568,12 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       'door_delivery': _toDouble(_doorCtrl),
       'handling': _toDouble(_handlingCtrl),
       'insurance': _toDouble(_insuranceCtrl),
+      'additional_freight': _toDouble(_additionalFreightCtrl),
+      'express_charges': _toDouble(_expressChargesCtrl),
+      'express_charges_driver_share': _toDouble(_expressDriverCtrl),
+      'extra_point_delivery': _toDouble(_extraPointDeliveryCtrl),
+      'extra_point_delivery_driver_share': _toDouble(_extraPointDriverCtrl),
+      'halting_charge': _toDouble(_haltingChargeCtrl),
       'advance': _toDouble(_advanceCtrl),
       'mathadi': _toDouble(_mathadiCtrl),
       'vistar_margin': _vistarMargin,
@@ -644,6 +700,12 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     'door_delivery': _doorCtrl.text,
     'handling': _handlingCtrl.text,
     'insurance': _insuranceCtrl.text,
+    'additional_freight': _additionalFreightCtrl.text,
+    'express_charges': _expressChargesCtrl.text,
+    'express_charges_driver_share': _expressDriverCtrl.text,
+    'extra_point_delivery': _extraPointDeliveryCtrl.text,
+    'extra_point_delivery_driver_share': _extraPointDriverCtrl.text,
+    'halting_charge': _haltingChargeCtrl.text,
     'advance': _advanceCtrl.text,
     'mathadi': _mathadiCtrl.text,
     'remarks': _remarksCtrl.text,
@@ -864,6 +926,12 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       _doorCtrl.text = text('door_delivery');
       _handlingCtrl.text = text('handling');
       _insuranceCtrl.text = text('insurance');
+      _additionalFreightCtrl.text = text('additional_freight');
+      _expressChargesCtrl.text = text('express_charges');
+      _expressDriverCtrl.text = text('express_charges_driver_share');
+      _extraPointDeliveryCtrl.text = text('extra_point_delivery');
+      _extraPointDriverCtrl.text = text('extra_point_delivery_driver_share');
+      _haltingChargeCtrl.text = text('halting_charge');
       _advanceCtrl.text = text('advance');
       _mathadiCtrl.text = text('mathadi');
       _remarksCtrl.text = text('remarks');
@@ -1133,6 +1201,19 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     if (_payType == null) {
       errors['payType'] = 'Select a pay type.';
     }
+    // A client incentive's driver share can't exceed the amount the client
+    // paid for that head (else Vistar's margin would go negative).
+    if (_canViewTransporterRate &&
+        _toDouble(_expressDriverCtrl) > _toDouble(_expressChargesCtrl)) {
+      errors['expressDriver'] =
+          "Driver's share can't exceed the express charges.";
+    }
+    if (_canViewTransporterRate &&
+        _toDouble(_extraPointDriverCtrl) >
+            _toDouble(_extraPointDeliveryCtrl)) {
+      errors['extraPointDriver'] =
+          "Driver's share can't exceed the extra point delivery amount.";
+    }
 
     // Also run the text-field validators (EWB format, etc.).
     final textOk = _formKey.currentState?.validate() ?? true;
@@ -1150,18 +1231,30 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
     if (errors.isNotEmpty) {
       final missing = _mandatoryOrder.where(errors.containsKey).toList();
-      final names = missing.map((k) => _mandatoryLabels[k]).join(', ');
-      MasterActions.showError(
-        context,
-        missing.length == 1
-            ? '$names is required.'
-            : 'Please fill the required field(s): $names.',
-      );
-      // Scroll once the inline messages have been laid out, so the target
-      // settles at a stable position.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _scrollToField(missing.first);
-      });
+      if (missing.isNotEmpty) {
+        final names = missing.map((k) => _mandatoryLabels[k]).join(', ');
+        MasterActions.showError(
+          context,
+          missing.length == 1
+              ? '$names is required.'
+              : 'Please fill the required field(s): $names.',
+        );
+        // Scroll once the inline messages have been laid out, so the target
+        // settles at a stable position.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _scrollToField(missing.first);
+        });
+      } else {
+        // Only non-mandatory value errors (e.g. an incentive driver share
+        // entered above the client amount) — highlight and scroll to them.
+        MasterActions.showError(
+          context,
+          'Please correct the highlighted fields.',
+        );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _scrollToField(errors.keys.first);
+        });
+      }
     } else {
       MasterActions.showError(
         context,
@@ -1183,6 +1276,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       'capacity': _capacityFieldKey,
       'freight': _freightFieldKey,
       'payType': _payTypeFieldKey,
+      'expressDriver': _incentiveFieldKey,
+      'extraPointDriver': _incentiveFieldKey,
     };
     final ctx = keys[fieldKey]?.currentContext;
     if (ctx == null) return;
@@ -1193,6 +1288,25 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       // Land the field ~25% down the viewport so its label *and* the newly
       // shown inline error stay clear of the fold on narrow screens.
       alignment: 0.25,
+    );
+  }
+
+  /// A read-only, disabled-looking amount box used for the auto-computed Vistar
+  /// margin cells in the incentive section.
+  Widget _readonlyAmount(double value) {
+    return InputDecorator(
+      decoration: const InputDecoration(
+        enabled: false,
+        suffixIcon: Icon(Icons.lock_outline, color: AppColors.slate, size: 16),
+      ),
+      child: Text(
+        inr(value),
+        style: const TextStyle(
+          fontSize: 14,
+          color: AppColors.slate,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 
@@ -1789,6 +1903,24 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                 ),
                               if (canViewTransporterRate)
                                 LabeledField(
+                                  label: 'Additional Freight Charges',
+                                  child: TextFormField(
+                                    controller: _additionalFreightCtrl,
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (_) => setState(() {}),
+                                  ),
+                                ),
+                              if (canViewTransporterRate)
+                                LabeledField(
+                                  label: 'Halting Charge',
+                                  child: TextFormField(
+                                    controller: _haltingChargeCtrl,
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (_) => setState(() {}),
+                                  ),
+                                ),
+                              if (canViewTransporterRate)
+                                LabeledField(
                                   label: 'Mathadi',
                                   child: TextFormField(
                                     controller: _mathadiCtrl,
@@ -1879,6 +2011,103 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                         color: AppColors.red,
                                       ),
                                     ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                            if (canViewTransporterRate) ...[
+                              SizedBox(key: _incentiveFieldKey, height: 20),
+                              const SectionTitle(
+                                icon: Icons.volunteer_activism_outlined,
+                                title: 'Incentive Charges (from Client)',
+                              ),
+                              const Padding(
+                                padding: EdgeInsets.only(top: 2, bottom: 10),
+                                child: Text(
+                                  'Extra amount the client pays as an incentive. '
+                                  'Enter the total received and the share for the '
+                                  'driver — the rest is Vistar margin. The driver '
+                                  'share is paid with the balance (after POD).',
+                                  style: TextStyle(
+                                    color: AppColors.slate,
+                                    fontSize: 12.5,
+                                  ),
+                                ),
+                              ),
+                              _grid(3, [
+                                LabeledField(
+                                  label: 'Express Charges (Client)',
+                                  child: TextFormField(
+                                    controller: _expressChargesCtrl,
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (_) => setState(() {
+                                      _fieldErrors.remove('expressDriver');
+                                    }),
+                                  ),
+                                ),
+                                LabeledField(
+                                  label: "Express — Driver's Share",
+                                  errorText: _fieldErrors['expressDriver'],
+                                  child: TextFormField(
+                                    controller: _expressDriverCtrl,
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (_) => setState(() {
+                                      _fieldErrors.remove('expressDriver');
+                                    }),
+                                  ),
+                                ),
+                                if (canViewVistarMargin)
+                                  LabeledField(
+                                    label: 'Express — Vistar Margin',
+                                    child: _readonlyAmount(_expressVistarMargin),
+                                  ),
+                                LabeledField(
+                                  label: 'Extra Point Delivery (Client)',
+                                  child: TextFormField(
+                                    controller: _extraPointDeliveryCtrl,
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (_) => setState(() {
+                                      _fieldErrors.remove('extraPointDriver');
+                                    }),
+                                  ),
+                                ),
+                                LabeledField(
+                                  label: "Extra Point — Driver's Share",
+                                  errorText: _fieldErrors['extraPointDriver'],
+                                  child: TextFormField(
+                                    controller: _extraPointDriverCtrl,
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (_) => setState(() {
+                                      _fieldErrors.remove('extraPointDriver');
+                                    }),
+                                  ),
+                                ),
+                                if (canViewVistarMargin)
+                                  LabeledField(
+                                    label: 'Extra Point — Vistar Margin',
+                                    child:
+                                        _readonlyAmount(_extraPointVistarMargin),
+                                  ),
+                              ]),
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: AppColors.ok.withValues(alpha: 0.06),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Column(
+                                  children: [
+                                    _summaryRow(
+                                      'Driver Incentive (paid with balance)',
+                                      inr(_driverIncentiveTotal),
+                                      emphasis: true,
+                                    ),
+                                    if (canViewVistarMargin)
+                                      _summaryRow(
+                                        'Vistar Incentive Margin',
+                                        inr(_incentiveVistarMargin),
+                                      ),
                                   ],
                                 ),
                               ),

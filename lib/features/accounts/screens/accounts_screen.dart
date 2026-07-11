@@ -459,6 +459,8 @@ class _LrPaymentCard extends ConsumerWidget {
     final canT = ref.watch(currentUserProvider)?.canViewTransporterRate ?? false;
     final canCust =
         ref.watch(currentUserProvider)?.canViewCustomerRate ?? false;
+    final canMargin =
+        ref.watch(currentUserProvider)?.canViewVistarMargin ?? false;
     // Resolve the full transporter (with bank details) from the masters list so
     // accounts can pay the correct party.
     final transporter = ref
@@ -621,6 +623,10 @@ class _LrPaymentCard extends ConsumerWidget {
               main,
               // The 90/10 advance plan is a transporter-freight breakdown.
               if (canT) _advancePlan(context),
+              // Client incentive charges: driver share is released with the
+              // balance, so Accounts sees it alongside the advance plan.
+              if (canT)
+                _driverIncentivePlan(context, canViewVistarMargin: canMargin),
               _billingMisInfo(context, canViewCustomerRate: canCust),
               _payInfo(context, ref, transporter),
             ],
@@ -778,6 +784,77 @@ class _LrPaymentCard extends ConsumerWidget {
                 label: 'Balance 10% (after POD)',
                 value: afterPod,
                 color: AppColors.slate,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Client incentive charges (express / extra-point delivery). The driver's
+  /// share is released together with the transporter balance (after POD); the
+  /// remainder is Vistar margin. Shown so Accounts knows to add the driver
+  /// incentive when completing the balance payment. Hidden when there's none.
+  Widget _driverIncentivePlan(
+    BuildContext context, {
+    required bool canViewVistarMargin,
+  }) {
+    final client = lr.freight.clientIncentiveTotal;
+    if (client <= 0) return const SizedBox.shrink();
+    final driver = lr.freight.driverIncentiveTotal;
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.plum.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.plum.withValues(alpha: 0.14)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.volunteer_activism_outlined,
+                size: 16,
+                color: AppColors.plum,
+              ),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  'Client Incentive — driver share paid with balance',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.ink,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              _BadgePill(
+                text: lr.driverIncentivePaid ? 'Paid' : 'With Balance',
+                fg: lr.driverIncentivePaid ? AppColors.ok : AppColors.plum,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 18,
+            runSpacing: 8,
+            children: [
+              _Amount(label: 'Client Incentive', value: client),
+              _Amount(
+                label: 'Driver Share (pay with balance)',
+                value: driver,
+                color: AppColors.ok,
+                emphasis: true,
+              ),
+              _Amount(
+                label: 'Vistar Margin',
+                value: lr.freight.incentiveVistarMargin,
+                color: AppColors.slate,
+                hidden: !canViewVistarMargin,
               ),
             ],
           ),

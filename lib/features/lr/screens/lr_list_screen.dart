@@ -224,38 +224,131 @@ class _FilterBar extends ConsumerWidget {
               ),
         );
 
+        final dateRange = _DateRangeField(
+          from: filter.fromDate,
+          to: filter.toDate,
+          onChanged: (r) => ref.read(lrFilterProvider.notifier).update(
+                (s) => r == null
+                    ? s.copyWith(clearDates: true)
+                    : s.copyWith(fromDate: r.start, toDate: r.end),
+              ),
+        );
+
         if (mobile) {
-          // All three filters in a single row — no wasted blank space, no
-          // horizontal scroll. Flexible widths share the available space.
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          // Search + dropdown filters share one row; the date range gets its
+          // own full-width row beneath so nothing is cramped on narrow screens.
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(flex: 5, child: search),
-              const SizedBox(width: 8),
-              Expanded(flex: 4, child: status),
-              const SizedBox(width: 8),
-              Expanded(flex: 4, child: route),
-              if (hasRegions) ...[
-                const SizedBox(width: 8),
-                Expanded(flex: 4, child: region),
-              ],
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(flex: 5, child: search),
+                  const SizedBox(width: 8),
+                  Expanded(flex: 4, child: status),
+                  const SizedBox(width: 8),
+                  Expanded(flex: 4, child: route),
+                  if (hasRegions) ...[
+                    const SizedBox(width: 8),
+                    Expanded(flex: 4, child: region),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 8),
+              dateRange,
             ],
           );
         }
 
-        // Wider screens: roomy fixed-width fields that wrap if needed.
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          crossAxisAlignment: WrapCrossAlignment.center,
+        // Wider screens: every filter shares one row via flex — dynamically
+        // sized to the available width, so it never wraps or scrolls no matter
+        // how many filters are shown.
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            SizedBox(width: 280, child: search),
-            SizedBox(width: 180, child: status),
-            SizedBox(width: 220, child: route),
-            if (hasRegions) SizedBox(width: 180, child: region),
+            Expanded(flex: 5, child: search),
+            const SizedBox(width: 12),
+            Expanded(flex: 3, child: status),
+            const SizedBox(width: 12),
+            Expanded(flex: 3, child: route),
+            if (hasRegions) ...[
+              const SizedBox(width: 12),
+              Expanded(flex: 3, child: region),
+            ],
+            const SizedBox(width: 12),
+            Expanded(flex: 4, child: dateRange),
           ],
         );
       },
+    );
+  }
+}
+
+/// Date-range filter styled to match the SearchableField boxes: shows "All
+/// dates" until a range is picked, then the range plus a clear (×). Opens the
+/// native date-range picker; filtering is inclusive of both endpoints.
+class _DateRangeField extends StatelessWidget {
+  final DateTime? from;
+  final DateTime? to;
+  final ValueChanged<DateTimeRange?> onChanged;
+  const _DateRangeField({
+    required this.from,
+    required this.to,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasValue = from != null && to != null;
+    final text =
+        hasValue ? '${formatDate(from!)} – ${formatDate(to!)}' : 'All dates';
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () async {
+        final now = DateTime.now();
+        final picked = await showDateRangePicker(
+          context: context,
+          firstDate: DateTime(now.year - 3),
+          lastDate: DateTime(now.year + 1, 12, 31),
+          initialDateRange:
+              hasValue ? DateTimeRange(start: from!, end: to!) : null,
+          helpText: 'Filter LRs by date',
+          saveText: 'Apply',
+        );
+        if (picked != null) onChanged(picked);
+      },
+      child: InputDecorator(
+        isEmpty: !hasValue,
+        decoration: InputDecoration(
+          suffixIcon: hasValue
+              ? IconButton(
+                  tooltip: 'Clear dates',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: AppColors.slate,
+                    size: 18,
+                  ),
+                  onPressed: () => onChanged(null),
+                )
+              : const Icon(
+                  Icons.date_range_rounded,
+                  color: AppColors.slate,
+                  size: 20,
+                ),
+        ),
+        child: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 14,
+            color: hasValue ? AppColors.ink : AppColors.slate,
+          ),
+        ),
+      ),
     );
   }
 }

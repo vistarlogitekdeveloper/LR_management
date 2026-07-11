@@ -159,6 +159,15 @@ class FreightDetails {
   final double doorDelivery;
   final double handling;
   final double insurance;
+  final double additionalFreight;
+  // Client-funded incentives (NOT part of transporter freight). Each carries a
+  // per-LR driver share; the remainder is Vistar's margin. See the incentive
+  // getters below.
+  final double expressCharges; // total received from client
+  final double expressChargesDriverShare; // portion paid out to the driver
+  final double extraPointDelivery; // total received from client
+  final double extraPointDeliveryDriverShare; // portion paid out to the driver
+  final double haltingCharge;
   final double gst;
   final double advance;
   final double mathadi;
@@ -176,6 +185,12 @@ class FreightDetails {
     this.doorDelivery = 0,
     this.handling = 0,
     this.insurance = 0,
+    this.additionalFreight = 0,
+    this.expressCharges = 0,
+    this.expressChargesDriverShare = 0,
+    this.extraPointDelivery = 0,
+    this.extraPointDeliveryDriverShare = 0,
+    this.haltingCharge = 0,
     this.gst = 0,
     this.advance = 0,
     this.mathadi = 0,
@@ -192,8 +207,50 @@ class FreightDetails {
   // GST is no longer charged; it is excluded from the total. The backend still
   // returns a `total` generated column (authoritative) — this fallback is only
   // used when that is absent.
-  double get total => _total ?? (freight + doorDelivery + handling + insurance);
+  // Client incentive charges (express / extra-point delivery) are NOT part of
+  // the transporter freight total — they are a separate client-funded incentive
+  // split between the driver and Vistar (see the incentive getters below). This
+  // fallback (used only when the backend omits `total`) mirrors the backend
+  // generated column exactly.
+  double get total =>
+      _total ??
+      (freight +
+          doorDelivery +
+          handling +
+          insurance +
+          gst +
+          mathadi +
+          collection +
+          vistarMargin +
+          additionalFreight +
+          haltingCharge);
   double get balance => _balance ?? (total - advance);
+
+  // ---- Client incentive charges (express + extra-point delivery) -----------
+  // Each is an extra amount the client pays; a per-LR portion is paid out to
+  // the driver (together with the transporter balance, after POD) and the
+  // remainder is Vistar's margin. Margins are clamped at 0 in case a driver
+  // share is (mis-)entered above the client amount.
+  double get expressChargesVistarMargin {
+    final m = expressCharges - expressChargesDriverShare;
+    return m > 0 ? m : 0;
+  }
+
+  double get extraPointDeliveryVistarMargin {
+    final m = extraPointDelivery - extraPointDeliveryDriverShare;
+    return m > 0 ? m : 0;
+  }
+
+  /// Total incentive owed to the driver, paid with the transporter balance.
+  double get driverIncentiveTotal =>
+      expressChargesDriverShare + extraPointDeliveryDriverShare;
+
+  /// Vistar's combined share of the client incentives.
+  double get incentiveVistarMargin =>
+      expressChargesVistarMargin + extraPointDeliveryVistarMargin;
+
+  /// Total incentive received from the client across both heads.
+  double get clientIncentiveTotal => expressCharges + extraPointDelivery;
 
   factory FreightDetails.fromJson(
     Map<String, dynamic> json, {
@@ -207,6 +264,13 @@ class FreightDetails {
       doorDelivery: asDouble(json['door_delivery']),
       handling: asDouble(json['handling']),
       insurance: asDouble(json['insurance']),
+      additionalFreight: asDouble(json['additional_freight']),
+      expressCharges: asDouble(json['express_charges']),
+      expressChargesDriverShare: asDouble(json['express_charges_driver_share']),
+      extraPointDelivery: asDouble(json['extra_point_delivery']),
+      extraPointDeliveryDriverShare:
+          asDouble(json['extra_point_delivery_driver_share']),
+      haltingCharge: asDouble(json['halting_charge']),
       gst: asDouble(json['gst']),
       advance: asDouble(json['advance']),
       mathadi: asDouble(json['mathadi']),
@@ -226,6 +290,12 @@ class FreightDetails {
     double? doorDelivery,
     double? handling,
     double? insurance,
+    double? additionalFreight,
+    double? expressCharges,
+    double? expressChargesDriverShare,
+    double? extraPointDelivery,
+    double? extraPointDeliveryDriverShare,
+    double? haltingCharge,
     double? gst,
     double? advance,
     double? mathadi,
@@ -241,6 +311,14 @@ class FreightDetails {
       doorDelivery: doorDelivery ?? this.doorDelivery,
       handling: handling ?? this.handling,
       insurance: insurance ?? this.insurance,
+      additionalFreight: additionalFreight ?? this.additionalFreight,
+      expressCharges: expressCharges ?? this.expressCharges,
+      expressChargesDriverShare:
+          expressChargesDriverShare ?? this.expressChargesDriverShare,
+      extraPointDelivery: extraPointDelivery ?? this.extraPointDelivery,
+      extraPointDeliveryDriverShare:
+          extraPointDeliveryDriverShare ?? this.extraPointDeliveryDriverShare,
+      haltingCharge: haltingCharge ?? this.haltingCharge,
       gst: gst ?? this.gst,
       advance: advance ?? this.advance,
       mathadi: mathadi ?? this.mathadi,
@@ -339,6 +417,11 @@ class LorryReceipt {
   // Accounts queue and no non-functional button appears.
   final bool sentForPayment;
   final DateTime? sentForPaymentAt;
+  // Set (server-side) when the driver's incentive share is released together
+  // with the transporter balance (Complete Payment / after POD) — never with
+  // the 90% advance.
+  final bool driverIncentivePaid;
+  final DateTime? driverIncentivePaidAt;
 
   const LorryReceipt({
     required this.id,
@@ -381,6 +464,8 @@ class LorryReceipt {
     this.balancePaidAt,
     this.sentForPayment = false,
     this.sentForPaymentAt,
+    this.driverIncentivePaid = false,
+    this.driverIncentivePaidAt,
   });
 
   int get totalPackages => items.fold(0, (sum, item) => sum + item.packages);
@@ -512,6 +597,10 @@ class LorryReceipt {
       sentForPayment: (json['sent_for_payment'] as bool?) ?? true,
       sentForPaymentAt:
           DateTime.tryParse(json['sent_for_payment_at']?.toString() ?? ''),
+      driverIncentivePaid: (json['driver_incentive_paid'] as bool?) ?? false,
+      driverIncentivePaidAt: DateTime.tryParse(
+        json['driver_incentive_paid_at']?.toString() ?? '',
+      ),
     );
   }
 
@@ -531,6 +620,8 @@ class LorryReceipt {
     DateTime? balancePaidAt,
     bool? sentForPayment,
     DateTime? sentForPaymentAt,
+    bool? driverIncentivePaid,
+    DateTime? driverIncentivePaidAt,
   }) {
     return LorryReceipt(
       id: id,
@@ -573,6 +664,9 @@ class LorryReceipt {
       balancePaidAt: balancePaidAt ?? this.balancePaidAt,
       sentForPayment: sentForPayment ?? this.sentForPayment,
       sentForPaymentAt: sentForPaymentAt ?? this.sentForPaymentAt,
+      driverIncentivePaid: driverIncentivePaid ?? this.driverIncentivePaid,
+      driverIncentivePaidAt:
+          driverIncentivePaidAt ?? this.driverIncentivePaidAt,
     );
   }
 }

@@ -606,6 +606,16 @@ class _RightColumn extends StatelessWidget {
                 value: lr.freight.insurance,
                 hidden: !canViewTransporterRate,
               ),
+              _FreightRow(
+                label: 'Additional Freight Charges',
+                value: lr.freight.additionalFreight,
+                hidden: !canViewTransporterRate,
+              ),
+              _FreightRow(
+                label: 'Halting Charge',
+                value: lr.freight.haltingCharge,
+                hidden: !canViewTransporterRate,
+              ),
               const Divider(),
               _FreightRow(
                 label: 'Total',
@@ -680,6 +690,59 @@ class _RightColumn extends StatelessWidget {
                 ],
                 mobile: mobile,
               ),
+              // Client incentive charges (separate from transporter freight):
+              // client total → driver share (paid with balance) + Vistar margin.
+              if (canViewTransporterRate &&
+                  lr.freight.clientIncentiveTotal > 0) ...[
+                const SizedBox(height: 14),
+                _SectionHeader(
+                  icon: Icons.volunteer_activism_outlined,
+                  title: 'Incentive Charges (from Client)',
+                  mobile: mobile,
+                ),
+                if (lr.freight.expressCharges > 0) ...[
+                  _FreightRow(
+                    label: 'Express — Client',
+                    value: lr.freight.expressCharges,
+                  ),
+                  _FreightRow(
+                    label: 'Express — Driver',
+                    value: lr.freight.expressChargesDriverShare,
+                  ),
+                  if (canViewVistarMargin)
+                    _FreightRow(
+                      label: 'Express — Vistar Margin',
+                      value: lr.freight.expressChargesVistarMargin,
+                    ),
+                ],
+                if (lr.freight.extraPointDelivery > 0) ...[
+                  _FreightRow(
+                    label: 'Extra Point — Client',
+                    value: lr.freight.extraPointDelivery,
+                  ),
+                  _FreightRow(
+                    label: 'Extra Point — Driver',
+                    value: lr.freight.extraPointDeliveryDriverShare,
+                  ),
+                  if (canViewVistarMargin)
+                    _FreightRow(
+                      label: 'Extra Point — Vistar Margin',
+                      value: lr.freight.extraPointDeliveryVistarMargin,
+                    ),
+                ],
+                const Divider(),
+                _FreightRow(
+                  label: 'Driver Incentive (paid with balance)',
+                  value: lr.freight.driverIncentiveTotal,
+                  emphasis: true,
+                  color: AppColors.ok,
+                ),
+                if (canViewVistarMargin)
+                  _FreightRow(
+                    label: 'Vistar Incentive Margin',
+                    value: lr.freight.incentiveVistarMargin,
+                  ),
+              ],
             ],
           ),
         ),

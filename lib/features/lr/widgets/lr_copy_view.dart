@@ -323,6 +323,15 @@ class LrCopyView extends StatelessWidget {
                     _moneyRow('Handling', lr.freight.handling),
                     if (format.showInsurance)
                       _moneyRow('Insurance', lr.freight.insurance),
+                    // Additional freight & halting are part of Total, so show
+                    // them (when present) to keep the printed Total reconciled.
+                    if (lr.freight.additionalFreight > 0)
+                      _moneyRow(
+                        'Additional Freight',
+                        lr.freight.additionalFreight,
+                      ),
+                    if (lr.freight.haltingCharge > 0)
+                      _moneyRow('Halting Charge', lr.freight.haltingCharge),
                     if (format.showMathadi)
                       _moneyRow('Mathadi', lr.freight.mathadi),
                     const Divider(),
