@@ -266,6 +266,10 @@ pw.Widget _copyBody(
     lr.vehicle.driver,
     lr.vehicle.driverMobile,
   ].where((str) => str.isNotEmpty).join(' , ');
+  // Trip lead is now an app user; fall back to the legacy lookup for old LRs.
+  final tripLead = lr.freight.tripLeadUserName.isNotEmpty
+      ? lr.freight.tripLeadUserName
+      : lr.freight.tripLeadBy;
   final consignorContact = lr.consignor.mobile.isNotEmpty
       ? lr.consignor.mobile
       : lr.consignor.contact;
@@ -438,6 +442,17 @@ pw.Widget _copyBody(
           ),
         ],
       ),
+      // 6b. Trip lead (only when set)
+      if (tripLead.isNotEmpty)
+        _section(
+          rows: [
+            pw.TableRow(
+              children: [
+                _kv('Trip Lead', tripLead, size: 9.5 * s, vertical: padV),
+              ],
+            ),
+          ],
+        ),
       // 7. Goods table, then a filler that continues the column rules down to
       // the footer. Together they stretch the ruled table to fill the page so
       // there's no blank band and the signature footer sits on the page edge.
