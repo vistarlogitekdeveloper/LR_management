@@ -202,6 +202,14 @@ class LrCopyView extends StatelessWidget {
             _kv('Route', lr.route),
             _kv('P-Mark', lr.vehicle.pmark),
             _kv('Delivery', lr.deliveryType.label),
+            if (lr.freight.tripLeadUserName.isNotEmpty ||
+                lr.freight.tripLeadBy.isNotEmpty)
+              _kv(
+                'Trip Lead',
+                lr.freight.tripLeadUserName.isNotEmpty
+                    ? lr.freight.tripLeadUserName
+                    : lr.freight.tripLeadBy,
+              ),
           ],
         ),
       ),

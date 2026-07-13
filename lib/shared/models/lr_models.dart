@@ -175,7 +175,9 @@ class FreightDetails {
   final String advancePaidById;
   final String tripLeadById;
   final String advancePaidBy; // display label
-  final String tripLeadBy; // display label
+  final String tripLeadBy; // display label (legacy TRIP_LEAD_BY lookup)
+  final String tripLeadUserId; // app-user id — the current "Trip Lead By"
+  final String tripLeadUserName; // that user's display name
   final double? _total; // backend-computed (generated column)
   final double? _balance; // backend-computed (generated column)
 
@@ -199,6 +201,8 @@ class FreightDetails {
     this.tripLeadById = '',
     this.advancePaidBy = '',
     this.tripLeadBy = '',
+    this.tripLeadUserId = '',
+    this.tripLeadUserName = '',
     double? total,
     double? balance,
   }) : _total = total,
@@ -279,6 +283,8 @@ class FreightDetails {
       tripLeadById: tlbId ?? '',
       advancePaidBy: resolveLookup('ADVANCE_PAID_BY', apbId),
       tripLeadBy: resolveLookup('TRIP_LEAD_BY', tlbId),
+      tripLeadUserId: (json['trip_lead_user_id'] as String?) ?? '',
+      tripLeadUserName: (json['trip_lead_user_name'] as String?) ?? '',
       total: asDoubleOrNull(json['total']),
       balance: asDoubleOrNull(json['balance']),
     );
@@ -304,6 +310,8 @@ class FreightDetails {
     String? tripLeadById,
     String? advancePaidBy,
     String? tripLeadBy,
+    String? tripLeadUserId,
+    String? tripLeadUserName,
   }) {
     return FreightDetails(
       freight: freight ?? this.freight,
@@ -327,6 +335,8 @@ class FreightDetails {
       tripLeadById: tripLeadById ?? this.tripLeadById,
       advancePaidBy: advancePaidBy ?? this.advancePaidBy,
       tripLeadBy: tripLeadBy ?? this.tripLeadBy,
+      tripLeadUserId: tripLeadUserId ?? this.tripLeadUserId,
+      tripLeadUserName: tripLeadUserName ?? this.tripLeadUserName,
     );
   }
 }

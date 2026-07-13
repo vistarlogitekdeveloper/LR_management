@@ -685,8 +685,14 @@ class _RightColumn extends StatelessWidget {
                     ('Mathadi', inr(lr.freight.mathadi)),
                   if (lr.freight.advancePaidBy.isNotEmpty)
                     ('Advance Paid By', lr.freight.advancePaidBy),
-                  if (lr.freight.tripLeadBy.isNotEmpty)
-                    ('Trip Lead By', lr.freight.tripLeadBy),
+                  if (lr.freight.tripLeadUserName.isNotEmpty ||
+                      lr.freight.tripLeadBy.isNotEmpty)
+                    (
+                      'Trip Lead By',
+                      lr.freight.tripLeadUserName.isNotEmpty
+                          ? lr.freight.tripLeadUserName
+                          : lr.freight.tripLeadBy,
+                    ),
                 ],
                 mobile: mobile,
               ),

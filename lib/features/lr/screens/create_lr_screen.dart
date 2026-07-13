@@ -28,6 +28,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../lookups/data/lookup_value.dart';
 import '../../lookups/providers/lookups_provider.dart';
 import '../../masters/providers/master_providers.dart';
+import '../../users/basic_users_provider.dart';
 import '../../masters/providers/part_descriptions_provider.dart';
 import '../../masters/widgets/master_actions.dart';
 import '../../masters/widgets/party_form_dialog.dart';
@@ -115,7 +116,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   LookupValue? _deliveryType;
   LookupValue? _capacity;
   LookupValue? _advancePaidBy;
-  LookupValue? _tripLeadBy;
+  UserRef? _tripLeadUser;
   LookupValue? _ewbLoad;
 
   final _customerCtrl = TextEditingController();
@@ -251,11 +252,12 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
           'ADVANCE_PAID_BY',
           lr.freight.advancePaidById,
         );
-        _tripLeadBy = lookupById(
-          _lookups,
-          'TRIP_LEAD_BY',
-          lr.freight.tripLeadById,
-        );
+        _tripLeadUser = lr.freight.tripLeadUserId.isNotEmpty
+            ? UserRef(
+                id: lr.freight.tripLeadUserId,
+                name: lr.freight.tripLeadUserName,
+              )
+            : null;
         _ewbLoad = lookupById(_lookups, 'EWB_LOAD_TYPE', lr.ewb?.loadTypeId);
 
         _rebuildInvoicesFromItems(lr.items);
@@ -309,7 +311,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       _deliveryType = null;
       _capacity = null;
       _advancePaidBy = null;
-      _tripLeadBy = null;
+      _tripLeadUser = null;
       _ewbLoad = null;
     }
     if (mounted) setState(() => _loading = false);
@@ -578,7 +580,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       'mathadi': _toDouble(_mathadiCtrl),
       'vistar_margin': _vistarMargin,
       if (_advancePaidBy != null) 'advance_paid_by_id': _advancePaidBy!.id,
-      if (_tripLeadBy != null) 'trip_lead_by_id': _tripLeadBy!.id,
+      if (_tripLeadUser != null) 'trip_lead_user_id': _tripLeadUser!.id,
       if (_remarksCtrl.text.trim().isNotEmpty)
         'remarks': _remarksCtrl.text.trim(),
       'invoice_items': _buildInvoiceItems(date),
@@ -673,7 +675,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     'delivery_type_id': _deliveryType?.id,
     'capacity_id': _capacity?.id,
     'advance_paid_by_id': _advancePaidBy?.id,
-    'trip_lead_by_id': _tripLeadBy?.id,
+    'trip_lead_user_id': _tripLeadUser?.id,
+    'trip_lead_user_name': _tripLeadUser?.name,
     'ewb_load_type_id': _ewbLoad?.id,
     'ewb_number': _ewbCtrl.text,
     'invoices': [
@@ -914,9 +917,13 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
             p['advance_paid_by_id'] as String?,
           ) ??
           _advancePaidBy;
-      _tripLeadBy =
-          lookupById(lk, 'TRIP_LEAD_BY', p['trip_lead_by_id'] as String?) ??
-          _tripLeadBy;
+      final tlUid = p['trip_lead_user_id'] as String?;
+      if (tlUid != null && tlUid.isNotEmpty) {
+        _tripLeadUser = UserRef(
+          id: tlUid,
+          name: (p['trip_lead_user_name'] as String?) ?? '',
+        );
+      }
       _ewbLoad =
           lookupById(lk, 'EWB_LOAD_TYPE', p['ewb_load_type_id'] as String?) ??
           _ewbLoad;
@@ -1551,8 +1558,13 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     final capacityList = lookupList(lookups, 'VEHICLE_CAPACITY');
     final packageTypes = lookupList(lookups, 'PACKAGE_TYPE');
     final advancePaidByList = lookupList(lookups, 'ADVANCE_PAID_BY');
-    final tripLeadByList = lookupList(lookups, 'TRIP_LEAD_BY');
     final ewbLoadList = lookupList(lookups, 'EWB_LOAD_TYPE');
+    // "Trip Lead By" is now an app user, sourced from GET /users/basic. The
+    // list is empty until the backend exposes that endpoint to LR-creating
+    // roles, in which case the picker simply shows no options.
+    final tripLeadUsersAsync = ref.watch(basicUsersProvider);
+    final tripLeadUsers = tripLeadUsersAsync.valueOrNull ?? const <UserRef>[];
+    final tripLeadUsersLoading = tripLeadUsersAsync.isLoading;
 
     final canViewTransporterRate = _canViewTransporterRate;
     final canViewVistarMargin = _canViewVistarMargin;
@@ -1947,11 +1959,17 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                               ),
                               LabeledField(
                                 label: 'Trip Lead By',
-                                child: _lookupDropdown(
-                                  value: _tripLeadBy,
-                                  options: tripLeadByList,
+                                child: SearchableField<UserRef>(
+                                  value: _tripLeadUser,
+                                  options: tripLeadUsers,
+                                  labelOf: (u) => u.name,
+                                  hintText: tripLeadUsersLoading
+                                      ? 'Loading users…'
+                                      : 'Select user',
+                                  dialogTitle: 'Select trip lead',
+                                  clearable: true,
                                   onChanged: (v) =>
-                                      setState(() => _tripLeadBy = v),
+                                      setState(() => _tripLeadUser = v),
                                 ),
                               ),
                               LabeledField(

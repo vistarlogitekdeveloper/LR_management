@@ -33,23 +33,52 @@ class DashboardScreen extends ConsumerWidget {
     final showMargin = user?.canViewVistarMargin ?? false;
     final canViewTransporterRate = user?.canViewTransporterRate ?? false;
 
-    final today = lrs.take(6).toList();
-    final pendingFreightLocal = lrs
-        .where((lr) => lr.freight.balance > 0)
-        .fold<double>(0, (sum, lr) => sum + lr.freight.balance);
-    final inTransitLocal = lrs
-        .where((lr) => lr.status == LrStatus.inTransit)
-        .length;
-    final dispatched = lrs.where((lr) => lr.status != LrStatus.booked).length;
+    // Six most recent LRs for the "Recent Lorry Receipts" list further down.
+    final recentLrs = lrs.take(6).toList();
 
-    // Prefer server-side aggregates when the summary has loaded; otherwise fall
-    // back to values computed from the live LR list.
-    final pendingFreight = summary?.outstanding ?? pendingFreightLocal;
-    final inTransit = summary == null
-        ? inTransitLocal
-        : (summary.byStatus['IN_TRANSIT'] ?? 0);
+    // The local list is complete (fetchAllPages), so today-scoped figures are
+    // derived here — the server summary only exposes total count, outstanding
+    // and a by-status breakdown, none of which is day-scoped.
+    final now = DateTime.now();
+    bool isSameDay(DateTime? d) =>
+        d != null &&
+        d.year == now.year &&
+        d.month == now.month &&
+        d.day == now.day;
+
+    // 1. Today's LR — LRs booked today (by LR date).
+    final todayCount = lrs.where((lr) => isSameDay(lr.date)).length;
     final totalLrCount = summary?.count ?? lrs.length;
-    final todayCount = summary?.count ?? today.length;
+
+    // 2. Vehicles Dispatched (today) — distinct vehicles sent out today. An LR
+    //    counts as dispatched today when it has left the gate (out_datetime is
+    //    today) or it is dated today and has moved past Booked; cancelled LRs
+    //    never count.
+    final dispatchedToday = lrs
+        .where(
+          (lr) =>
+              lr.status != LrStatus.cancelled &&
+              (isSameDay(lr.outDateTime) ||
+                  (isSameDay(lr.date) &&
+                      (lr.status == LrStatus.inTransit ||
+                          lr.status == LrStatus.delivered))),
+        )
+        .map((lr) => lr.vehicle.number.trim().toUpperCase())
+        .where((v) => v.isNotEmpty)
+        .toSet()
+        .length;
+
+    // 3. Pending Delivery — LRs currently in transit (live on-road backlog).
+    final inTransit = summary == null
+        ? lrs.where((lr) => lr.status == LrStatus.inTransit).length
+        : (summary.byStatus['IN_TRANSIT'] ?? 0);
+
+    // 4. Pending Freight — outstanding transporter balance across open (non-
+    //    cancelled) LRs. Prefer the server aggregate when it has loaded.
+    final pendingFreightLocal = lrs
+        .where((lr) => lr.status != LrStatus.cancelled && lr.freight.balance > 0)
+        .fold<double>(0, (sum, lr) => sum + lr.freight.balance);
+    final pendingFreight = summary?.outstanding ?? pendingFreightLocal;
     final marginMtd = lrs.fold<double>(
       0,
       (sum, lr) => sum + lr.freight.vistarMargin,
@@ -57,7 +86,11 @@ class DashboardScreen extends ConsumerWidget {
 
     final customerTotals = <String, double>{};
     for (final lr in lrs) {
-      final key = lr.consignor.name;
+      // Rank by the LR's customer, not the consignor. Fall back to the
+      // consignor only for older LRs that have no customer recorded, so no
+      // freight is dropped from the ranking.
+      final customer = lr.customerName.trim();
+      final key = customer.isNotEmpty ? customer : lr.consignor.name;
       customerTotals[key] = (customerTotals[key] ?? 0) + lr.freight.total;
     }
     final topCustomers = customerTotals.entries.toList()
@@ -101,6 +134,15 @@ class DashboardScreen extends ConsumerWidget {
                       // narrow) — same small card on web and mobile.
                       final cols = c.maxWidth < 480 ? 2 : 4;
                       final spacing = c.maxWidth < 600 ? 8.0 : 12.0;
+                      // Each tile drills into the matching filtered view. The
+                      // LR-list filter is reset to only the relevant criterion
+                      // so the destination shows exactly what the tile counts.
+                      final todayDate = DateTime(now.year, now.month, now.day);
+                      void openLrs(LrFilter f) {
+                        ref.read(lrFilterProvider.notifier).state = f;
+                        context.go('/lrs');
+                      }
+
                       final stats = <_StatTile>[
                         _StatTile(
                           icon: Icons.description_outlined,
@@ -109,14 +151,20 @@ class DashboardScreen extends ConsumerWidget {
                           value: '$todayCount',
                           sub: '$totalLrCount total in system',
                           compact: true,
+                          onTap: () => openLrs(
+                            LrFilter(fromDate: todayDate, toDate: todayDate),
+                          ),
                         ),
                         _StatTile(
                           icon: Icons.local_shipping_outlined,
                           tint: AppColors.orange,
                           label: 'Vehicles Dispatched',
-                          value: '$dispatched',
-                          sub: '$inTransit in transit',
+                          value: '$dispatchedToday',
+                          sub: 'today · $inTransit in transit',
                           compact: true,
+                          onTap: () => openLrs(
+                            LrFilter(fromDate: todayDate, toDate: todayDate),
+                          ),
                         ),
                         _StatTile(
                           icon: Icons.schedule_rounded,
@@ -125,6 +173,9 @@ class DashboardScreen extends ConsumerWidget {
                           value: '$inTransit',
                           sub: 'On the road',
                           compact: true,
+                          onTap: () => openLrs(
+                            const LrFilter(status: LrStatus.inTransit),
+                          ),
                         ),
                         if (canViewTransporterRate)
                           _StatTile(
@@ -134,6 +185,15 @@ class DashboardScreen extends ConsumerWidget {
                             value: inr(pendingFreight),
                             sub: 'across open LRs',
                             compact: true,
+                            // Accounts desk gets the payments queue; everyone
+                            // else (who can see the amount) gets the LR list.
+                            onTap: () {
+                              if (user?.canViewAccounts ?? false) {
+                                context.go('/accounts');
+                              } else {
+                                openLrs(const LrFilter());
+                              }
+                            },
                           ),
                       ];
                       // Distribute the tiles that actually render across the
@@ -170,7 +230,7 @@ class DashboardScreen extends ConsumerWidget {
                                 child: const Text('View all'),
                               ),
                             ),
-                            for (final lr in today)
+                            for (final lr in recentLrs)
                               _RecentLrRow(
                                 lr: lr,
                                 canViewTransporterRate: canViewTransporterRate,
@@ -460,6 +520,7 @@ class _StatTile extends StatelessWidget {
   final String value;
   final String sub;
   final bool compact;
+  final VoidCallback? onTap;
 
   const _StatTile({
     required this.icon,
@@ -468,6 +529,7 @@ class _StatTile extends StatelessWidget {
     required this.value,
     required this.sub,
     this.compact = false,
+    this.onTap,
   });
 
   @override
@@ -520,17 +582,22 @@ class _StatTile extends StatelessWidget {
   // Phones: a tiny tile so four fit in one row. The value auto-scales so long
   // money figures (e.g. ₹1,23,456) still fit the narrow width.
   Widget _compactTile() {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: AppColors.white,
+    return Material(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
+        child: Ink(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.line),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
           Container(
             width: 28,
             height: 28,
@@ -574,7 +641,9 @@ class _StatTile extends StatelessWidget {
               ),
             ),
           ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }
