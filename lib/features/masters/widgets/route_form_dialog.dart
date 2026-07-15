@@ -49,6 +49,7 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
   PickedLocation? _fromLoc;
   PickedLocation? _toLoc;
   String? _vehicleTypeId;
+  String? _capacityId;
   bool _saving = false;
 
   RouteMaster? get _existing => widget.existing;
@@ -73,6 +74,7 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
           : '',
     );
     _vehicleTypeId = r?.vehicleTypeId;
+    _capacityId = r?.capacityId;
     if (r != null && r.hasFromCoords) {
       _fromLoc = PickedLocation(
         placeId: r.fromPlaceId,
@@ -121,6 +123,7 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
         baseRate: parse(_baseRate),
         customerRate: parse(_customerRate),
         vehicleTypeId: _vehicleTypeId,
+        capacityId: _capacityId,
         fromPlaceId: _fromLoc?.placeId ?? '',
         fromLat: _fromLoc?.lat,
         fromLng: _fromLoc?.lng,
@@ -151,6 +154,8 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
   Widget build(BuildContext context) {
     final vehicleTypes =
         lookupList(ref.watch(lookupsMapProvider), 'VEHICLE_TYPE');
+    final capacities =
+        lookupList(ref.watch(lookupsMapProvider), 'VEHICLE_CAPACITY');
     // Visibility perms (migration 072): hide the rate inputs the user may not
     // see. Controllers stay initialised — only the fields are dropped — and the
     // backend strips any redacted value on save.
@@ -167,6 +172,16 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
         category: 'VEHICLE_TYPE',
         code: _existing?.vehicleTypeCode ?? '',
         label: _existing?.vehicleTypeLabel ?? '',
+      );
+    }
+    LookupValue? selectedCap =
+        capacities.where((v) => v.id == _capacityId).firstOrNull;
+    if (selectedCap == null && (_capacityId ?? '').isNotEmpty) {
+      selectedCap = LookupValue(
+        id: _capacityId!,
+        category: 'VEHICLE_CAPACITY',
+        code: _existing?.capacityCode ?? '',
+        label: _existing?.capacityLabel ?? '',
       );
     }
     return Column(
@@ -262,6 +277,7 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
                           child: _text(
                             _customerRate,
                             'Customer Rate (₹)',
+                            required: true,
                             number: true,
                             hint: 'Used for Vistar margin',
                           ),
@@ -279,6 +295,22 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
                             clearable: true,
                             onChanged: (v) =>
                                 setState(() => _vehicleTypeId = v?.id),
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: half,
+                        child: LabeledField(
+                          label: 'Vehicle Capacity',
+                          child: SearchableField<LookupValue>(
+                            value: selectedCap,
+                            options: capacities,
+                            labelOf: (v) => v.label,
+                            hintText: 'Select vehicle capacity',
+                            dialogTitle: 'Select Vehicle Capacity',
+                            clearable: true,
+                            onChanged: (v) =>
+                                setState(() => _capacityId = v?.id),
                           ),
                         ),
                       ),

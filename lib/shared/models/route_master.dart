@@ -11,6 +11,11 @@ class RouteMaster {
   final String? vehicleTypeId;
   final String? vehicleTypeCode;
   final String? vehicleTypeLabel;
+  // Vehicle capacity (VEHICLE_CAPACITY lookup) — nullable; copied onto LRs
+  // created for this route.
+  final String? capacityId;
+  final String? capacityCode;
+  final String? capacityLabel;
   // Map-picked endpoints (Google Places). place_id is the stable key; lat/lng
   // + formatted address power the map and (later) geofencing.
   final String fromPlaceId;
@@ -33,6 +38,9 @@ class RouteMaster {
     this.vehicleTypeId,
     this.vehicleTypeCode,
     this.vehicleTypeLabel,
+    this.capacityId,
+    this.capacityCode,
+    this.capacityLabel,
     this.fromPlaceId = '',
     this.fromLat,
     this.fromLng,
@@ -59,6 +67,10 @@ class RouteMaster {
         ((json['vehicleType'] as Map?)?['id'] as String?),
     vehicleTypeCode: (json['vehicleType'] as Map?)?['code'] as String?,
     vehicleTypeLabel: (json['vehicleType'] as Map?)?['label'] as String?,
+    capacityId: (json['capacity_id'] as String?) ??
+        ((json['capacity'] as Map?)?['id'] as String?),
+    capacityCode: (json['capacity'] as Map?)?['code'] as String?,
+    capacityLabel: (json['capacity'] as Map?)?['label'] as String?,
     fromPlaceId: (json['from_place_id'] as String?) ?? '',
     fromLat: asDoubleOrNull(json['from_lat']),
     fromLng: asDoubleOrNull(json['from_lng']),
@@ -78,6 +90,8 @@ class RouteMaster {
     'customer_rate': customerRate > 0 ? customerRate : null,
     // Always sent (even null) so clearing the vehicle type sticks on PATCH.
     'vehicle_type_id': vehicleTypeId,
+    // Always sent (even null) so clearing the capacity sticks on PATCH.
+    'capacity_id': capacityId,
     // Always sent (even null) so clearing a pin sticks on PATCH.
     'from_place_id': fromPlaceId.isEmpty ? null : fromPlaceId,
     'from_lat': fromLat,
@@ -98,6 +112,9 @@ class RouteMaster {
     String? vehicleTypeId,
     String? vehicleTypeCode,
     String? vehicleTypeLabel,
+    String? capacityId,
+    String? capacityCode,
+    String? capacityLabel,
     String? fromPlaceId,
     double? fromLat,
     double? fromLng,
@@ -118,6 +135,9 @@ class RouteMaster {
       vehicleTypeId: vehicleTypeId ?? this.vehicleTypeId,
       vehicleTypeCode: vehicleTypeCode ?? this.vehicleTypeCode,
       vehicleTypeLabel: vehicleTypeLabel ?? this.vehicleTypeLabel,
+      capacityId: capacityId ?? this.capacityId,
+      capacityCode: capacityCode ?? this.capacityCode,
+      capacityLabel: capacityLabel ?? this.capacityLabel,
       fromPlaceId: fromPlaceId ?? this.fromPlaceId,
       fromLat: fromLat ?? this.fromLat,
       fromLng: fromLng ?? this.fromLng,

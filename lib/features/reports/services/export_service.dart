@@ -24,7 +24,8 @@ class ExportService {
     final sheet = excel[excel.getDefaultSheet() ?? 'Sheet1'];
 
     final headers = <String>[
-      'LR No', 'Date', 'Consignor', 'Consignee', 'Vehicle', 'Route',
+      'LR No', 'Date', 'Consignor', 'Consignee', 'Vehicle',
+      'Vehicle Type', 'Capacity', 'Route',
       if (canViewTransporterRate) ...[
         'Freight', 'Door Delivery', 'Handling', 'Insurance', 'Mathadi',
         'Advance', 'Total', 'Balance',
@@ -43,6 +44,8 @@ class ExportService {
         TextCellValue(lr.consignor.name),
         TextCellValue(lr.consignee.name),
         TextCellValue(lr.vehicle.number),
+        TextCellValue(lr.vehicle.type),
+        TextCellValue(lr.capacityLabel),
         TextCellValue(lr.route),
         if (canViewTransporterRate) ...[
           DoubleCellValue(lr.freight.freight),

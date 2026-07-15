@@ -96,7 +96,6 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   final _vehicleFieldKey = GlobalKey();
   final _transporterFieldKey = GlobalKey();
   final _routeFieldKey = GlobalKey();
-  final _capacityFieldKey = GlobalKey();
   final _freightFieldKey = GlobalKey();
   final _incentiveFieldKey = GlobalKey();
 
@@ -771,6 +770,17 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       _freightCtrl.text = r.baseRate.toStringAsFixed(0);
       _fieldErrors.remove('freight');
     }
+    // Vehicle capacity is a route attribute now — carry the route's capacity
+    // onto the LR (this replaced the manual "Vehicle Capacity" field here).
+    final capId = r.capacityId;
+    _capacity = (capId != null && capId.isNotEmpty)
+        ? LookupValue(
+            id: capId,
+            category: 'VEHICLE_CAPACITY',
+            code: r.capacityCode ?? '',
+            label: r.capacityLabel ?? '',
+          )
+        : null;
   }
 
   Future<void> _addCustomerInline() async {
@@ -1195,9 +1205,6 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     if (_deliveryType == null) {
       errors['deliveryType'] = 'Select a delivery type.';
     }
-    if (_capacity == null) {
-      errors['capacity'] = 'Select a vehicle capacity.';
-    }
     // Only require freight from users who can see the transporter-side amount.
     // When the Freight input is hidden (no VIEW_TRANSPORTER_RATE) the backend
     // strips the field on save, so demanding it here would make save impossible
@@ -1280,7 +1287,6 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       'transporter': _transporterFieldKey,
       'route': _routeFieldKey,
       'deliveryType': _deliveryTypeFieldKey,
-      'capacity': _capacityFieldKey,
       'freight': _freightFieldKey,
       'payType': _payTypeFieldKey,
       'expressDriver': _incentiveFieldKey,
@@ -1555,7 +1561,6 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
     final payTypes = lookupList(lookups, 'PAY_TYPE');
     final deliveryTypes = lookupList(lookups, 'DELIVERY_TYPE');
-    final capacityList = lookupList(lookups, 'VEHICLE_CAPACITY');
     final packageTypes = lookupList(lookups, 'PACKAGE_TYPE');
     final advancePaidByList = lookupList(lookups, 'ADVANCE_PAID_BY');
     final ewbLoadList = lookupList(lookups, 'EWB_LOAD_TYPE');
@@ -1796,22 +1801,6 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                     _deliveryType = v;
                                     if (v != null) {
                                       _fieldErrors.remove('deliveryType');
-                                    }
-                                  }),
-                                ),
-                              ),
-                              LabeledField(
-                                key: _capacityFieldKey,
-                                label: 'Vehicle Capacity',
-                                required: true,
-                                errorText: _fieldErrors['capacity'],
-                                child: _lookupDropdown(
-                                  value: _capacity,
-                                  options: capacityList,
-                                  onChanged: (v) => setState(() {
-                                    _capacity = v;
-                                    if (v != null) {
-                                      _fieldErrors.remove('capacity');
                                     }
                                   }),
                                 ),
