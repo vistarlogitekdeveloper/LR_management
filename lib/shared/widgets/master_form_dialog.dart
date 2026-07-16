@@ -74,6 +74,8 @@ class _MasterFormDialogState extends State<MasterFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final Map<String, TextEditingController> _ctrls;
   late final Map<String, String?> _dropdownValues;
+  /// Names of required dropdowns left empty on the last save attempt.
+  final _dropdownErrors = <String>{};
   bool _saving = false;
 
   @override
@@ -84,9 +86,10 @@ class _MasterFormDialogState extends State<MasterFormDialog> {
     for (final f in widget.fields) {
       final initial = widget.initial[f.name] ?? f.initialValue ?? '';
       if (f.type == FieldType.dropdown) {
-        _dropdownValues[f.name] = initial.isNotEmpty
-            ? initial
-            : f.options?.firstOrNull;
+        // Only preselect a value we were actually handed. Falling back to the
+        // first option silently substitutes an arbitrary value for a field the
+        // caller left empty — and saving the form then persists that guess.
+        _dropdownValues[f.name] = initial.isNotEmpty ? initial : null;
       } else {
         _ctrls[f.name] = TextEditingController(text: initial);
       }
@@ -102,7 +105,24 @@ class _MasterFormDialogState extends State<MasterFormDialog> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    // SearchableField is not a FormField, so Form.validate() never sees the
+    // dropdowns — a required one has to be checked by hand or it submits empty.
+    final missing = widget.fields
+        .where((f) =>
+            f.type == FieldType.dropdown &&
+            f.required &&
+            (_dropdownValues[f.name] ?? '').isEmpty)
+        .map((f) => f.name)
+        .toSet();
+    final textOk = _formKey.currentState!.validate();
+    if (missing.isNotEmpty) {
+      setState(() => _dropdownErrors
+        ..clear()
+        ..addAll(missing));
+      return;
+    }
+    setState(() => _dropdownErrors.clear());
+    if (!textOk) return;
     setState(() => _saving = true);
     final values = <String, String>{};
     for (final f in widget.fields) {
@@ -219,14 +239,31 @@ class _MasterFormDialogState extends State<MasterFormDialog> {
       return LabeledField(
         label: f.label,
         required: f.required,
-        child: SearchableField<String>(
-          value: _dropdownValues[f.name],
-          options: f.options ?? const <String>[],
-          labelOf: (o) => o,
-          hintText: f.hint ?? 'Select ${f.label}',
-          dialogTitle: 'Select ${f.label}',
-          clearable: !f.required,
-          onChanged: (v) => setState(() => _dropdownValues[f.name] = v),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SearchableField<String>(
+              value: _dropdownValues[f.name],
+              options: f.options ?? const <String>[],
+              labelOf: (o) => o,
+              hintText: f.hint ?? 'Select ${f.label}',
+              dialogTitle: 'Select ${f.label}',
+              clearable: !f.required,
+              onChanged: (v) => setState(() {
+                _dropdownValues[f.name] = v;
+                _dropdownErrors.remove(f.name);
+              }),
+            ),
+            if (_dropdownErrors.contains(f.name))
+              const Padding(
+                padding: EdgeInsets.only(top: 6, left: 12),
+                child: Text(
+                  'Required',
+                  style: TextStyle(color: AppColors.red, fontSize: 12),
+                ),
+              ),
+          ],
         ),
       );
     }

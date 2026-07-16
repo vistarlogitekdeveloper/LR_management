@@ -12,8 +12,10 @@ import '../../../shared/widgets/pills.dart';
 import '../../../shared/widgets/section_title.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../lr/providers/lr_providers.dart';
+import '../../reports/data/reports_repository.dart';
 import '../../reports/providers/reports_providers.dart';
 import '../../shell/widgets/app_topbar.dart';
+import '../data/local_dashboard_metrics.dart';
 import '../models/role_flow.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -36,49 +38,18 @@ class DashboardScreen extends ConsumerWidget {
     // Six most recent LRs for the "Recent Lorry Receipts" list further down.
     final recentLrs = lrs.take(6).toList();
 
-    // The local list is complete (fetchAllPages), so today-scoped figures are
-    // derived here — the server summary only exposes total count, outstanding
-    // and a by-status breakdown, none of which is day-scoped.
-    final now = DateTime.now();
-    bool isSameDay(DateTime? d) =>
-        d != null &&
-        d.year == now.year &&
-        d.month == now.month &&
-        d.day == now.day;
+    // Tile figures come from the server (/reports/dashboard → `metrics`), which
+    // computes today / MTD / total in IST and applies the viewer's region scope
+    // and rate permissions in SQL. Deriving them here instead would only ever be
+    // as correct as the page of LRs this client happens to hold.
+    //
+    // localDashboardMetrics() is a stand-in for one case only: an app build that
+    // is ahead of the backend deploy, where `metrics` is absent from the
+    // response. Then the tiles degrade in accuracy rather than going blank.
+    final metrics = (summary != null && summary.metrics.isNotEmpty)
+        ? summary.metrics
+        : localDashboardMetrics(lrs);
 
-    // 1. Today's LR — LRs booked today (by LR date).
-    final todayCount = lrs.where((lr) => isSameDay(lr.date)).length;
-    final totalLrCount = summary?.count ?? lrs.length;
-
-    // 2. Vehicles Dispatched (today) — distinct vehicles sent out today. An LR
-    //    counts as dispatched today when it has left the gate (out_datetime is
-    //    today) or it is dated today and has moved past Booked; cancelled LRs
-    //    never count.
-    final dispatchedToday = lrs
-        .where(
-          (lr) =>
-              lr.status != LrStatus.cancelled &&
-              (isSameDay(lr.outDateTime) ||
-                  (isSameDay(lr.date) &&
-                      (lr.status == LrStatus.inTransit ||
-                          lr.status == LrStatus.delivered))),
-        )
-        .map((lr) => lr.vehicle.number.trim().toUpperCase())
-        .where((v) => v.isNotEmpty)
-        .toSet()
-        .length;
-
-    // 3. Pending Delivery — LRs currently in transit (live on-road backlog).
-    final inTransit = summary == null
-        ? lrs.where((lr) => lr.status == LrStatus.inTransit).length
-        : (summary.byStatus['IN_TRANSIT'] ?? 0);
-
-    // 4. Pending Freight — outstanding transporter balance across open (non-
-    //    cancelled) LRs. Prefer the server aggregate when it has loaded.
-    final pendingFreightLocal = lrs
-        .where((lr) => lr.status != LrStatus.cancelled && lr.freight.balance > 0)
-        .fold<double>(0, (sum, lr) => sum + lr.freight.balance);
-    final pendingFreight = summary?.outstanding ?? pendingFreightLocal;
     final marginMtd = lrs.fold<double>(
       0,
       (sum, lr) => sum + lr.freight.vistarMargin,
@@ -137,20 +108,38 @@ class DashboardScreen extends ConsumerWidget {
                       // Each tile drills into the matching filtered view. The
                       // LR-list filter is reset to only the relevant criterion
                       // so the destination shows exactly what the tile counts.
+                      final now = DateTime.now();
                       final todayDate = DateTime(now.year, now.month, now.day);
                       void openLrs(LrFilter f) {
                         ref.read(lrFilterProvider.notifier).state = f;
                         context.go('/lrs');
                       }
 
+                      // Tiles follow the operational funnel: booked → vehicle
+                      // placed → dispatched → in transit → completed, then the
+                      // two backlogs.
+                      //
+                      // Flow tiles headline Today (the day's output); the
+                      // backlog tiles headline Total, because "pending" is a
+                      // standing figure — the ₹ still owed across every open LR
+                      // is the number being watched, not just today's slice.
                       final stats = <_StatTile>[
                         _StatTile(
                           icon: Icons.description_outlined,
                           tint: AppColors.plum,
-                          label: 'Today\'s LR',
-                          value: '$todayCount',
-                          sub: '$totalLrCount total in system',
-                          compact: true,
+                          label: 'LRs Booked',
+                          metric: metrics['lrs_booked'],
+                          headline: MetricScope.today,
+                          onTap: () => openLrs(
+                            LrFilter(fromDate: todayDate, toDate: todayDate),
+                          ),
+                        ),
+                        _StatTile(
+                          icon: Icons.pin_drop_outlined,
+                          tint: AppColors.plum,
+                          label: 'Vehicle Placed',
+                          metric: metrics['vehicles_placed'],
+                          headline: MetricScope.today,
                           onTap: () => openLrs(
                             LrFilter(fromDate: todayDate, toDate: todayDate),
                           ),
@@ -159,32 +148,56 @@ class DashboardScreen extends ConsumerWidget {
                           icon: Icons.local_shipping_outlined,
                           tint: AppColors.orange,
                           label: 'Vehicles Dispatched',
-                          value: '$dispatchedToday',
-                          sub: 'today · $inTransit in transit',
-                          compact: true,
+                          metric: metrics['vehicles_dispatched'],
+                          headline: MetricScope.today,
                           onTap: () => openLrs(
                             LrFilter(fromDate: todayDate, toDate: todayDate),
+                          ),
+                        ),
+                        _StatTile(
+                          icon: Icons.alt_route_rounded,
+                          tint: AppColors.amber,
+                          label: 'Trips in Transit',
+                          metric: metrics['trips_in_transit'],
+                          headline: MetricScope.total,
+                          onTap: () => openLrs(
+                            const LrFilter(status: LrStatus.inTransit),
+                          ),
+                        ),
+                        _StatTile(
+                          icon: Icons.task_alt_rounded,
+                          tint: AppColors.ok,
+                          label: 'Trips Completed',
+                          metric: metrics['trips_completed'],
+                          headline: MetricScope.today,
+                          onTap: () => openLrs(
+                            const LrFilter(status: LrStatus.delivered),
                           ),
                         ),
                         _StatTile(
                           icon: Icons.schedule_rounded,
                           tint: AppColors.amber,
                           label: 'Pending Delivery',
-                          value: '$inTransit',
-                          sub: 'On the road',
-                          compact: true,
+                          // Booked + In Transit — everything not yet delivered,
+                          // deliberately wider than Trips in Transit.
+                          metric: metrics['pending_delivery'],
+                          headline: MetricScope.total,
                           onTap: () => openLrs(
-                            const LrFilter(status: LrStatus.inTransit),
+                            const LrFilter(status: LrStatus.booked),
                           ),
                         ),
+                        // Money tile: the server omits `pending_freight`
+                        // entirely without VIEW_TRANSPORTER_RATE, so this is
+                        // gated on the permission AND renders nothing if the
+                        // metric never arrived.
                         if (canViewTransporterRate)
                           _StatTile(
                             icon: Icons.account_balance_wallet_outlined,
                             tint: AppColors.red,
                             label: 'Pending Freight',
-                            value: inr(pendingFreight),
-                            sub: 'across open LRs',
-                            compact: true,
+                            metric: metrics['pending_freight'],
+                            headline: MetricScope.total,
+                            money: true,
                             // Accounts desk gets the payments queue; everyone
                             // else (who can see the amount) gets the LR list.
                             onTap: () {
@@ -513,75 +526,59 @@ class _FlowStepCard extends StatelessWidget {
   }
 }
 
+/// Which of the three reported scopes a tile leads with.
+enum MetricScope { today, mtd, total }
+
+extension on MetricScope {
+  String get label => switch (this) {
+    MetricScope.today => 'Today',
+    MetricScope.mtd => 'MTD',
+    MetricScope.total => 'Total',
+  };
+
+  double read(MetricScopes m) => switch (this) {
+    MetricScope.today => m.today,
+    MetricScope.mtd => m.mtd,
+    MetricScope.total => m.total,
+  };
+}
+
+/// A KPI tile reporting one metric across Today / MTD / Total.
+///
+/// The `headline` scope is rendered large; the other two follow as a footer in
+/// canonical (today → mtd → total) order, so every tile reads the same way even
+/// though flow tiles lead with Today and backlog tiles lead with Total.
 class _StatTile extends StatelessWidget {
   final IconData icon;
   final Color tint;
   final String label;
-  final String value;
-  final String sub;
-  final bool compact;
+
+  /// Null while the summary is still loading, or when the viewer's permissions
+  /// mean the server never sent this metric — rendered as em-dashes either way.
+  final MetricScopes? metric;
+  final MetricScope headline;
+
+  /// Format values as ₹ rather than plain counts.
+  final bool money;
   final VoidCallback? onTap;
 
   const _StatTile({
     required this.icon,
     required this.tint,
     required this.label,
-    required this.value,
-    required this.sub,
-    this.compact = false,
+    required this.metric,
+    required this.headline,
+    this.money = false,
     this.onTap,
   });
 
+  String _fmt(double v) => money ? inr(v) : v.round().toString();
+
   @override
   Widget build(BuildContext context) {
-    if (compact) return _compactTile();
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: tint.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            alignment: Alignment.center,
-            child: Icon(icon, color: tint, size: 22),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.slate,
-              fontWeight: FontWeight.w700,
-              fontSize: 12.5,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              color: AppColors.ink,
-              fontWeight: FontWeight.w800,
-              fontSize: 24,
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            sub,
-            style: const TextStyle(color: AppColors.slate, fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
+    final m = metric;
+    final rest = MetricScope.values.where((s) => s != headline).toList();
 
-  // Phones: a tiny tile so four fit in one row. The value auto-scales so long
-  // money figures (e.g. ₹1,23,456) still fit the narrow width.
-  Widget _compactTile() {
     return Material(
       color: AppColors.white,
       borderRadius: BorderRadius.circular(12),
@@ -598,52 +595,108 @@ class _StatTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-          Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: tint.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            alignment: Alignment.center,
-            child: Icon(icon, color: tint, size: 15),
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: tint.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                alignment: Alignment.center,
+                child: Icon(icon, color: tint, size: 15),
+              ),
+              const SizedBox(height: 6),
+              // Headline value. Money figures (₹79,69,378) are far wider than
+              // counts, so it scales down rather than overflowing the tile.
+              SizedBox(
+                width: double.infinity,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    m == null ? '—' : _fmt(headline.read(m)),
+                    maxLines: 1,
+                    style: const TextStyle(
+                      color: AppColors.ink,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 17,
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              SizedBox(
+                height: 24,
+                child: Text(
+                  '$label · ${headline.label}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.slate,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 9,
+                    height: 1.1,
+                  ),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 6),
+                child: Divider(height: 1, thickness: 1, color: AppColors.line),
+              ),
+              for (final s in rest)
+                _ScopeRow(
+                  label: s.label,
+                  value: m == null ? '—' : _fmt(s.read(m)),
+                ),
+            ],
           ),
-          const SizedBox(height: 6),
-          SizedBox(
-            width: double.infinity,
+        ),
+      ),
+    );
+  }
+}
+
+/// One "MTD ——— 414" line under a tile's headline figure.
+class _ScopeRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _ScopeRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.slate,
+              fontWeight: FontWeight.w600,
+              fontSize: 9,
+            ),
+          ),
+          const SizedBox(width: 4),
+          // The value takes the leftover width and scales down inside it, so a
+          // long ₹ figure shrinks instead of pushing the label off the tile.
+          Flexible(
             child: FittedBox(
               fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
+              alignment: Alignment.centerRight,
               child: Text(
                 value,
                 maxLines: 1,
                 style: const TextStyle(
                   color: AppColors.ink,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 17,
-                  letterSpacing: -0.4,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 10.5,
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 2),
-          SizedBox(
-            height: 24,
-            child: Text(
-              label,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppColors.slate,
-                fontWeight: FontWeight.w600,
-                fontSize: 9,
-                height: 1.1,
-              ),
-            ),
-          ),
-            ],
-          ),
-        ),
+        ],
       ),
     );
   }

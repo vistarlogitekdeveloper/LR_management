@@ -377,16 +377,57 @@ class _LrTable extends StatefulWidget {
 class _LrTableState extends State<_LrTable> {
   final ScrollController _hController = ScrollController();
 
+  // LRs are fetched in full and filtered client-side, so rendering every row
+  // would build — and, for DataTable, *measure* — hundreds of rows in a single
+  // frame: slow to open, and janky on every filter keystroke. Render a window
+  // instead and extend it as the user scrolls the enclosing page, so rows
+  // append seamlessly while only what's needed is ever built.
+  static const _pageSize = 50;
+  int _visible = _pageSize;
+  ScrollPosition? _outerPos;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The page scroller this table sits inside.
+    final pos = Scrollable.maybeOf(context)?.position;
+    if (!identical(pos, _outerPos)) {
+      _outerPos?.removeListener(_onOuterScroll);
+      _outerPos = pos;
+      _outerPos?.addListener(_onOuterScroll);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _LrTable oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A different result set (search/filter changed) restarts the window so a
+    // fresh query never renders a huge page.
+    if (oldWidget.lrs.length != widget.lrs.length) _visible = _pageSize;
+  }
+
+  void _onOuterScroll() {
+    final pos = _outerPos;
+    if (pos == null || !pos.hasContentDimensions) return;
+    if (_visible >= widget.lrs.length) return;
+    if (pos.pixels >= pos.maxScrollExtent - 600) {
+      setState(() {
+        final next = _visible + _pageSize;
+        _visible = next > widget.lrs.length ? widget.lrs.length : next;
+      });
+    }
+  }
+
   @override
   void dispose() {
+    _outerPos?.removeListener(_onOuterScroll);
     _hController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final lrs = widget.lrs;
-    if (lrs.isEmpty) {
+    if (widget.lrs.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(40),
         alignment: Alignment.center,
@@ -396,6 +437,10 @@ class _LrTableState extends State<_LrTable> {
         ),
       );
     }
+    // Only the current window is built; more rows append as the page scrolls.
+    final lrs = _visible >= widget.lrs.length
+        ? widget.lrs
+        : widget.lrs.take(_visible).toList();
 
     return LayoutBuilder(
       builder: (context, c) {

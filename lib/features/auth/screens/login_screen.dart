@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -58,6 +59,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         .login(username, _passCtrl.text);
     if (!mounted) return;
     if (ok) {
+      // Close the autofill context on success so the browser / password manager
+      // is prompted to save or update the saved credentials. Only on success —
+      // a failed attempt shouldn't offer to save a wrong password.
+      TextInput.finishAutofillContext();
       // Persist (or clear) the remembered username only after a successful
       // sign-in, so a failed attempt never changes what's stored.
       await LoginPrefs.save(remember: _rememberMe, username: username);
@@ -155,11 +160,11 @@ class _Hero extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
         child: const Row(
           children: [
-            BrandLogo(height: 28, light: true),
+            BrandLogo(height: 38, light: true),
             SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Vistar Transport Management System',
+                'Vistar Transport Management System (VTMS)',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 16,
@@ -183,10 +188,10 @@ class _Hero extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const BrandLogo(height: 36, light: true),
+          const BrandLogo(height: 58, light: true),
           const SizedBox(height: 32),
           const Text(
-            'Vistar Transport\nManagement System',
+            'Vistar Transport\nManagement System (VTMS)',
             style: TextStyle(
               color: Colors.white,
               fontSize: 36,
@@ -320,55 +325,69 @@ class _FormState extends State<_Form> {
               style: TextStyle(color: AppColors.slate, fontSize: 14),
             ),
             SizedBox(height: compact ? 20 : 28),
-            LabeledField(
-              label: 'Username',
-              required: true,
-              child: TextFormField(
-                controller: widget.userCtrl,
-                autofocus: widget.autofocusUsername,
-                textInputAction: TextInputAction.next,
-                autofillHints: const [AutofillHints.username],
-                // Use readOnly instead of enabled:false — on Flutter Web,
-                // disabling a TextField forces a DOM rebuild that wipes the
-                // displayed value, making it look like the field cleared.
-                readOnly: widget.loading,
-                validator: _validateUsername,
-                decoration: const InputDecoration(hintText: 'Enter your username'),
-              ),
-            ),
-            const SizedBox(height: 16),
-            LabeledField(
-              label: 'Password',
-              required: true,
-              child: TextFormField(
-                controller: widget.passCtrl,
-                obscureText: _obscurePassword,
-                // readOnly keeps the value visible during the API call;
-                // enabled:false would visually wipe it on Flutter Web.
-                readOnly: widget.loading,
-                textInputAction: TextInputAction.done,
-                autofillHints: const [AutofillHints.password],
-                validator: _validatePassword,
-                onFieldSubmitted: (_) => widget.loading ? null : widget.onSubmit(),
-                decoration: InputDecoration(
-                  hintText: 'Enter your password',
-                  // Eye icon to show / hide the password.
-                  suffixIcon: IconButton(
-                    tooltip:
-                        _obscurePassword ? 'Show password' : 'Hide password',
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                      color: AppColors.slate,
-                      size: 20,
+            // AutofillGroup links the username + password fields into ONE
+            // autofill context. Without it each field is its own scope, so the
+            // browser/password-manager fills only the field you clicked (the
+            // username) and leaves the password blank.
+            AutofillGroup(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  LabeledField(
+                    label: 'Username',
+                    required: true,
+                    child: TextFormField(
+                      controller: widget.userCtrl,
+                      autofocus: widget.autofocusUsername,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.username],
+                      // Use readOnly instead of enabled:false — on Flutter Web,
+                      // disabling a TextField forces a DOM rebuild that wipes the
+                      // displayed value, making it look like the field cleared.
+                      readOnly: widget.loading,
+                      validator: _validateUsername,
+                      decoration:
+                          const InputDecoration(hintText: 'Enter your username'),
                     ),
-                    onPressed: widget.loading
-                        ? null
-                        : () => setState(
-                            () => _obscurePassword = !_obscurePassword),
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  LabeledField(
+                    label: 'Password',
+                    required: true,
+                    child: TextFormField(
+                      controller: widget.passCtrl,
+                      obscureText: _obscurePassword,
+                      // readOnly keeps the value visible during the API call;
+                      // enabled:false would visually wipe it on Flutter Web.
+                      readOnly: widget.loading,
+                      textInputAction: TextInputAction.done,
+                      autofillHints: const [AutofillHints.password],
+                      validator: _validatePassword,
+                      onFieldSubmitted: (_) =>
+                          widget.loading ? null : widget.onSubmit(),
+                      decoration: InputDecoration(
+                        hintText: 'Enter your password',
+                        // Eye icon to show / hide the password.
+                        suffixIcon: IconButton(
+                          tooltip: _obscurePassword
+                              ? 'Show password'
+                              : 'Hide password',
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            color: AppColors.slate,
+                            size: 20,
+                          ),
+                          onPressed: widget.loading
+                              ? null
+                              : () => setState(
+                                  () => _obscurePassword = !_obscurePassword),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             if (widget.error != null) ...[

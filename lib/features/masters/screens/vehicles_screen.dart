@@ -21,6 +21,12 @@ const _none = '(None)';
 class VehiclesScreen extends ConsumerWidget {
   const VehiclesScreen({super.key});
 
+  /// The field takes a bare number of tonnes, so render 12 rather than "12.0".
+  static String _capacityText(double? mt) {
+    if (mt == null || mt <= 0) return '';
+    return mt.toStringAsFixed(mt.truncateToDouble() == mt ? 0 : 1);
+  }
+
   static List<FormFieldSpec> _fields(
     Vehicle? v, {
     required List<String> vehicleTypes,
@@ -46,8 +52,18 @@ class VehiclesScreen extends ConsumerWidget {
             name: 'capacity',
             label: 'Capacity (MT)',
             type: FieldType.number,
-            initialValue:
-                (v != null && v.capacityMt > 0) ? v.capacityMt.toString() : ''),
+            hint: 'e.g. 12',
+            // Without this a value like "10MT" fails to parse and is silently
+            // saved as no capacity at all — a 200 OK that quietly drops data.
+            validator: (value) {
+              final s = (value ?? '').trim();
+              if (s.isEmpty) return null; // optional
+              final n = double.tryParse(s);
+              if (n == null) return 'Enter tonnes as a plain number, e.g. 12';
+              if (n <= 0) return 'Must be greater than 0';
+              return null;
+            },
+            initialValue: _capacityText(v?.capacityMt)),
         FormFieldSpec(
             name: 'driver',
             label: 'Assigned Driver',
@@ -101,8 +117,7 @@ class VehiclesScreen extends ConsumerWidget {
           : {
               'number': existing.number,
               'type': existing.type,
-              'capacity':
-                  existing.capacityMt > 0 ? existing.capacityMt.toString() : '',
+              'capacity': _capacityText(existing.capacityMt),
               'driver': existing.driver.isEmpty ? _none : existing.driver,
               'transporter': existing.transporterName.isEmpty
                   ? _none
