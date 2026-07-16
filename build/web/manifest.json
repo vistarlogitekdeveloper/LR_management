@@ -1,6 +1,6 @@
 {
-    "name": "Vistar Logitek — LR Generation",
-    "short_name": "Vistar LR",
+    "name": "Vistar Transport Management System (VTMS)",
+    "short_name": "VTMS",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
