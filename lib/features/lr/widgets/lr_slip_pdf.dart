@@ -513,7 +513,7 @@ pw.Widget _copyBody(
           ),
         ],
       ),
-      // 11. Jurisdiction + copy legend
+      // 11. Copy legend
       _section(
         rows: [
           pw.TableRow(
@@ -526,9 +526,6 @@ pw.Widget _copyBody(
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    _txt('SUBJECT TO PUNE JURISDICTION',
-                        size: 8 * s, bold: true),
-                    pw.SizedBox(height: 2),
                     _txt(
                       '1) White - Sender Copy   2) Pink - Acknowledgement Copy   3) Blue - Recipient Copy   4) News - Office Copy',
                       size: 7.5 * s,

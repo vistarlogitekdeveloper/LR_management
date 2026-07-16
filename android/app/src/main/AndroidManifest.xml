@@ -4,7 +4,7 @@
          lookup" — even though debug builds work (debug manifest grants it). -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="lr_management"
+        android:label="VTMS"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

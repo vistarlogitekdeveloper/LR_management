@@ -680,6 +680,16 @@ class _LrPaymentCard extends ConsumerWidget {
                     visualDensity: VisualDensity.compact,
                   ),
                 ),
+              if (t.hasTdsDocument)
+                TextButton.icon(
+                  onPressed: () => _viewTds(context, ref, t),
+                  icon: const Icon(Icons.description_outlined, size: 16),
+                  label: const Text('TDS'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 4),
@@ -975,6 +985,29 @@ class _LrPaymentCard extends ConsumerWidget {
         bytes,
         _mimeForName(name),
         name.isEmpty ? 'cheque' : name,
+      );
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not open the document')),
+      );
+    }
+  }
+
+  Future<void> _viewTds(
+    BuildContext context,
+    WidgetRef ref,
+    Transporter t,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final bytes = await ref
+          .read(transportersRepositoryProvider)
+          .downloadDocument(t.id, type: 'tds');
+      final name = t.tdsFileName;
+      openFileInBrowser(
+        bytes,
+        _mimeForName(name),
+        name.isEmpty ? 'tds' : name,
       );
     } catch (_) {
       messenger.showSnackBar(

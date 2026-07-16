@@ -193,27 +193,32 @@ class _FilterBar extends ConsumerWidget {
               ),
         );
 
-        // Region options derived from the loaded LRs: region_id -> short code
-        // embedded in the LR number ({prefix}/{REGION}/{FY}/{seq}). Same source
-        // as the MIS region filter — no backend field needed. Shown whenever
-        // at least one region is present in the loaded LRs.
-        final regionCodes = <String, String>{};
+        // Region options derived from the loaded LRs. Label = the DB region
+        // name (region_name, joined server-side), falling back to the short
+        // code embedded in the LR number ({prefix}/{REGION}/{FY}/{seq}) for
+        // older responses. Shown whenever at least one region is present.
+        final regionLabels = <String, String>{};
         for (final lr in ref.watch(lrListProvider)) {
           final rid = lr.regionId;
           if (rid == null || rid.isEmpty) continue;
-          final parts = lr.number.split('/');
-          if (parts.length > 1 &&
-              RegExp(r'^[A-Za-z]{2,6}$').hasMatch(parts[1])) {
-            regionCodes[rid] = parts[1].toUpperCase();
+          final name = lr.regionName;
+          if (name != null && name.isNotEmpty) {
+            regionLabels[rid] = name;
+          } else {
+            final parts = lr.number.split('/');
+            if (parts.length > 1 &&
+                RegExp(r'^[A-Za-z]{2,6}$').hasMatch(parts[1])) {
+              regionLabels.putIfAbsent(rid, () => parts[1].toUpperCase());
+            }
           }
         }
-        final regionIds = regionCodes.keys.toList()
-          ..sort((a, b) => regionCodes[a]!.compareTo(regionCodes[b]!));
+        final regionIds = regionLabels.keys.toList()
+          ..sort((a, b) => regionLabels[a]!.compareTo(regionLabels[b]!));
         final hasRegions = regionIds.isNotEmpty;
         final region = SearchableField<String>(
           value: filter.region,
           options: regionIds,
-          labelOf: (id) => regionCodes[id] ?? id,
+          labelOf: (id) => regionLabels[id] ?? id,
           hintText: 'All regions',
           dialogTitle: 'Select region',
           clearable: true,

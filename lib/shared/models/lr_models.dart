@@ -396,6 +396,7 @@ class LorryReceipt {
   final String? driverId;
   final String? routeId;
   final String? regionId;
+  final String? regionName;
   final String route;
   final String fromCity;
   final String toCity;
@@ -451,6 +452,7 @@ class LorryReceipt {
     this.driverId,
     this.routeId,
     this.regionId,
+    this.regionName,
     required this.route,
     required this.fromCity,
     required this.toCity,
@@ -569,6 +571,8 @@ class LorryReceipt {
       driverId: json['driver_id'] as String? ?? driverJson?['id'] as String?,
       routeId: json['route_id'] as String?,
       regionId: json['region_id'] as String?,
+      regionName: (json['region_name'] as String?) ??
+          ((json['region'] as Map?)?['name'] as String?),
       route: (fromCity.isNotEmpty || toCity.isNotEmpty)
           ? '$fromCity → $toCity'
           : '',
@@ -651,6 +655,7 @@ class LorryReceipt {
       driverId: driverId,
       routeId: routeId,
       regionId: regionId,
+      regionName: regionName,
       route: route,
       fromCity: fromCity,
       toCity: toCity,

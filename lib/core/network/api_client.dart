@@ -232,7 +232,10 @@ class ApiClient {
     dynamic details;
     if (body is Map) {
       code = body['code']?.toString() ?? code;
-      message = body['error']?.toString() ?? message;
+      // Envelope responses use `error`; the global error handler uses `message`.
+      message = body['error']?.toString() ??
+          body['message']?.toString() ??
+          message;
       traceId = body['traceId']?.toString();
       // VALIDATION_ERROR ships Joi's details[]; VERSION_CONFLICT ships
       // current_version; HAS_REFERENCES ships references{}. Keep the whole

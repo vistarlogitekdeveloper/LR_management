@@ -159,7 +159,7 @@ class _Hero extends StatelessWidget {
             SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Lorry Receipt Management',
+                'Vistar Transport Management System',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 16,
@@ -186,7 +186,7 @@ class _Hero extends StatelessWidget {
           const BrandLogo(height: 36, light: true),
           const SizedBox(height: 32),
           const Text(
-            'Lorry Receipt\nManagement',
+            'Vistar Transport\nManagement System',
             style: TextStyle(
               color: Colors.white,
               fontSize: 36,

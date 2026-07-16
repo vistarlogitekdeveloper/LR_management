@@ -34,7 +34,16 @@ class UsersAdminScreen extends ConsumerWidget {
   }) async {
     final currentUser = ref.read(currentUserProvider);
     final isSuper = currentUser?.isSuperAdmin ?? false;
-    final roles = ref.read(rolesProvider).valueOrNull ?? const <RoleInfo>[];
+    // Ensure roles are loaded before building the dialog (the screen also keeps
+    // them warm). Awaiting the future removes the empty-picker race that left
+    // the Role dropdown showing "No matches".
+    List<RoleInfo> roles = const [];
+    try {
+      roles = await ref.read(rolesProvider.future);
+    } catch (_) {
+      // On failure leave roles empty — the picker shows "No matches".
+    }
+    if (!context.mounted) return;
     final roleNames = roles.map((r) => r.name).toList();
     final regions = ref.read(regionsProvider);
     final regionNames = regions.map((r) => r.name).toList();
@@ -344,8 +353,11 @@ class UsersAdminScreen extends ConsumerWidget {
     final users = ref.watch(usersProvider);
     final currentUser = ref.watch(currentUserProvider);
     final isSuper = currentUser?.isSuperAdmin ?? false;
-    // Keep regions/roles warm for the form pickers.
+    // Keep regions AND roles warm for the form pickers. rolesProvider is an
+    // autoDispose FutureProvider — without this watch it never loads before the
+    // dialog reads it, so the Role picker came up empty ("No matches").
     ref.watch(regionsProvider);
+    ref.watch(rolesProvider);
 
     return Scaffold(
       backgroundColor: AppColors.mist,

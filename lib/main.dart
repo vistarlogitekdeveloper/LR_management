@@ -18,7 +18,7 @@ class VistarApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
     return MaterialApp.router(
-      title: '${AppStrings.appName} · ${AppStrings.appTagline}',
+      title: '${AppStrings.appName} (${AppStrings.appShortName})',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       routerConfig: router,
