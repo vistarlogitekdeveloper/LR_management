@@ -1,8 +1,25 @@
+import '../../core/utils/json_parse.dart';
+
+/// Share of the transporter freight released up front as an advance when
+/// nothing more specific is configured. Historically this was hardcoded at 90%
+/// across the app; it is now a per-transporter default that each LR copies and
+/// may override, so this constant is only the fallback for a transporter (or a
+/// legacy LR) that carries no explicit figure.
+///
+/// Must stay in step with the backend: the `advance_percent` column default in
+/// migration 088 and the `== null ? 90` fallbacks in lrController.markAdvancePaid
+/// and lrPaymentEmail.service.
+const double kDefaultAdvancePercent = 90;
+
 class Transporter {
   final String id;
   final String name;
   final String pan;
   final String tds; // 'Yes' / 'No' (maps to backend tds_applicable)
+  /// Default share of the transporter freight released up front as an advance.
+  /// Copied onto each new LR for this transporter (which may then override it
+  /// for that one LR). 90 unless the partner negotiated something else.
+  final double advancePercent;
   // Bank / payment details — persisted in the backend `bank_account` JSONB.
   final String bankName;
   final String accountHolder;
@@ -25,6 +42,7 @@ class Transporter {
     required this.name,
     required this.pan,
     required this.tds,
+    this.advancePercent = kDefaultAdvancePercent,
     this.bankName = '',
     this.accountHolder = '',
     this.accountNo = '',
@@ -83,6 +101,12 @@ class Transporter {
       name: (json['name'] as String?) ?? '',
       pan: (json['pan'] as String?) ?? '',
       tds: (json['tds_applicable'] as bool?) == true ? 'Yes' : 'No',
+      // NUMERIC comes back as a string ("75.00"); asDoubleOrNull handles both
+      // that and a real number. Falls back to 90 only when genuinely absent —
+      // an explicit 0 ("no advance") must survive, which `?? ` preserves and a
+      // truthiness check would not.
+      advancePercent:
+          asDoubleOrNull(json['advance_percent']) ?? kDefaultAdvancePercent,
       bankName: (bank['bank_name'] as String?) ?? '',
       accountHolder: (bank['account_holder'] as String?) ?? '',
       accountNo: (bank['account_no'] as String?) ?? '',
@@ -102,6 +126,7 @@ class Transporter {
     'name': name,
     if (pan.isNotEmpty) 'pan': pan,
     'tds_applicable': tdsApplicable,
+    'advance_percent': advancePercent,
     // Only the user-editable bank fields are sent — always (so clearing a
     // field sticks). On PATCH the backend MERGES this onto the stored
     // bank_account, preserving the cheque key + OCR readout set out-of-band
@@ -118,6 +143,7 @@ class Transporter {
     String? name,
     String? pan,
     String? tds,
+    double? advancePercent,
     String? bankName,
     String? accountHolder,
     String? accountNo,
@@ -136,6 +162,7 @@ class Transporter {
       name: name ?? this.name,
       pan: pan ?? this.pan,
       tds: tds ?? this.tds,
+      advancePercent: advancePercent ?? this.advancePercent,
       bankName: bankName ?? this.bankName,
       accountHolder: accountHolder ?? this.accountHolder,
       accountNo: accountNo ?? this.accountNo,

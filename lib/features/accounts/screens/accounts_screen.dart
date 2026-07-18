@@ -79,7 +79,8 @@ class AccountsScreen extends ConsumerWidget {
       ..sort((a, b) => regionCodes[a]!.compareTo(regionCodes[b]!));
     final hasRegions = regionIds.isNotEmpty;
     // Accounts pays the transporter, so payment state is tracked against the
-    // transporter freight (90% advance / 10% against POD), not the customer
+    // transporter freight (the LR's advance % up front, the rest against POD),
+    // not the customer
     // total. `balance` here means the transporter freight still unpaid.
     final filtered = sorted.where((lr) {
       final freight = lr.freight.freight;
@@ -446,7 +447,7 @@ class _LrPaymentCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Payment state is tracked against the transporter freight (the amount
-    // Accounts pays out): 90% advance up front, the ~10% balance against POD.
+    // Accounts pays out): the LR's advance % up front, the balance against POD.
     final freight = lr.freight.freight;
     final advance = lr.freight.advance;
     final transBalance = (freight - advance) > 0 ? (freight - advance) : 0.0;
@@ -621,7 +622,7 @@ class _LrPaymentCard extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               main,
-              // The 90/10 advance plan is a transporter-freight breakdown.
+              // The advance plan is a transporter-freight breakdown.
               if (canT) _advancePlan(context),
               // Client incentive charges: driver share is released with the
               // balance, so Accounts sees it alongside the advance plan.
@@ -716,22 +717,29 @@ class _LrPaymentCard extends ConsumerWidget {
     );
   }
 
-  // 90% of the transporter freight, rounded to the nearest 1000 so Accounts
-  // releases a clean round figure (e.g. 17,550 -> 18,000), clamped to the
-  // freight. The backend rounds the same way when the advance is paid.
-  double _advance90(double freight) =>
-      (((freight * 0.9) / 1000).roundToDouble() * 1000)
+  /// This LR's advance share — copied from the transporter when the LR was
+  /// created and overridable per LR (90 for every legacy LR, so their figures
+  /// are unchanged). Clamped because it drives a payout preview.
+  double get _advancePct => lr.freight.advancePercent.clamp(0, 100).toDouble();
+
+  /// The advance share of the transporter freight, rounded to the nearest 1000
+  /// so Accounts releases a clean round figure (e.g. 17,550 -> 18,000), clamped
+  /// to the freight. The backend rounds the same way when the advance is paid —
+  /// see markAdvancePaid in lrController.js, which must stay in lockstep with
+  /// this, since this only PREVIEWS the number the server will compute.
+  double _advanceFor(double freight) =>
+      (((freight * (_advancePct / 100)) / 1000).roundToDouble() * 1000)
           .clamp(0, freight)
           .toDouble();
 
-  /// The 90/10 transporter advance plan: 90% of the transporter freight is
-  /// released up front, the remaining 10% settles after POD. The actual figures
-  /// are computed on `freight` (the transporter freight, excluding the
+  /// The transporter advance plan: the LR's advance share of the transporter
+  /// freight is released up front, the remainder settles after POD. The actual
+  /// figures are computed on `freight` (the transporter freight, excluding the
   /// customer-side door/handling charges) — the same base Accounts pays out on.
   Widget _advancePlan(BuildContext context) {
     final freight = lr.freight.freight;
     if (freight <= 0) return const SizedBox.shrink();
-    final advance = _advance90(freight); // ~90% up front, rounded to 1000
+    final advance = _advanceFor(freight); // rounded to 1000
     final afterPod = freight - advance; // balance against POD
     // "Advance done" once the recorded advance covers the rounded target;
     // "fully paid" once it covers the whole freight (balance also released).
@@ -785,13 +793,13 @@ class _LrPaymentCard extends ConsumerWidget {
             children: [
               _Amount(label: 'Transporter Freight', value: freight),
               _Amount(
-                label: 'Advance 90% (now)',
+                label: 'Advance ${pctText(_advancePct)}% (now)',
                 value: advance,
                 color: AppColors.ok,
                 emphasis: true,
               ),
               _Amount(
-                label: 'Balance 10% (after POD)',
+                label: 'Balance ${pctText(100 - _advancePct)}% (after POD)',
                 value: afterPod,
                 color: AppColors.slate,
               ),
@@ -1035,12 +1043,13 @@ class _LrPaymentCard extends ConsumerWidget {
     }
   }
 
-  /// Releases the standard 90% transporter advance and triggers the
-  /// advance-paid notification email (LR creator + admins + master admin). The
-  /// backend computes the amount from the transporter freight.
+  /// Releases this LR's transporter advance and triggers the advance-paid
+  /// notification email (LR creator + admins + master admin). The backend
+  /// computes the amount from the transporter freight and the LR's own advance
+  /// percentage — the figure shown here is a preview of that same calculation.
   Future<void> _markAdvancePaid(BuildContext context, WidgetRef ref) async {
     final freight = lr.freight.freight;
-    final advance = _advance90(freight);
+    final advance = _advanceFor(freight);
     final afterPod = freight - advance;
     final transporterName = lr.transporter.name.isEmpty
         ? 'the transporter'
@@ -1053,7 +1062,7 @@ class _LrPaymentCard extends ConsumerWidget {
           builder: (ctx) => AlertDialog(
             title: Text('Mark advance paid · ${lr.number}'),
             content: Text(
-              'Release ${inr(advance)} (90% of the transporter freight ${inr(freight)}) '
+              'Release ${inr(advance)} (${pctText(_advancePct)}% of the transporter freight ${inr(freight)}) '
               'to $transporterName. The remaining ${inr(afterPod)} settles after POD.\n\n'
               'An advance-paid notification will be emailed to the LR creator, '
               'admin and master admin.',

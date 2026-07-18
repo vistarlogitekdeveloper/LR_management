@@ -126,8 +126,8 @@ class UsersAdminScreen extends ConsumerWidget {
               'username': existing.username,
               'email': existing.email,
               if (existing.mobile != null) 'mobile': existing.mobile!,
-              if (initialRoleName != null) 'role': initialRoleName,
-              if (existingRegionName != null) 'region': existingRegionName,
+              'role': ?initialRoleName,
+              'region': ?existingRegionName,
             },
       onSave: (values) async {
         final n = ref.read(usersProvider.notifier);

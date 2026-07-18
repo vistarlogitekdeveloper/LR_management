@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/utils/formatters.dart';
 import '../../../shared/models/transporter.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/master_providers.dart';
@@ -45,13 +46,23 @@ class TransportersScreen extends ConsumerWidget {
               }
             }
           : null,
-      columns: const ['Name', 'PAN', 'TDS Applicable', 'Bank', 'Cheque'],
+      // MasterPage zips columns[i] to cells[i] positionally — keep the two
+      // lists index-aligned.
+      columns: const [
+        'Name',
+        'PAN',
+        'TDS Applicable',
+        'Advance %',
+        'Bank',
+        'Cheque',
+      ],
       rows: [
         for (final t in transporters)
           MasterRow(id: t.id, cells: [
             t.name,
             t.pan,
             t.tds,
+            '${pctText(t.advancePercent)}%',
             t.bankName.isEmpty ? '—' : t.bankName,
             t.hasDocument ? 'On file' : '—',
           ]),

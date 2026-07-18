@@ -170,6 +170,11 @@ class FreightDetails {
   final double haltingCharge;
   final double gst;
   final double advance;
+  /// Share of the transporter freight released as this LR's advance. Copied
+  /// from the transporter's default when the LR is created and overridable on
+  /// this one LR; frozen thereafter, so later edits to the transporter's
+  /// default never move an already-billed LR. Legacy LRs read back as 90.
+  final double advancePercent;
   final double mathadi;
   final double vistarMargin;
   final String advancePaidById;
@@ -195,6 +200,7 @@ class FreightDetails {
     this.haltingCharge = 0,
     this.gst = 0,
     this.advance = 0,
+    this.advancePercent = kDefaultAdvancePercent,
     this.mathadi = 0,
     this.vistarMargin = 0,
     this.advancePaidById = '',
@@ -277,6 +283,11 @@ class FreightDetails {
       haltingCharge: asDouble(json['halting_charge']),
       gst: asDouble(json['gst']),
       advance: asDouble(json['advance']),
+      // asDoubleOrNull (not asDouble) so an absent column falls back to the
+      // standard default while an explicit 0% ("no advance") survives — the
+      // null-coercing asDouble would turn both into 0.
+      advancePercent:
+          asDoubleOrNull(json['advance_percent']) ?? kDefaultAdvancePercent,
       mathadi: asDouble(json['mathadi']),
       vistarMargin: asDouble(json['vistar_margin']),
       advancePaidById: apbId ?? '',
@@ -304,6 +315,7 @@ class FreightDetails {
     double? haltingCharge,
     double? gst,
     double? advance,
+    double? advancePercent,
     double? mathadi,
     double? vistarMargin,
     String? advancePaidById,
@@ -329,6 +341,7 @@ class FreightDetails {
       haltingCharge: haltingCharge ?? this.haltingCharge,
       gst: gst ?? this.gst,
       advance: advance ?? this.advance,
+      advancePercent: advancePercent ?? this.advancePercent,
       mathadi: mathadi ?? this.mathadi,
       vistarMargin: vistarMargin ?? this.vistarMargin,
       advancePaidById: advancePaidById ?? this.advancePaidById,

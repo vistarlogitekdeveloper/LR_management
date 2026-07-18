@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/file_opener.dart';
+import '../../../core/utils/formatters.dart';
 import '../../../shared/models/transporter.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/labeled_field.dart';
@@ -45,6 +46,7 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
   late final TextEditingController _holder;
   late final TextEditingController _accNo;
   late final TextEditingController _ifsc;
+  late final TextEditingController _advancePct;
   late String _tds;
 
   PlatformFile? _picked;
@@ -67,12 +69,16 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
     _holder = TextEditingController(text: t?.accountHolder ?? '');
     _accNo = TextEditingController(text: t?.accountNo ?? '');
     _ifsc = TextEditingController(text: t?.ifsc ?? '');
+    // Whole percentages show as "90", not "90.0".
+    _advancePct = TextEditingController(
+      text: pctText(t?.advancePercent ?? kDefaultAdvancePercent),
+    );
     _tds = t?.tds ?? 'Yes';
   }
 
   @override
   void dispose() {
-    for (final c in [_name, _pan, _bank, _holder, _accNo, _ifsc]) {
+    for (final c in [_name, _pan, _bank, _holder, _accNo, _ifsc, _advancePct]) {
       c.dispose();
     }
     super.dispose();
@@ -163,6 +169,7 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
             name: _name.text.trim(),
             pan: _pan.text.trim(),
             tds: _tds,
+            advancePercent: _advancePercentValue,
             bankName: _bank.text.trim(),
             accountHolder: _holder.text.trim(),
             accountNo: _accNo.text.trim(),
@@ -175,6 +182,7 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
             name: _name.text.trim(),
             pan: _pan.text.trim(),
             tds: _tds,
+            advancePercent: _advancePercentValue,
             bankName: _bank.text.trim(),
             accountHolder: _holder.text.trim(),
             accountNo: _accNo.text.trim(),
@@ -262,6 +270,16 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
                       SizedBox(width: w, child: _tdsField()),
                       SizedBox(
                         width: w,
+                        child: _text(
+                          _advancePct,
+                          'Advance %',
+                          number: true,
+                          hint: 'Default ${pctText(kDefaultAdvancePercent)}',
+                          validator: _validateAdvancePercent,
+                        ),
+                      ),
+                      SizedBox(
+                        width: w,
                         child: _text(_bank, 'Bank Name', required: true),
                       ),
                       SizedBox(
@@ -323,6 +341,9 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
     bool required = false,
     int? maxLength,
     bool upper = false,
+    bool number = false,
+    String? hint,
+    String? Function(String?)? validator,
   }) {
     return LabeledField(
       label: label,
@@ -330,15 +351,41 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
       child: TextFormField(
         controller: c,
         maxLength: maxLength,
+        keyboardType: number
+            ? const TextInputType.numberWithOptions(decimal: true)
+            : TextInputType.text,
         textCapitalization: upper
             ? TextCapitalization.characters
             : TextCapitalization.none,
-        decoration: const InputDecoration(counterText: ''),
-        validator: required
-            ? (v) => (v == null || v.trim().isEmpty) ? 'Required' : null
-            : null,
+        decoration: InputDecoration(counterText: '', hintText: hint),
+        validator: (v) {
+          final s = v?.trim() ?? '';
+          if (required && s.isEmpty) return 'Required';
+          return validator?.call(v);
+        },
       ),
     );
+  }
+
+  /// Validates the advance share. Blank is allowed and means "use the standard
+  /// ${kDefaultAdvancePercent}%". Rejecting an unparseable value matters here:
+  /// the save path coerces with `double.tryParse(...) ?? default`, so "90%" or
+  /// "ninety" would otherwise be silently stored as 90 — a 200 OK that quietly
+  /// ignored what the user typed. The 0-100 bound mirrors the backend CHECK
+  /// constraint so the server can never reject what the form accepted.
+  /// The advance share to save. Blank falls back to the standard default; the
+  /// value is already known-parseable and in range because _validateAdvancePercent
+  /// gated the save.
+  double get _advancePercentValue =>
+      double.tryParse(_advancePct.text.trim()) ?? kDefaultAdvancePercent;
+
+  String? _validateAdvancePercent(String? v) {
+    final s = (v ?? '').trim();
+    if (s.isEmpty) return null; // optional — falls back to the default
+    final n = double.tryParse(s);
+    if (n == null) return 'Enter a plain number, e.g. 90';
+    if (n < 0 || n > 100) return 'Must be between 0 and 100';
+    return null;
   }
 
   Widget _tdsField() => LabeledField(

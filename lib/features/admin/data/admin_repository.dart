@@ -12,10 +12,10 @@ class RoleInfo {
   const RoleInfo({required this.id, required this.code, required this.name});
 
   factory RoleInfo.fromJson(Map<String, dynamic> json) => RoleInfo(
-        id: json['id'] as String,
-        code: (json['code'] as String?) ?? '',
-        name: (json['name'] as String?) ?? '',
-      );
+    id: json['id'] as String,
+    code: (json['code'] as String?) ?? '',
+    name: (json['name'] as String?) ?? '',
+  );
 }
 
 class RegionInfo {
@@ -33,12 +33,12 @@ class RegionInfo {
   });
 
   factory RegionInfo.fromJson(Map<String, dynamic> json) => RegionInfo(
-        id: json['id'] as String,
-        code: (json['code'] as String?) ?? '',
-        name: (json['name'] as String?) ?? '',
-        active: (json['active'] as bool?) ?? true,
-        version: (json['version'] as num?)?.toInt() ?? 0,
-      );
+    id: json['id'] as String,
+    code: (json['code'] as String?) ?? '',
+    name: (json['name'] as String?) ?? '',
+    active: (json['active'] as bool?) ?? true,
+    version: (json['version'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// One per-user permission toggle row, as returned by the backend: whether the
@@ -58,7 +58,8 @@ class PermissionToggle {
     required this.effective,
   });
 
-  factory PermissionToggle.fromJson(Map<String, dynamic> json) => PermissionToggle(
+  factory PermissionToggle.fromJson(Map<String, dynamic> json) =>
+      PermissionToggle(
         code: json['code'] as String,
         label: (json['label'] as String?) ?? json['code'] as String,
         roleDefault: (json['role_default'] as bool?) ?? false,
@@ -72,9 +73,12 @@ class AdminRepository {
   final ApiClient _api;
 
   Future<List<AppUser>> listUsers({String? regionId}) async {
-    final res = await _api.dio.get('/admin/users', queryParameters: {
-      if (regionId != null && regionId.isNotEmpty) 'region_id': regionId,
-    });
+    final res = await _api.dio.get(
+      '/admin/users',
+      queryParameters: {
+        if (regionId != null && regionId.isNotEmpty) 'region_id': regionId,
+      },
+    );
     final rows = (res.data['data'] as List).cast<Map<String, dynamic>>();
     return rows.map(AppUser.fromJson).toList();
   }
@@ -89,16 +93,19 @@ class AdminRepository {
     String? regionId,
     bool active = true,
   }) async {
-    final res = await _api.dio.post('/admin/users', data: {
-      'username': username,
-      'name': name,
-      'role_id': roleId,
-      'password': password,
-      if (email != null && email.isNotEmpty) 'email': email,
-      if (mobile != null && mobile.isNotEmpty) 'mobile': mobile,
-      if (regionId != null && regionId.isNotEmpty) 'region_id': regionId,
-      'active': active,
-    });
+    final res = await _api.dio.post(
+      '/admin/users',
+      data: {
+        'username': username,
+        'name': name,
+        'role_id': roleId,
+        'password': password,
+        if (email != null && email.isNotEmpty) 'email': email,
+        if (mobile != null && mobile.isNotEmpty) 'mobile': mobile,
+        if (regionId != null && regionId.isNotEmpty) 'region_id': regionId,
+        'active': active,
+      },
+    );
     return AppUser.fromJson((res.data['data'] as Map).cast<String, dynamic>());
   }
 
@@ -115,12 +122,12 @@ class AdminRepository {
     final res = await _api.dio.patch(
       '/admin/users/$id',
       data: {
-        if (name != null) 'name': name,
-        if (email != null) 'email': email,
-        if (mobile != null) 'mobile': mobile,
-        if (roleId != null) 'role_id': roleId,
-        if (regionId != null) 'region_id': regionId,
-        if (active != null) 'active': active,
+        'name': ?name,
+        'email': ?email,
+        'mobile': ?mobile,
+        'role_id': ?roleId,
+        'region_id': ?regionId,
+        'active': ?active,
       },
       options: Options(headers: {'If-Match': version.toString()}),
     );
@@ -146,11 +153,13 @@ class AdminRepository {
   }
 
   Future<RegionInfo> createRegion({required String name, String? code}) async {
-    final res = await _api.dio.post('/admin/regions', data: {
-      'name': name,
-      if (code != null && code.isNotEmpty) 'code': code,
-    });
-    return RegionInfo.fromJson((res.data['data'] as Map).cast<String, dynamic>());
+    final res = await _api.dio.post(
+      '/admin/regions',
+      data: {'name': name, if (code != null && code.isNotEmpty) 'code': code},
+    );
+    return RegionInfo.fromJson(
+      (res.data['data'] as Map).cast<String, dynamic>(),
+    );
   }
 
   Future<RegionInfo> updateRegion(
@@ -162,14 +171,12 @@ class AdminRepository {
   }) async {
     final res = await _api.dio.patch(
       '/admin/regions/$id',
-      data: {
-        if (name != null) 'name': name,
-        if (code != null) 'code': code,
-        if (active != null) 'active': active,
-      },
+      data: {'name': ?name, 'code': ?code, 'active': ?active},
       options: Options(headers: {'If-Match': version.toString()}),
     );
-    return RegionInfo.fromJson((res.data['data'] as Map).cast<String, dynamic>());
+    return RegionInfo.fromJson(
+      (res.data['data'] as Map).cast<String, dynamic>(),
+    );
   }
 
   Future<void> deleteRegion(String id) async {
@@ -202,7 +209,7 @@ class AdminRepository {
     final rows = await fetchAllPages(
       _api,
       '/admin/audit',
-      query: {if (entityType != null) 'entity_type': entityType},
+      query: {'entity_type': ?entityType},
       maxPages: 5,
     );
     return rows.map(AuditEntry.fromJson).toList();

@@ -23,8 +23,8 @@ class TemplatesRepository {
     Map<String, dynamic>? payload,
   }) async {
     final res = await _api.dio.patch('/lr-templates/$id', data: {
-      if (title != null) 'title': title,
-      if (payload != null) 'payload': payload,
+      'title': ?title,
+      'payload': ?payload,
     });
     return LrTemplate.fromJson((res.data['data'] as Map).cast<String, dynamic>());
   }

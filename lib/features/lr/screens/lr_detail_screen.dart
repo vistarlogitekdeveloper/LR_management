@@ -624,7 +624,7 @@ class _RightColumn extends StatelessWidget {
                 hidden: !canViewTransporterRate,
               ),
               _FreightRow(
-                label: 'Advance',
+                label: 'Advance (${pctText(lr.freight.advancePercent)}%)',
                 value: lr.freight.advance,
                 hidden: !canViewTransporterRate,
               ),

@@ -135,6 +135,12 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   final _extraPointDriverCtrl = TextEditingController(text: '0');
   final _haltingChargeCtrl = TextEditingController(text: '0');
   final _advanceCtrl = TextEditingController(text: '0');
+  // Share of the transporter freight released as this LR's advance. Seeded from
+  // the selected transporter's default (see _selectTransporter) and editable
+  // here for this one LR.
+  final _advancePctCtrl = TextEditingController(
+    text: pctText(kDefaultAdvancePercent),
+  );
   final _mathadiCtrl = TextEditingController(text: '0');
   final _remarksCtrl = TextEditingController();
   final _ewbCtrl = TextEditingController();
@@ -276,6 +282,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
             .toStringAsFixed(0);
         _haltingChargeCtrl.text = lr.freight.haltingCharge.toStringAsFixed(0);
         _advanceCtrl.text = lr.freight.advance.toStringAsFixed(0);
+        _advancePctCtrl.text = pctText(lr.freight.advancePercent);
         _mathadiCtrl.text = lr.freight.mathadi.toStringAsFixed(0);
         _remarksCtrl.text = lr.remarks ?? '';
         _customerCtrl.text = lr.customerName;
@@ -332,6 +339,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       _extraPointDriverCtrl,
       _haltingChargeCtrl,
       _advanceCtrl,
+      _advancePctCtrl,
       _mathadiCtrl,
       _remarksCtrl,
       _ewbCtrl,
@@ -429,6 +437,43 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
   double _toDouble(TextEditingController c) =>
       double.tryParse(c.text.trim()) ?? 0;
+
+  /// This LR's advance share. Blank means "use the transporter's default", and
+  /// falls back to the standard 90 when no transporter is selected. Clamped to
+  /// 0-100 so the value sent can never violate the backend CHECK constraint —
+  /// a server-side rejection here would be especially costly, because the
+  /// form's idempotency key is fixed for its lifetime and a rejected save makes
+  /// every corrected retry fail with a 409.
+  double get _advancePercentValue {
+    final parsed = double.tryParse(_advancePctCtrl.text.trim());
+    final v =
+        parsed ?? _transporter?.advancePercent ?? kDefaultAdvancePercent;
+    return v.clamp(0, 100).toDouble();
+  }
+
+  /// Mirrors the backend range so an out-of-range figure is caught inline
+  /// rather than coming back as a 400 from the API.
+  String? _validateAdvancePercent(String? v) {
+    final s = (v ?? '').trim();
+    if (s.isEmpty) return null; // falls back to the transporter's default
+    final n = double.tryParse(s);
+    if (n == null) return 'Enter a plain number, e.g. 90';
+    if (n < 0 || n > 100) return 'Must be between 0 and 100';
+    return null;
+  }
+
+  /// What Accounts will actually release for the current freight + percentage —
+  /// the same formula the backend applies on "Mark advance paid" (rounded to
+  /// the nearest ₹1,000, clamped to the freight), shown live so the operator
+  /// sees the real payout rather than just a percentage.
+  double get _advancePreview {
+    final freight = _toDouble(_freightCtrl);
+    if (freight <= 0) return 0;
+    final pct = _advancePercentValue;
+    return (((freight * (pct / 100)) / 1000).roundToDouble() * 1000)
+        .clamp(0, freight)
+        .toDouble();
+  }
 
   // Mirrors the backend-authoritative `total` so the preview matches what will
   // actually be saved: freight + charges + mathadi + the auto Vistar margin.
@@ -576,6 +621,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       'extra_point_delivery_driver_share': _toDouble(_extraPointDriverCtrl),
       'halting_charge': _toDouble(_haltingChargeCtrl),
       'advance': _toDouble(_advanceCtrl),
+      'advance_percent': _advancePercentValue,
       'mathadi': _toDouble(_mathadiCtrl),
       'vistar_margin': _vistarMargin,
       if (_advancePaidBy != null) 'advance_paid_by_id': _advancePaidBy!.id,
@@ -709,6 +755,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     'extra_point_delivery_driver_share': _extraPointDriverCtrl.text,
     'halting_charge': _haltingChargeCtrl.text,
     'advance': _advanceCtrl.text,
+    'advance_percent': _advancePctCtrl.text,
     'mathadi': _mathadiCtrl.text,
     'remarks': _remarksCtrl.text,
   };
@@ -749,14 +796,34 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     }
     if (v.transporterId != null && v.transporterId!.isNotEmpty) {
       final t = _byId(transporters, v.transporterId, (x) => x.id);
-      if (t != null) {
-        _transporter = t;
-        _fieldErrors.remove('transporter');
-      }
+      // Carries the transporter's advance % too — same path as picking the
+      // transporter by hand.
+      if (t != null) _selectTransporter(t);
     }
     if (v.routeId != null && v.routeId!.isNotEmpty) {
       final r = _byId(routes, v.routeId, (x) => x.id);
       if (r != null) _selectRoute(r);
+    }
+  }
+
+  /// Selecting a transporter carries that partner's agreed advance share onto
+  /// this LR (the operator can still edit it for this one LR afterward), the
+  /// same way selecting a route carries its base rate and capacity.
+  ///
+  /// Only a CHANGE of transporter re-seeds the percentage. Re-selecting the one
+  /// already chosen leaves the field alone, so an operator's per-LR override
+  /// isn't silently replaced by the master default. Loading an existing LR for
+  /// edit (and restoring a draft/template) assigns `_transporter` directly
+  /// rather than calling this, so a saved LR keeps the percentage it froze at
+  /// creation even if the transporter's default has moved since.
+  /// (Call inside setState.)
+  void _selectTransporter(Transporter? t) {
+    final previousId = _transporter?.id;
+    _transporter = t;
+    if (t == null) return;
+    _fieldErrors.remove('transporter');
+    if (t.id != previousId) {
+      _advancePctCtrl.text = pctText(t.advancePercent);
     }
   }
 
@@ -950,6 +1017,12 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       _extraPointDriverCtrl.text = text('extra_point_delivery_driver_share');
       _haltingChargeCtrl.text = text('halting_charge');
       _advanceCtrl.text = text('advance');
+      // Older drafts/templates predate this field — fall back to the selected
+      // transporter's default rather than restoring a blank.
+      final draftPct = text('advance_percent');
+      _advancePctCtrl.text = draftPct.isNotEmpty
+          ? draftPct
+          : pctText(_transporter?.advancePercent ?? kDefaultAdvancePercent);
       _mathadiCtrl.text = text('mathadi');
       _remarksCtrl.text = text('remarks');
     });
@@ -1749,12 +1822,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                   subtitleOf: (t) => t.pan,
                                   hintText: 'Select transporter',
                                   dialogTitle: 'Select Transporter',
-                                  onChanged: (v) => setState(() {
-                                    _transporter = v;
-                                    if (v != null) {
-                                      _fieldErrors.remove('transporter');
-                                    }
-                                  }),
+                                  onChanged: (v) =>
+                                      setState(() => _selectTransporter(v)),
                                 ),
                               ),
                               LabeledField(
@@ -1934,6 +2003,29 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                   child: TextFormField(
                                     controller: _advanceCtrl,
                                     keyboardType: TextInputType.number,
+                                    onChanged: (_) => setState(() {}),
+                                  ),
+                                ),
+                              // Carried from the selected transporter, editable
+                              // for this one LR. The helper text previews what
+                              // Accounts will actually release, so the operator
+                              // sees rupees rather than just a percentage.
+                              if (canViewTransporterRate)
+                                LabeledField(
+                                  label: 'Advance %',
+                                  child: TextFormField(
+                                    controller: _advancePctCtrl,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    validator: _validateAdvancePercent,
+                                    decoration: InputDecoration(
+                                      suffixText: '%',
+                                      helperText: _advancePreview > 0
+                                          ? 'Releases ${inr(_advancePreview)} of ${inr(_toDouble(_freightCtrl))}'
+                                          : 'Of the transporter freight',
+                                    ),
                                     onChanged: (_) => setState(() {}),
                                   ),
                                 ),
