@@ -9,6 +9,7 @@ import '../../../shared/models/lr_models.dart';
 import '../../../shared/models/transporter.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/loading_shimmer.dart';
 import '../../../shared/widgets/pills.dart';
 import '../../../shared/widgets/searchable_field.dart';
 import '../../../shared/widgets/section_title.dart';
@@ -53,6 +54,7 @@ class AccountsScreen extends ConsumerWidget {
         .watch(lrListProvider)
         .where((lr) => lr.sentForPayment)
         .toList();
+    final loading = ref.watch(lrListLoadingProvider);
     final filter = ref.watch(_accountsFilterProvider);
     final query = ref.watch(_accountsSearchProvider).trim().toLowerCase();
     final range = ref.watch(_accountsDateRangeProvider);
@@ -310,7 +312,14 @@ class AccountsScreen extends ConsumerWidget {
                           ],
                         ),
                         SizedBox(height: isMobile ? 12 : 16),
-                        if (filtered.isEmpty)
+                        if (loading && lrs.isEmpty)
+                          // First fetch still running → shimmer, not the empty
+                          // message (which would read as "nothing to pay").
+                          const Padding(
+                            padding: EdgeInsets.only(top: 4),
+                            child: ShimmerCards(cards: 4),
+                          )
+                        else if (filtered.isEmpty)
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 32),
                             child: Center(

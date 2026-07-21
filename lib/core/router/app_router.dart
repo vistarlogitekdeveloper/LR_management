@@ -122,6 +122,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               key: state.pageKey,
               child: RefreshGate(
                 onEnter: (ref) => ref.read(lrListProvider.notifier).refresh(),
+                loadingFlag: lrListLoadingProvider,
                 child: const DashboardScreen(),
               ),
             ),
@@ -144,6 +145,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               key: state.pageKey,
               child: RefreshGate(
                 onEnter: (ref) => ref.read(lrListProvider.notifier).refresh(),
+                loadingFlag: lrListLoadingProvider,
                 child: const LrListScreen(),
               ),
             ),
@@ -189,6 +191,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               child: RefreshGate(
                 onEnter: (ref) =>
                     ref.read(consignorsProvider.notifier).refresh(),
+                loadingFlag: consignorsLoadingProvider,
                 child: const ConsignorsScreen(),
               ),
             ),
@@ -199,6 +202,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               key: state.pageKey,
               child: RefreshGate(
                 onEnter: (ref) => ref.read(partiesProvider.notifier).refresh(),
+                loadingFlag: partiesLoadingProvider,
                 child: const PartiesScreen(),
               ),
             ),
@@ -216,6 +220,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               child: RefreshGate(
                 onEnter: (ref) =>
                     ref.read(consigneesProvider.notifier).refresh(),
+                loadingFlag: consigneesLoadingProvider,
                 child: const ConsigneesScreen(),
               ),
             ),
@@ -225,11 +230,15 @@ final routerProvider = Provider<GoRouter>((ref) {
             pageBuilder: (context, state) => NoTransitionPage(
               key: state.pageKey,
               child: RefreshGate(
+                // Drivers + transporters feed the vehicle form's pickers; the
+                // vehicles list drives this screen's loading flag, so its
+                // refresh is the one awaited.
                 onEnter: (ref) {
-                  ref.read(vehiclesProvider.notifier).refresh();
                   ref.read(driversProvider.notifier).refresh();
                   ref.read(transportersProvider.notifier).refresh();
+                  return ref.read(vehiclesProvider.notifier).refresh();
                 },
+                loadingFlag: vehiclesLoadingProvider,
                 child: const VehiclesScreen(),
               ),
             ),
@@ -240,6 +249,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               key: state.pageKey,
               child: RefreshGate(
                 onEnter: (ref) => ref.read(driversProvider.notifier).refresh(),
+                loadingFlag: driversLoadingProvider,
                 child: const DriversScreen(),
               ),
             ),
@@ -251,6 +261,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               child: RefreshGate(
                 onEnter: (ref) =>
                     ref.read(transportersProvider.notifier).refresh(),
+                loadingFlag: transportersLoadingProvider,
                 child: const TransportersScreen(),
               ),
             ),
@@ -261,6 +272,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               key: state.pageKey,
               child: RefreshGate(
                 onEnter: (ref) => ref.read(routesProvider.notifier).refresh(),
+                loadingFlag: routesLoadingProvider,
                 child: const RoutesScreen(),
               ),
             ),
@@ -272,6 +284,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               child: RefreshGate(
                 onEnter: (ref) =>
                     ref.read(partDescriptionsProvider.notifier).refresh(),
+                loadingFlag: partDescriptionsLoadingProvider,
                 child: const PartDescriptionsScreen(),
               ),
             ),
@@ -282,6 +295,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               key: state.pageKey,
               child: RefreshGate(
                 onEnter: (ref) => ref.read(lrListProvider.notifier).refresh(),
+                loadingFlag: lrListLoadingProvider,
                 child: const WarehouseScreen(),
               ),
             ),
@@ -292,6 +306,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               key: state.pageKey,
               child: RefreshGate(
                 onEnter: (ref) => ref.read(lrListProvider.notifier).refresh(),
+                loadingFlag: lrListLoadingProvider,
                 child: const ReportsScreen(),
               ),
             ),
@@ -302,6 +317,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               key: state.pageKey,
               child: RefreshGate(
                 onEnter: (ref) => ref.read(lrListProvider.notifier).refresh(),
+                loadingFlag: lrListLoadingProvider,
                 child: const AccountsScreen(),
               ),
             ),
@@ -318,6 +334,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   child: RefreshGate(
                     onEnter: (ref) =>
                         ref.read(usersProvider.notifier).refresh(),
+                    loadingFlag: usersLoadingProvider,
                     child: const UsersAdminScreen(),
                   ),
                 ),
@@ -329,6 +346,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   child: RefreshGate(
                     onEnter: (ref) =>
                         ref.read(regionsProvider.notifier).refresh(),
+                    loadingFlag: regionsLoadingProvider,
                     child: const RegionsScreen(),
                   ),
                 ),
@@ -362,6 +380,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                   child: RefreshGate(
                     onEnter: (ref) =>
                         ref.read(capacityOptionsProvider.notifier).refresh(),
+                    loadingFlag: capacityOptionsLoadingProvider,
                     child: const CapacityOptionsScreen(),
                   ),
                 ),

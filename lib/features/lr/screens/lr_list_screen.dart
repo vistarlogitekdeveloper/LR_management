@@ -8,6 +8,7 @@ import '../../../shared/models/lr_models.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/confirm_dialog.dart';
+import '../../../shared/widgets/loading_shimmer.dart';
 import '../../../shared/widgets/pills.dart';
 import '../../../shared/widgets/searchable_field.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -78,6 +79,7 @@ class LrListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final lrs = ref.watch(filteredLrsProvider);
+    final loading = ref.watch(lrListLoadingProvider);
     final filter = ref.watch(lrFilterProvider);
     final user = ref.watch(currentUserProvider);
     final canDelete = user?.canDeleteLr ?? false;
@@ -95,7 +97,7 @@ class LrListScreen extends ConsumerWidget {
         children: [
           AppTopbar(
             title: 'Lorry Receipts',
-            subtitle: '${lrs.length} records',
+            subtitle: loading && lrs.isEmpty ? 'Loading…' : '${lrs.length} records',
             actions: [
               AppButton(
                 label: 'Create LR',
@@ -116,6 +118,7 @@ class LrListScreen extends ConsumerWidget {
                     const SizedBox(height: 14),
                     _LrTable(
                       lrs: lrs,
+                      loading: loading,
                       canViewTransporterRate: canViewTransporterRate,
                       onDelete: canDelete
                           ? (lr) => _confirmDeleteLr(context, ref, lr)
@@ -360,11 +363,13 @@ class _DateRangeField extends StatelessWidget {
 
 class _LrTable extends StatefulWidget {
   final List<LorryReceipt> lrs;
+  final bool loading;
   final bool canViewTransporterRate;
   final void Function(LorryReceipt lr)? onDelete;
   final void Function(LorryReceipt lr)? onSendForPayment;
   const _LrTable({
     required this.lrs,
+    required this.loading,
     required this.canViewTransporterRate,
     this.onDelete,
     this.onSendForPayment,
@@ -428,6 +433,14 @@ class _LrTableState extends State<_LrTable> {
   @override
   Widget build(BuildContext context) {
     if (widget.lrs.isEmpty) {
+      // First fetch still in flight → shimmer, not "No LRs found" (which would
+      // wrongly read as an empty result while the API is pending).
+      if (widget.loading) {
+        return const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: ShimmerRows(rows: 8),
+        );
+      }
       return Container(
         padding: const EdgeInsets.all(40),
         alignment: Alignment.center,

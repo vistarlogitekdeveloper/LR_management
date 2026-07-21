@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/loading_shimmer.dart';
 import '../../shell/widgets/app_topbar.dart';
 
 class MasterRow {
@@ -22,6 +23,11 @@ class MasterPage extends StatefulWidget {
   final void Function(String id)? onEdit;
   final void Function(String id)? onDelete;
 
+  /// True while the first fetch is in flight. When set and there are no rows
+  /// yet, a shimmer is shown instead of the "No records" empty state, so a
+  /// pending API call no longer looks like an empty master.
+  final bool loading;
+
   const MasterPage({
     super.key,
     required this.title,
@@ -33,6 +39,7 @@ class MasterPage extends StatefulWidget {
     this.onAdd,
     this.onEdit,
     this.onDelete,
+    this.loading = false,
   });
 
   @override
@@ -102,7 +109,9 @@ class _MasterPageState extends State<MasterPage> {
                         ),
                         const SizedBox(width: 12),
                         Text(
-                          '${filtered.length} of ${widget.rows.length}',
+                          widget.loading && widget.rows.isEmpty
+                              ? 'Loading…'
+                              : '${filtered.length} of ${widget.rows.length}',
                           style: const TextStyle(
                             color: AppColors.slate,
                             fontSize: 12.5,
@@ -114,6 +123,14 @@ class _MasterPageState extends State<MasterPage> {
                     SizedBox(height: isMobile ? 10 : 14),
                     LayoutBuilder(
                       builder: (context, c) {
+                        // First load with nothing yet → shimmer, not "No
+                        // records" (which would wrongly read as an empty master).
+                        if (widget.rows.isEmpty && widget.loading) {
+                          return const Padding(
+                            padding: EdgeInsets.only(top: 4),
+                            child: ShimmerRows(rows: 8),
+                          );
+                        }
                         if (filtered.isEmpty) {
                           return const Padding(
                             padding: EdgeInsets.symmetric(vertical: 28),

@@ -69,6 +69,7 @@ class RegionsScreen extends ConsumerWidget {
     final canEdit = user?.canManageRegions ?? false;
 
     return MasterPage(
+      loading: ref.watch(regionsLoadingProvider),
       title: 'Regions',
       subtitle: '${regions.length} operating regions',
       icon: Icons.public_outlined,

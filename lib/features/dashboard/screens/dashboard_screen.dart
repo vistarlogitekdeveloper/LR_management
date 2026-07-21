@@ -8,6 +8,7 @@ import '../../../shared/models/lr_models.dart';
 import '../../../shared/models/user.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/loading_shimmer.dart';
 import '../../../shared/widgets/pills.dart';
 import '../../../shared/widgets/section_title.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -26,6 +27,10 @@ class DashboardScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final lrs = ref.watch(lrListProvider);
     final summary = ref.watch(dashboardSummaryProvider).valueOrNull;
+    // First load with nothing to show yet → shimmer instead of a page full of
+    // zeros that reads like real (empty) data.
+    final firstLoading =
+        ref.watch(lrListLoadingProvider) && lrs.isEmpty && summary == null;
 
     final flow = user == null ? null : RoleFlows.flows[user.role];
     final canCreate = user?.canCreateLr ?? false;
@@ -92,7 +97,9 @@ class DashboardScreen extends ConsumerWidget {
               padding: EdgeInsets.all(
                 MediaQuery.of(context).size.width < 600 ? 14 : 20,
               ),
-              child: Column(
+              child: firstLoading
+                  ? const ShimmerCards(cards: 6)
+                  : Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (flow != null) ...[

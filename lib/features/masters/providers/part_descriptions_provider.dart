@@ -13,6 +13,10 @@ final partDescriptionsProvider =
   (ref) => PartDescriptionsNotifier(ref.watch(partDescriptionsRepositoryProvider)),
 );
 
+/// First-load flag — `true` until the initial fetch settles (cleared by the
+/// route's RefreshGate). See [partDescriptionsProvider].
+final partDescriptionsLoadingProvider = StateProvider<bool>((ref) => true);
+
 class PartDescriptionsNotifier extends StateNotifier<List<PartDescription>> {
   PartDescriptionsNotifier(this._repo) : super(const []) {
     refresh();

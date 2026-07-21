@@ -155,6 +155,12 @@ final lrListProvider =
   );
 });
 
+/// First-load flag for the LR list: `true` until the initial GET /lrs settles
+/// (cleared by the route's RefreshGate). The list screen shows a shimmer while
+/// this is true AND the list is still empty, so a pending fetch no longer looks
+/// like an empty result.
+final lrListLoadingProvider = StateProvider<bool>((ref) => true);
+
 final lrFilterProvider = StateProvider<LrFilter>((ref) => const LrFilter());
 
 final filteredLrsProvider = Provider<List<LorryReceipt>>((ref) {

@@ -105,6 +105,7 @@ class ConsignorsScreen extends ConsumerWidget {
     final canEdit = user?.canManageConsignors ?? false;
 
     return MasterPage(
+      loading: ref.watch(consignorsLoadingProvider),
       title: 'Consignors',
       subtitle: '${consignors.length} parties · auto-fill enabled',
       icon: Icons.business_outlined,

@@ -23,6 +23,7 @@ class TransportersScreen extends ConsumerWidget {
     final canEdit = user?.canManageTransporters ?? false;
 
     return MasterPage(
+      loading: ref.watch(transportersLoadingProvider),
       title: 'Transporter Master',
       subtitle: '${transporters.length} transporter partners',
       icon: Icons.alt_route_rounded,

@@ -26,6 +26,7 @@ class RoutesScreen extends ConsumerWidget {
         RouteFormDialog.show(context, existing: existing);
 
     return MasterPage(
+      loading: ref.watch(routesLoadingProvider),
       title: 'Routes',
       subtitle: '${routes.length} routes with rate mapping',
       icon: Icons.route_outlined,

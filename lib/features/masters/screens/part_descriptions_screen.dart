@@ -119,6 +119,7 @@ class PartDescriptionsScreen extends ConsumerWidget {
     final canEdit = user?.canManagePartDescriptions ?? false;
 
     return MasterPage(
+      loading: ref.watch(partDescriptionsLoadingProvider),
       title: 'Part Descriptions',
       subtitle: '${parts.length} entries · auto-fill enabled',
       icon: Icons.inventory_2_outlined,

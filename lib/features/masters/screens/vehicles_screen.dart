@@ -210,6 +210,7 @@ class VehiclesScreen extends ConsumerWidget {
     final canEdit = user?.canManageVehicles ?? false;
 
     return MasterPage(
+      loading: ref.watch(vehiclesLoadingProvider),
       title: 'Vehicles & Drivers',
       subtitle: '${vehicles.length} vehicles in fleet',
       icon: Icons.local_shipping_outlined,

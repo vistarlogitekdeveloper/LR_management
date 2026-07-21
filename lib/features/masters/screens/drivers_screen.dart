@@ -97,6 +97,7 @@ class DriversScreen extends ConsumerWidget {
     final canEdit = user?.canManageDrivers ?? false;
 
     return MasterPage(
+      loading: ref.watch(driversLoadingProvider),
       title: 'Drivers',
       subtitle: '${drivers.length} drivers registered',
       icon: Icons.badge_outlined,

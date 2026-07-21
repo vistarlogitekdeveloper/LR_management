@@ -48,6 +48,7 @@ class CapacityOptionsScreen extends ConsumerWidget {
     final n = ref.read(capacityOptionsProvider.notifier);
 
     return MasterPage(
+      loading: ref.watch(capacityOptionsLoadingProvider),
       title: 'Vehicle Capacity Options',
       subtitle:
           '${options.length} options · shown in the LR "Vehicle Capacity" dropdown',

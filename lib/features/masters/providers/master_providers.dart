@@ -300,3 +300,17 @@ final driversProvider = StateNotifierProvider<DriversNotifier, List<Driver>>(
 final routesProvider = StateNotifierProvider<RoutesNotifier, List<RouteMaster>>(
   (ref) => RoutesNotifier(ref.watch(routesRepositoryProvider)),
 );
+
+// ---- First-load flags ----
+// Each is `true` until its master's initial fetch settles (cleared by the
+// route's RefreshGate). A master screen shows a shimmer while its flag is true
+// AND its list is still empty, so a pending fetch is no longer shown as "No
+// records". They persist for the app's lifetime, so re-entering a page keeps
+// showing the already-loaded rows instead of flashing a shimmer.
+final consignorsLoadingProvider = StateProvider<bool>((ref) => true);
+final partiesLoadingProvider = StateProvider<bool>((ref) => true);
+final consigneesLoadingProvider = StateProvider<bool>((ref) => true);
+final vehiclesLoadingProvider = StateProvider<bool>((ref) => true);
+final transportersLoadingProvider = StateProvider<bool>((ref) => true);
+final driversLoadingProvider = StateProvider<bool>((ref) => true);
+final routesLoadingProvider = StateProvider<bool>((ref) => true);

@@ -108,6 +108,7 @@ class ConsigneesScreen extends ConsumerWidget {
     final canEdit = user?.canManageConsignees ?? false;
 
     return MasterPage(
+      loading: ref.watch(consigneesLoadingProvider),
       title: 'Consignees',
       subtitle: '${consignees.length} delivery parties',
       icon: Icons.people_outline,

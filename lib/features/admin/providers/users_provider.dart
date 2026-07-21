@@ -81,6 +81,10 @@ final usersProvider =
   return UsersNotifier(ref.watch(adminRepositoryProvider), authed: authed);
 });
 
+/// First-load flag — `true` until the initial fetch settles (cleared by the
+/// route's RefreshGate). See [usersProvider].
+final usersLoadingProvider = StateProvider<bool>((ref) => true);
+
 class RegionsNotifier extends StateNotifier<List<RegionInfo>> {
   RegionsNotifier(this._repo, {required bool authed}) : super(const []) {
     if (authed) refresh();
@@ -121,3 +125,7 @@ final regionsProvider =
   final authed = ref.watch(currentUserProvider) != null;
   return RegionsNotifier(ref.watch(adminRepositoryProvider), authed: authed);
 });
+
+/// First-load flag — `true` until the initial fetch settles (cleared by the
+/// route's RefreshGate). See [regionsProvider].
+final regionsLoadingProvider = StateProvider<bool>((ref) => true);

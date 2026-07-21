@@ -9,6 +9,7 @@ import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/confirm_dialog.dart';
 import '../../../shared/widgets/form_field_spec.dart';
+import '../../../shared/widgets/loading_shimmer.dart';
 import '../../../shared/widgets/master_form_dialog.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../data/admin_repository.dart';
@@ -351,6 +352,7 @@ class UsersAdminScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final users = ref.watch(usersProvider);
+    final usersLoading = ref.watch(usersLoadingProvider);
     final currentUser = ref.watch(currentUserProvider);
     final isSuper = currentUser?.isSuperAdmin ?? false;
     // Keep regions AND roles warm for the form pickers. rolesProvider is an
@@ -385,6 +387,13 @@ class UsersAdminScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(16),
                 child: LayoutBuilder(
                   builder: (context, c) {
+                    // First load with nothing yet → shimmer, not "No users".
+                    if (users.isEmpty && usersLoading) {
+                      return const Padding(
+                        padding: EdgeInsets.only(top: 4),
+                        child: ShimmerRows(rows: 6),
+                      );
+                    }
                     if (users.isEmpty) {
                       return const Padding(
                         padding: EdgeInsets.symmetric(vertical: 28),

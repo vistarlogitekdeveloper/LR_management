@@ -17,6 +17,7 @@ class PartiesScreen extends ConsumerWidget {
     final canEdit = user?.canManageParties ?? false;
 
     return MasterPage(
+      loading: ref.watch(partiesLoadingProvider),
       title: 'Parties',
       subtitle: '${parties.length} parties · consignor / consignee / customer',
       icon: Icons.business_outlined,
