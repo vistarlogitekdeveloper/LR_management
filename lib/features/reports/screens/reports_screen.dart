@@ -22,6 +22,9 @@ final _misRangeProvider = StateProvider<DateTimeRange?>((ref) => null);
 // accounts role).
 final _misRegionProvider = StateProvider<String?>((ref) => null);
 final _misCreatorProvider = StateProvider<String?>((ref) => null);
+// MIS payment-stage filter (Accounts' "sent for advance"): null = all LRs,
+// true = only those sent for payment, false = only those not yet sent.
+final _misSentProvider = StateProvider<bool?>((ref) => null);
 
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
@@ -316,6 +319,7 @@ class _AccountsTab extends ConsumerWidget {
     final misRange = ref.watch(_misRangeProvider);
     final misRegion = ref.watch(_misRegionProvider);
     final misCreator = ref.watch(_misCreatorProvider);
+    final misSent = ref.watch(_misSentProvider);
     // Derive the MIS filter options from the visible LRs. Region label = the
     // short code embedded in the LR number ({prefix}/{REGION}/{FY}/{seq});
     // creator label = the creator name (populated once /lrs returns it).
@@ -484,6 +488,22 @@ class _AccountsTab extends ConsumerWidget {
                                   .state = v,
                             ),
                           ),
+                        // Payment-stage filter. Clearing it (the ✕) returns to
+                        // "All LRs" — the default, unchanged download.
+                        SizedBox(
+                          width: 190,
+                          child: SearchableField<bool>(
+                            value: misSent,
+                            options: const [true, false],
+                            labelOf: (v) =>
+                                v ? 'Sent for advance' : 'Not yet sent',
+                            hintText: 'All LRs',
+                            dialogTitle: 'Payment stage',
+                            clearable: true,
+                            onChanged: (v) =>
+                                ref.read(_misSentProvider.notifier).state = v,
+                          ),
+                        ),
                         AppButton(
                           label: 'Download MIS (Excel)',
                           icon: Icons.download_outlined,
@@ -504,6 +524,7 @@ class _AccountsTab extends ConsumerWidget {
                                         .substring(0, 10),
                                     regionId: ref.read(_misRegionProvider),
                                     createdBy: ref.read(_misCreatorProvider),
+                                    sentForPayment: ref.read(_misSentProvider),
                                   );
                               await ExportService.shareBytes(
                                 bytes,

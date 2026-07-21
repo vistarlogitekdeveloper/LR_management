@@ -109,11 +109,18 @@ class ReportsRepository {
 
   /// Fetches the server-generated MIS workbook (`.xlsx`) as raw bytes. Optional
   /// `from`/`to` are `YYYY-MM-DD` LR-date bounds.
+  ///
+  /// [sentForPayment] filters by Accounts' "sent for advance" stage:
+  ///   `true`  → only LRs already sent for payment,
+  ///   `false` → only LRs not yet sent (still pending),
+  ///   `null`  → all LRs (the default).
+  /// It is only sent when non-null, so the backend treats absence as "all".
   Future<List<int>> misXlsx({
     String? from,
     String? to,
     String? regionId,
     String? createdBy,
+    bool? sentForPayment,
   }) async {
     final res = await _api.dio.get(
       '/reports/mis.xlsx',
@@ -122,6 +129,7 @@ class ReportsRepository {
         if (to != null && to.isNotEmpty) 'to': to,
         if (regionId != null && regionId.isNotEmpty) 'region_id': regionId,
         if (createdBy != null && createdBy.isNotEmpty) 'created_by': createdBy,
+        'sent_for_payment': ?sentForPayment,
       },
       options: Options(responseType: ResponseType.bytes),
     );

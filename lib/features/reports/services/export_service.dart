@@ -24,8 +24,9 @@ class ExportService {
     final sheet = excel[excel.getDefaultSheet() ?? 'Sheet1'];
 
     final headers = <String>[
-      'LR No', 'Date', 'Consignor', 'Consignee', 'Vehicle',
-      'Vehicle Type', 'Capacity', 'Route',
+      'LR No', 'Date', 'Customer Name', 'Consignor', 'Consignee',
+      'Transporter Name', 'Vehicle', 'Vehicle Type', 'Capacity',
+      'In Date', 'Out Date', 'Route',
       if (canViewTransporterRate) ...[
         'Freight', 'Door Delivery', 'Handling', 'Insurance', 'Mathadi',
         'Advance', 'Total', 'Balance',
@@ -37,15 +38,23 @@ class ExportService {
       headers.map<CellValue?>((h) => TextCellValue(h)).toList(),
     );
 
-    for (final lr in lrs) {
+    // The list arrives latest-first (created_at DESC); reverse it so the sheet
+    // reads oldest → newest, i.e. the latest LR is the LAST row.
+    for (final lr in lrs.reversed) {
       sheet.appendRow(<CellValue?>[
         TextCellValue(lr.number),
         TextCellValue(formatDate(lr.date)),
+        TextCellValue(lr.customerName),
         TextCellValue(lr.consignor.name),
         TextCellValue(lr.consignee.name),
+        TextCellValue(lr.transporter.name),
         TextCellValue(lr.vehicle.number),
         TextCellValue(lr.vehicle.type),
         TextCellValue(lr.capacityLabel),
+        TextCellValue(
+            lr.inDateTime != null ? formatDateTime(lr.inDateTime!) : ''),
+        TextCellValue(
+            lr.outDateTime != null ? formatDateTime(lr.outDateTime!) : ''),
         TextCellValue(lr.route),
         if (canViewTransporterRate) ...[
           DoubleCellValue(lr.freight.freight),
