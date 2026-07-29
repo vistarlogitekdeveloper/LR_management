@@ -70,11 +70,30 @@ class LrRepository {
 
   LookupResolver get _resolver => _resolve;
 
-  Future<List<LorryReceipt>> list([LrFilterParams filter = const LrFilterParams()]) async {
-    final rows = await fetchAllPages(_api, '/lrs', query: filter.toQuery());
-    return rows
+  /// Loads all LRs. A small FIRST page (100) paints the list almost instantly;
+  /// the rest arrive in a single large page (backend allows up to 1000/page for
+  /// /lrs). [onPage] fires with each page's parsed rows as it lands so the list
+  /// can render progressively — the first rows show in well under a second even
+  /// when the full set is large. The complete list is still returned.
+  ///
+  /// Deploy-order safe: an un-upgraded backend just clamps the 1000 limit to its
+  /// own max and the walk continues over the extra pages.
+  Future<List<LorryReceipt>> list({
+    LrFilterParams filter = const LrFilterParams(),
+    void Function(List<LorryReceipt> page)? onPage,
+  }) async {
+    List<LorryReceipt> mapRows(List<Map<String, dynamic>> raw) => raw
         .map((e) => LorryReceipt.fromJson(e, resolveLookup: _resolver))
         .toList();
+    final rows = await fetchAllPages(
+      _api,
+      '/lrs',
+      query: filter.toQuery(),
+      firstPageSize: 100,
+      pageSize: 1000,
+      onPage: onPage == null ? null : (page) => onPage(mapRows(page)),
+    );
+    return mapRows(rows);
   }
 
   Future<LorryReceipt> getById(String id) async {

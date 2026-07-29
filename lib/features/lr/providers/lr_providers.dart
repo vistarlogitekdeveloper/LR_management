@@ -58,6 +58,13 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
   final LrRepository _repo;
   final AppUser? _user;
 
+  /// Bumped on each refresh so a superseded load (e.g. the constructor's initial
+  /// fetch and RefreshGate's on-entry fetch racing on first mount, or a fast
+  /// re-navigation) stops writing state — only the latest refresh paints. Without
+  /// this, two concurrent progressive loads could interleave their per-page
+  /// writes and make the list visibly jump.
+  int _refreshGen = 0;
+
   /// Operators may only see the LRs they created — region scope alone still
   /// exposes peers' consignments. Admins / super admins / accounts see the full
   /// (backend-scoped) set.
@@ -74,7 +81,30 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
 
   Future<void> refresh() async {
     try {
-      state = _scoped(await _repo.list());
+      // Render progressively: each page repaints the list as it arrives, so the
+      // first ~100 LRs show almost immediately instead of waiting for the whole
+      // set. The shimmer (gated on an empty list) clears as soon as page 1
+      // lands. `mounted` guards against a state write after disposal.
+      final gen = ++_refreshGen;
+      // Only paint progressively on a COLD list (first load / empty). When the
+      // list is already populated (a re-open / pull-to-refresh), we already show
+      // data, so streaming per-page gives nothing — and, crucially, replacing
+      // the full list with a partial first page would truncate it if a later
+      // page then failed. So on a warm list we accumulate silently and commit
+      // the full set once, keeping the prior list intact on any mid-stream error.
+      final paintProgressively = state.isEmpty;
+      final acc = <LorryReceipt>[];
+      final all = await _repo.list(
+        onPage: (page) {
+          // Stop if disposed or superseded by a newer refresh.
+          if (!mounted || gen != _refreshGen) return;
+          acc.addAll(page);
+          if (paintProgressively) state = _scoped(List.of(acc));
+        },
+      );
+      // Authoritative final state — also clears stale rows on an empty result,
+      // where no non-empty page callback replaced them.
+      if (mounted && gen == _refreshGen) state = _scoped(all);
     } catch (_) {
       // A transient backend/DB error shouldn't crash the UI; keep prior state.
     }

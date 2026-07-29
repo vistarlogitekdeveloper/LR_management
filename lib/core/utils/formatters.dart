@@ -23,6 +23,10 @@ String formatDate(DateTime d) => DateFormat('dd MMM yyyy').format(d);
 String formatDateTime(DateTime d) =>
     DateFormat('dd MMM yyyy, hh:mm a').format(d);
 
+/// 24-hour clock time only (e.g. 15:15). Used where date and time are shown in
+/// separate columns (the Excel export).
+String formatTime24(DateTime d) => DateFormat('HH:mm').format(d);
+
 int ageingDays(DateTime from, {DateTime? to}) {
   final end = to ?? DateTime.now();
   final diff = end.difference(from).inDays;

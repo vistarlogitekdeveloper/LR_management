@@ -28,6 +28,11 @@ class LrDetailScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final canEdit = user?.canEditLr ?? false;
     final canDelete = user?.canDeleteLr ?? false;
+    // A super admin may edit an LR at ANY stage — including after it was sent for
+    // payment (the sent-for-payment lock on the Edit button is bypassed for them).
+    // The backend already permits this (no sent-for-payment block; the delivered
+    // lock is bypassed for admins).
+    final isSuperAdmin = user?.isSuperAdmin ?? false;
     // The ops user who creates/manages LRs is the one who sends it to Accounts.
     final canSend = (user?.canCreateLr ?? false) ||
         (user?.canEditLr ?? false) ||
@@ -96,6 +101,7 @@ class LrDetailScreen extends ConsumerWidget {
           canSend,
           canViewTransporterRate,
           canViewVistarMargin,
+          isSuperAdmin,
         );
       },
     );
@@ -143,6 +149,7 @@ class LrDetailScreen extends ConsumerWidget {
     bool canSend,
     bool canViewTransporterRate,
     bool canViewVistarMargin,
+    bool isSuperAdmin,
   ) {
     return Scaffold(
       backgroundColor: AppColors.mist,
@@ -167,8 +174,9 @@ class LrDetailScreen extends ConsumerWidget {
                 ),
               // Once an LR is sent to Accounts for payment it is locked — no
               // more edits or deletes (status changes are still allowed so the
-              // LR can be progressed/delivered).
-              if (canEdit && !lr.sentForPayment)
+              // LR can be progressed/delivered). A super admin is exempt: they
+              // may edit the LR at any stage.
+              if (canEdit && (!lr.sentForPayment || isSuperAdmin))
                 AppButton(
                   label: 'Edit',
                   kind: BtnKind.soft,

@@ -20,13 +20,31 @@ class ExportService {
     bool canViewTransporterRate = true,
     bool canViewVistarMargin = true,
   }) async {
+    final bytes = buildLrsWorkbook(
+      lrs,
+      canViewTransporterRate: canViewTransporterRate,
+      canViewVistarMargin: canViewVistarMargin,
+    );
+    if (bytes != null) {
+      await shareBytes(bytes, 'vistar_lrs_${_now()}.xlsx');
+    }
+  }
+
+  /// Builds the LR workbook and returns its `.xlsx` bytes (no sharing) — split
+  /// out from [exportLrsExcel] so the column layout can be unit-tested.
+  static List<int>? buildLrsWorkbook(
+    List<LorryReceipt> lrs, {
+    bool canViewTransporterRate = true,
+    bool canViewVistarMargin = true,
+  }) {
     final excel = Excel.createExcel();
     final sheet = excel[excel.getDefaultSheet() ?? 'Sheet1'];
 
     final headers = <String>[
       'LR No', 'Date', 'Customer Name', 'Consignor', 'Consignee',
       'Transporter Name', 'Vehicle', 'Vehicle Type', 'Capacity',
-      'In Date', 'Out Date', 'Route',
+      // In / Out are split into separate date and (24-hour) time columns.
+      'In Date', 'In Time', 'Out Date', 'Out Time', 'Route',
       if (canViewTransporterRate) ...[
         'Freight', 'Door Delivery', 'Handling', 'Insurance', 'Mathadi',
         'Advance', 'Total', 'Balance',
@@ -51,10 +69,13 @@ class ExportService {
         TextCellValue(lr.vehicle.number),
         TextCellValue(lr.vehicle.type),
         TextCellValue(lr.capacityLabel),
+        // Date and 24-hour time in their own columns (blank when not recorded).
+        TextCellValue(lr.inDateTime != null ? formatDate(lr.inDateTime!) : ''),
         TextCellValue(
-            lr.inDateTime != null ? formatDateTime(lr.inDateTime!) : ''),
+            lr.inDateTime != null ? formatTime24(lr.inDateTime!) : ''),
+        TextCellValue(lr.outDateTime != null ? formatDate(lr.outDateTime!) : ''),
         TextCellValue(
-            lr.outDateTime != null ? formatDateTime(lr.outDateTime!) : ''),
+            lr.outDateTime != null ? formatTime24(lr.outDateTime!) : ''),
         TextCellValue(lr.route),
         if (canViewTransporterRate) ...[
           DoubleCellValue(lr.freight.freight),
@@ -73,10 +94,7 @@ class ExportService {
       ]);
     }
 
-    final bytes = excel.encode();
-    if (bytes != null) {
-      await shareBytes(bytes, 'vistar_lrs_${_now()}.xlsx');
-    }
+    return excel.encode();
   }
 
   static Future<void> exportTally(List<LorryReceipt> lrs) async {

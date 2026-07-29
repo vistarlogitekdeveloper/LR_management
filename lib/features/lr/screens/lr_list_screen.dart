@@ -406,9 +406,18 @@ class _LrTableState extends State<_LrTable> {
   @override
   void didUpdateWidget(covariant _LrTable oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // A different result set (search/filter changed) restarts the window so a
-    // fresh query never renders a huge page.
-    if (oldWidget.lrs.length != widget.lrs.length) _visible = _pageSize;
+    // Restart the window on a genuinely different result set (search/filter, or
+    // a new query) so a fresh query never renders a huge page. But do NOT reset
+    // it when the list merely GROWS with the same head — that's progressive
+    // streaming appending pages, and resetting mid-scroll would snap the user's
+    // position back to the top.
+    final old = oldWidget.lrs;
+    final now = widget.lrs;
+    final headChanged = old.isEmpty != now.isEmpty ||
+        (old.isNotEmpty && now.isNotEmpty && old.first.id != now.first.id);
+    if (headChanged || now.length < old.length) {
+      _visible = _pageSize;
+    }
   }
 
   void _onOuterScroll() {

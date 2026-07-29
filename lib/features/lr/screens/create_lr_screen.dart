@@ -1398,9 +1398,12 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
   Future<void> _save() async {
     // Guardrail: an LR that has been sent to Accounts for payment is locked and
-    // cannot be edited (the Edit button is hidden, but this also blocks a direct
-    // /edit deep-link). The backend is the ultimate enforcer.
-    if (_isEdit && (_editing?.sentForPayment ?? false)) {
+    // cannot be edited (the Edit button is hidden, this also blocks a direct
+    // /edit deep-link) — EXCEPT for a super admin, who may edit an LR at any
+    // stage. The backend allows the super-admin edit (no sent-for-payment block;
+    // the delivered lock is bypassed for admins).
+    final isSuperAdmin = ref.read(currentUserProvider)?.isSuperAdmin ?? false;
+    if (_isEdit && (_editing?.sentForPayment ?? false) && !isSuperAdmin) {
       MasterActions.showError(
         context,
         'This LR has been sent for payment and can no longer be edited.',
