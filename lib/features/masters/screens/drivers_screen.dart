@@ -83,7 +83,7 @@ class DriversScreen extends ConsumerWidget {
           }
           return true;
         } catch (e) {
-          MasterActions.showError(context, e);
+          if (context.mounted) MasterActions.showError(context, e);
           return false;
         }
       },

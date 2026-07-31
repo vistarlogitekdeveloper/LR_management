@@ -952,7 +952,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
           setState(() => _onVehicleSelected(full));
           return true;
         } catch (e) {
-          MasterActions.showError(context, e);
+          if (mounted) MasterActions.showError(context, e);
           return false;
         }
       },
