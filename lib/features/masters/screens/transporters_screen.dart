@@ -21,6 +21,9 @@ class TransportersScreen extends ConsumerWidget {
     final transporters = ref.watch(transportersProvider);
     final user = ref.watch(currentUserProvider);
     final canEdit = user?.canManageTransporters ?? false;
+    // Deleting a transporter is restricted to SUPER ADMINS only (matches the
+    // backend guard). Add/edit stay open to the manage permission.
+    final canDelete = user?.isSuperAdmin ?? false;
 
     return MasterPage(
       loading: ref.watch(transportersLoadingProvider),
@@ -35,7 +38,7 @@ class TransportersScreen extends ConsumerWidget {
               _openForm(context, existing: t);
             }
           : null,
-      onDelete: canEdit
+      onDelete: canDelete
           ? (id) async {
               final ok = await MasterActions.confirmDelete(
                   context: context, label: 'this transporter');

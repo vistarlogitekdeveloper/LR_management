@@ -26,6 +26,19 @@ final _misCreatorProvider = StateProvider<String?>((ref) => null);
 // true = only those sent for payment, false = only those not yet sent.
 final _misSentProvider = StateProvider<bool?>((ref) => null);
 
+// Profit & Loss filters: region, year, and an optional month. A null month means
+// the whole financial year (Apr year – Mar year+1); a month means that calendar
+// month. Options for the P&L card in the Accounts tab.
+final _plRegionProvider = StateProvider<String?>((ref) => null);
+final _plYearProvider = StateProvider<int>((ref) => DateTime.now().year);
+final _plMonthProvider = StateProvider<int?>((ref) => null);
+
+const _plMonthNames = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+String _plMonthName(int m) => _plMonthNames[(m - 1).clamp(0, 11)];
+
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
 
@@ -320,6 +333,11 @@ class _AccountsTab extends ConsumerWidget {
     final misRegion = ref.watch(_misRegionProvider);
     final misCreator = ref.watch(_misCreatorProvider);
     final misSent = ref.watch(_misSentProvider);
+    final plRegion = ref.watch(_plRegionProvider);
+    final plMonth = ref.watch(_plMonthProvider);
+    final plYear = ref.watch(_plYearProvider);
+    final plNowYear = DateTime.now().year;
+    final plYears = [for (var y = plNowYear + 1; y >= plNowYear - 3; y--) y];
     // Derive the MIS filter options from the visible LRs. Region label = the
     // short code embedded in the LR number ({prefix}/{REGION}/{FY}/{seq});
     // creator label = the creator name (populated once /lrs returns it).
@@ -539,6 +557,125 @@ class _AccountsTab extends ConsumerWidget {
                               messenger.showSnackBar(
                                 SnackBar(
                                   content: Text('Could not generate MIS: $e'),
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          if (canViewMis)
+            Padding(
+              padding: EdgeInsets.only(top: gap),
+              child: AppCard(
+                padding: EdgeInsets.all(mobile ? 12 : 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SectionTitle(
+                      icon: Icons.account_balance_wallet_outlined,
+                      title: 'Profit & Loss (Transport)',
+                    ),
+                    Text(
+                      plMonth == null
+                          ? 'Download Profit & Loss (Excel) for the financial year '
+                              'Apr $plYear – Mar ${plYear + 1} — sales, transport cost, '
+                              'gross & net profit per customer, plus a monthly summary.'
+                          : 'Profit & Loss (Excel) for ${_plMonthName(plMonth)} $plYear — '
+                              'sales, transport cost, gross & net profit per customer.',
+                      style:
+                          const TextStyle(color: AppColors.slate, fontSize: 13),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 120,
+                          child: SearchableField<int>(
+                            value: plYear,
+                            options: plYears,
+                            labelOf: (y) => '$y',
+                            hintText: 'Year',
+                            dialogTitle: 'Year',
+                            onChanged: (v) {
+                              if (v != null) {
+                                ref.read(_plYearProvider.notifier).state = v;
+                              }
+                            },
+                          ),
+                        ),
+                        SizedBox(
+                          width: 180,
+                          child: SearchableField<int>(
+                            value: plMonth,
+                            options: const [
+                              1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
+                            ],
+                            labelOf: _plMonthName,
+                            hintText: 'Full year (FY)',
+                            dialogTitle: 'Month',
+                            clearable: true,
+                            onChanged: (v) =>
+                                ref.read(_plMonthProvider.notifier).state = v,
+                          ),
+                        ),
+                        if (misRegions.isNotEmpty)
+                          SizedBox(
+                            width: 170,
+                            child: SearchableField<String>(
+                              value: plRegion,
+                              options: misRegions.keys.toList()
+                                ..sort((a, b) =>
+                                    misRegions[a]!.compareTo(misRegions[b]!)),
+                              labelOf: (id) => misRegions[id] ?? id,
+                              hintText: 'All regions',
+                              dialogTitle: 'Region',
+                              clearable: true,
+                              onChanged: (v) => ref
+                                  .read(_plRegionProvider.notifier)
+                                  .state = v,
+                            ),
+                          ),
+                        AppButton(
+                          label: 'Download P&L (Excel)',
+                          icon: Icons.download_outlined,
+                          kind: BtnKind.primary,
+                          small: true,
+                          onPressed: () async {
+                            final messenger = ScaffoldMessenger.of(context);
+                            final m = ref.read(_plMonthProvider);
+                            final y = ref.read(_plYearProvider);
+                            try {
+                              final bytes = await ref
+                                  .read(reportsRepositoryProvider)
+                                  .profitLossXlsx(
+                                    regionId: ref.read(_plRegionProvider),
+                                    month: m != null
+                                        ? '$y-${m.toString().padLeft(2, '0')}'
+                                        : null,
+                                    year: m == null ? '$y' : null,
+                                  );
+                              await ExportService.shareBytes(
+                                bytes,
+                                'Profit_Loss_${ExportService.stamp()}.xlsx',
+                              );
+                              messenger.showSnackBar(
+                                const SnackBar(
+                                  content:
+                                      Text('Profit & Loss Excel generated'),
+                                ),
+                              );
+                            } catch (e) {
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text('Could not generate P&L: $e'),
                                 ),
                               );
                             }

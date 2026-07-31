@@ -15,6 +15,9 @@ class PartiesScreen extends ConsumerWidget {
     final parties = ref.watch(partiesProvider);
     final user = ref.watch(currentUserProvider);
     final canEdit = user?.canManageParties ?? false;
+    // Deleting a party is restricted to SUPER ADMINS only (matches the backend
+    // guard). Add/edit stay open to the manage permission.
+    final canDelete = user?.isSuperAdmin ?? false;
 
     return MasterPage(
       loading: ref.watch(partiesLoadingProvider),
@@ -31,7 +34,7 @@ class PartiesScreen extends ConsumerWidget {
               PartyFormDialog.show(context, existing: p);
             }
           : null,
-      onDelete: canEdit
+      onDelete: canDelete
           ? (id) async {
               final ok = await MasterActions.confirmDelete(
                 context: context,

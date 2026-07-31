@@ -135,4 +135,25 @@ class ReportsRepository {
     );
     return (res.data as List).cast<int>();
   }
+
+  /// Fetches the server-generated Profit & Loss workbook (`.xlsx`) as raw bytes.
+  /// Pass [month] (`YYYY-MM`) for a month-wise P&L, or [year] (`YYYY`) for the
+  /// financial-year P&L (Apr Y – Mar Y+1). [regionId] restricts to a region.
+  /// Only non-empty values are sent, so the backend applies its own defaults.
+  Future<List<int>> profitLossXlsx({
+    String? regionId,
+    String? month,
+    String? year,
+  }) async {
+    final res = await _api.dio.get(
+      '/reports/profit-loss.xlsx',
+      queryParameters: {
+        if (regionId != null && regionId.isNotEmpty) 'region_id': regionId,
+        if (month != null && month.isNotEmpty) 'month': month,
+        if (year != null && year.isNotEmpty) 'year': year,
+      },
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return (res.data as List).cast<int>();
+  }
 }
