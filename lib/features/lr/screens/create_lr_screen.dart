@@ -2000,19 +2000,17 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                     keyboardType: TextInputType.number,
                                   ),
                                 ),
-                              if (canViewTransporterRate)
-                                LabeledField(
-                                  label: 'Advance',
-                                  child: TextFormField(
-                                    controller: _advanceCtrl,
-                                    keyboardType: TextInputType.number,
-                                    onChanged: (_) => setState(() {}),
-                                  ),
-                                ),
+                              // The Advance AMOUNT field is intentionally hidden:
+                              // the advance is expressed as a percentage here and
+                              // the actual rupee figure is computed + released by
+                              // Accounts. _advanceCtrl is still kept (0 on create,
+                              // prefilled + preserved on edit) so an already-paid
+                              // advance is never lost when an LR is edited.
+                              //
                               // Carried from the selected transporter, editable
                               // for this one LR. The helper text previews what
                               // Accounts will actually release, so the operator
-                              // sees rupees rather than just a percentage.
+                              // sees rupees alongside the percentage.
                               if (canViewTransporterRate)
                                 LabeledField(
                                   label: 'Advance %',
