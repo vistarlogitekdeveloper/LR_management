@@ -600,6 +600,16 @@ class _AccountsTab extends ConsumerWidget {
                       style:
                           const TextStyle(color: AppColors.slate, fontSize: 13),
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Includes only LRs whose advance or full payment has been '
+                      'marked paid — so the figures reflect realised business.',
+                      style: TextStyle(
+                        color: AppColors.slate.withValues(alpha: 0.85),
+                        fontSize: 11.5,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     Wrap(
                       spacing: 10,
