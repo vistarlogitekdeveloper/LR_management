@@ -32,6 +32,9 @@ final _misSentProvider = StateProvider<bool?>((ref) => null);
 final _plRegionProvider = StateProvider<String?>((ref) => null);
 final _plYearProvider = StateProvider<int>((ref) => DateTime.now().year);
 final _plMonthProvider = StateProvider<int?>((ref) => null);
+// Optional custom inclusive date range. When set it OVERRIDES year/month, so the
+// user can pull an arbitrary span (e.g. 15 May – 15 Jun). null = use year/month.
+final _plRangeProvider = StateProvider<DateTimeRange?>((ref) => null);
 
 const _plMonthNames = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -336,6 +339,7 @@ class _AccountsTab extends ConsumerWidget {
     final plRegion = ref.watch(_plRegionProvider);
     final plMonth = ref.watch(_plMonthProvider);
     final plYear = ref.watch(_plYearProvider);
+    final plRange = ref.watch(_plRangeProvider);
     final plNowYear = DateTime.now().year;
     final plYears = [for (var y = plNowYear + 1; y >= plNowYear - 3; y--) y];
     // Derive the MIS filter options from the visible LRs. Region label = the
@@ -581,12 +585,18 @@ class _AccountsTab extends ConsumerWidget {
                       title: 'Profit & Loss (Transport)',
                     ),
                     Text(
-                      plMonth == null
-                          ? 'Download Profit & Loss (Excel) for the financial year '
-                              'Apr $plYear – Mar ${plYear + 1} — sales, transport cost, '
-                              'gross & net profit per customer, plus a monthly summary.'
-                          : 'Profit & Loss (Excel) for ${_plMonthName(plMonth)} $plYear — '
-                              'sales, transport cost, gross & net profit per customer.',
+                      plRange != null
+                          ? 'Profit & Loss (Excel) for '
+                              '${formatDate(plRange.start)} – ${formatDate(plRange.end)} — '
+                              'sales, transport cost, gross & net profit per customer'
+                              '${plRange.start.month != plRange.end.month || plRange.start.year != plRange.end.year ? ', plus a detailed sheet for each month in the range.' : '.'}'
+                          : plMonth == null
+                              ? 'Download Profit & Loss (Excel) for the financial year '
+                                  'Apr $plYear – Mar ${plYear + 1} — sales, transport cost, '
+                                  'gross & net profit per customer, a monthly summary, and '
+                                  'a separate detailed sheet for each month.'
+                              : 'Profit & Loss (Excel) for ${_plMonthName(plMonth)} $plYear — '
+                                  'sales, transport cost, gross & net profit per customer.',
                       style:
                           const TextStyle(color: AppColors.slate, fontSize: 13),
                     ),
@@ -596,36 +606,71 @@ class _AccountsTab extends ConsumerWidget {
                       runSpacing: 10,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        SizedBox(
-                          width: 120,
-                          child: SearchableField<int>(
-                            value: plYear,
-                            options: plYears,
-                            labelOf: (y) => '$y',
-                            hintText: 'Year',
-                            dialogTitle: 'Year',
-                            onChanged: (v) {
-                              if (v != null) {
-                                ref.read(_plYearProvider.notifier).state = v;
-                              }
-                            },
+                        // Custom inclusive date range — overrides Year/Month
+                        // when set (e.g. 15 May – 15 Jun).
+                        OutlinedButton.icon(
+                          onPressed: () async {
+                            final now = DateTime.now();
+                            final picked = await showDateRangePicker(
+                              context: context,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(now.year + 1, 12, 31),
+                              initialDateRange: plRange,
+                              helpText: 'P&L date range',
+                              saveText: 'Apply',
+                            );
+                            if (picked != null) {
+                              ref.read(_plRangeProvider.notifier).state = picked;
+                            }
+                          },
+                          icon: const Icon(Icons.date_range_rounded, size: 16),
+                          label: Text(
+                            plRange == null
+                                ? 'Custom range'
+                                : '${formatDate(plRange.start)} – '
+                                    '${formatDate(plRange.end)}',
                           ),
                         ),
-                        SizedBox(
-                          width: 180,
-                          child: SearchableField<int>(
-                            value: plMonth,
-                            options: const [
-                              1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
-                            ],
-                            labelOf: _plMonthName,
-                            hintText: 'Full year (FY)',
-                            dialogTitle: 'Month',
-                            clearable: true,
-                            onChanged: (v) =>
-                                ref.read(_plMonthProvider.notifier).state = v,
+                        if (plRange != null)
+                          TextButton(
+                            onPressed: () => ref
+                                .read(_plRangeProvider.notifier)
+                                .state = null,
+                            child: const Text('Clear'),
                           ),
-                        ),
+                        // Year / Month are ignored while a custom range is set.
+                        if (plRange == null) ...[
+                          SizedBox(
+                            width: 120,
+                            child: SearchableField<int>(
+                              value: plYear,
+                              options: plYears,
+                              labelOf: (y) => '$y',
+                              hintText: 'Year',
+                              dialogTitle: 'Year',
+                              onChanged: (v) {
+                                if (v != null) {
+                                  ref.read(_plYearProvider.notifier).state = v;
+                                }
+                              },
+                            ),
+                          ),
+                          SizedBox(
+                            width: 180,
+                            child: SearchableField<int>(
+                              value: plMonth,
+                              options: const [
+                                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
+                              ],
+                              labelOf: _plMonthName,
+                              hintText: 'Full year (FY)',
+                              dialogTitle: 'Month',
+                              clearable: true,
+                              onChanged: (v) =>
+                                  ref.read(_plMonthProvider.notifier).state = v,
+                            ),
+                          ),
+                        ],
                         if (misRegions.isNotEmpty)
                           SizedBox(
                             width: 170,
@@ -650,17 +695,27 @@ class _AccountsTab extends ConsumerWidget {
                           small: true,
                           onPressed: () async {
                             final messenger = ScaffoldMessenger.of(context);
+                            final range = ref.read(_plRangeProvider);
                             final m = ref.read(_plMonthProvider);
                             final y = ref.read(_plYearProvider);
+                            String ymd(DateTime d) =>
+                                d.toIso8601String().substring(0, 10);
                             try {
                               final bytes = await ref
                                   .read(reportsRepositoryProvider)
                                   .profitLossXlsx(
                                     regionId: ref.read(_plRegionProvider),
-                                    month: m != null
+                                    // A custom range wins; else month/year.
+                                    from: range != null
+                                        ? ymd(range.start)
+                                        : null,
+                                    to: range != null ? ymd(range.end) : null,
+                                    month: range == null && m != null
                                         ? '$y-${m.toString().padLeft(2, '0')}'
                                         : null,
-                                    year: m == null ? '$y' : null,
+                                    year: range == null && m == null
+                                        ? '$y'
+                                        : null,
                                   );
                               await ExportService.shareBytes(
                                 bytes,

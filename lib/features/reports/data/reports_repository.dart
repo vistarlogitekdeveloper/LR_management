@@ -137,13 +137,19 @@ class ReportsRepository {
   }
 
   /// Fetches the server-generated Profit & Loss workbook (`.xlsx`) as raw bytes.
-  /// Pass [month] (`YYYY-MM`) for a month-wise P&L, or [year] (`YYYY`) for the
-  /// financial-year P&L (Apr Y – Mar Y+1). [regionId] restricts to a region.
-  /// Only non-empty values are sent, so the backend applies its own defaults.
+  ///
+  /// Precedence (highest first): a custom inclusive [from]/[to] range
+  /// (`YYYY-MM-DD`, both required together) → [month] (`YYYY-MM`) → [year]
+  /// (`YYYY`, financial year Apr Y – Mar Y+1). A range spanning more than one
+  /// calendar month also yields the per-month detail sheets. [regionId]
+  /// restricts to a region. Only non-empty values are sent, so the backend
+  /// applies its own defaults.
   Future<List<int>> profitLossXlsx({
     String? regionId,
     String? month,
     String? year,
+    String? from,
+    String? to,
   }) async {
     final res = await _api.dio.get(
       '/reports/profit-loss.xlsx',
@@ -151,6 +157,8 @@ class ReportsRepository {
         if (regionId != null && regionId.isNotEmpty) 'region_id': regionId,
         if (month != null && month.isNotEmpty) 'month': month,
         if (year != null && year.isNotEmpty) 'year': year,
+        if (from != null && from.isNotEmpty) 'from': from,
+        if (to != null && to.isNotEmpty) 'to': to,
       },
       options: Options(responseType: ResponseType.bytes),
     );
