@@ -118,6 +118,11 @@ class AdminRepository {
     String? roleId,
     String? regionId,
     bool? active,
+    // Reset Password (optional): pass a non-null value to change it; pass null
+    // to leave the stored password untouched. Username is intentionally NOT
+    // updatable here — it is the login identity and the backend PATCH schema
+    // does not accept it.
+    String? password,
   }) async {
     final res = await _api.dio.patch(
       '/admin/users/$id',
@@ -128,6 +133,7 @@ class AdminRepository {
         'role_id': ?roleId,
         'region_id': ?regionId,
         'active': ?active,
+        'password': ?password,
       },
       options: Options(headers: {'If-Match': version.toString()}),
     );

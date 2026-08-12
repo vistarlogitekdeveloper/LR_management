@@ -132,7 +132,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
         children: [
           AppTopbar(
             title: 'Change Password',
-            subtitle: 'Min 10 chars, 1 number',
+            subtitle: 'Min 6 chars, 1 number',
             actions: [
               AppButton(
                 label: 'Back',
@@ -177,8 +177,8 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                             onToggle: () =>
                                 setState(() => _obscureNew = !_obscureNew),
                             validator: (v) {
-                              if (v == null || v.length < 10) {
-                                return 'Min 10 characters';
+                              if (v == null || v.length < 6) {
+                                return 'Min 6 characters';
                               }
                               if (v.length > 128) {
                                 return 'Max 128 characters';

@@ -6,6 +6,8 @@ class ApiConfig {
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'https://vistar-crm.onrender.com/api/v1/lr-management',
+
+    // defaultValue: 'https://api.vistarlogitek.com/api/v1/lr-management',
   );
 
   // Backend login requires {tenant_code, username, password}. The login screen

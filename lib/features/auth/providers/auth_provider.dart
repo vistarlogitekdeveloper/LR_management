@@ -117,7 +117,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   /// Changes the signed-in user's password. The backend identifies the user
   /// from the JWT, verifies [currentPassword] against the stored hash, and sets
-  /// [newPassword] (min 10 chars). On success the server revokes ALL of the
+  /// [newPassword] (min 6 chars). On success the server revokes ALL of the
   /// user's refresh tokens, so the caller must sign out afterwards. Throws a
   /// DioException carrying an [ApiException] on failure — a wrong current
   /// password comes back as code `OLD_PASSWORD_MISMATCH`.

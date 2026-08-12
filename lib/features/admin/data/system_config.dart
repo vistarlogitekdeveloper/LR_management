@@ -59,7 +59,7 @@ class SystemConfig {
     this.dailyBackup = true,
     this.backupTime = '02:00',
     this.auditTrail = true,
-    this.passwordPolicy = 'Min 10 chars',
+    this.passwordPolicy = 'Min 6 chars',
   });
 
   SystemConfig copyWith({

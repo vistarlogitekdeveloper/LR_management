@@ -176,6 +176,10 @@ class UsersAdminScreen extends ConsumerWidget {
               active: true,
             );
           } else {
+            // "Reset Password (optional)" — only send it when the field was
+            // filled, so a normal edit that leaves it blank never touches the
+            // stored password.
+            final pwd = (values['password'] ?? '').trim();
             await n.updateUser(
               existing,
               name: values['name'] ?? existing.name,
@@ -183,6 +187,7 @@ class UsersAdminScreen extends ConsumerWidget {
               email: email,
               mobile: mobile.isEmpty ? null : mobile,
               regionId: regionId,
+              password: pwd.isEmpty ? null : pwd,
             );
           }
           return true;

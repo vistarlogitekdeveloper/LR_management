@@ -55,6 +55,7 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
     String? mobile,
     String? regionId,
     bool? active,
+    String? password,
   }) async {
     final updated = await _repo.updateUser(
       existing.id,
@@ -65,6 +66,7 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
       mobile: mobile,
       regionId: regionId,
       active: active,
+      password: password,
     );
     state = [for (final u in state) u.id == updated.id ? updated : u];
   }
