@@ -521,8 +521,21 @@ class _LrPaymentsListState extends ConsumerState<_LrPaymentsList> {
   // Cards are large; a smaller window than the LR-list table (which uses 50)
   // still fills the initial viewport but keeps first-paint fast.
   static const _pageSize = 25;
+  // Hard safety ceiling for auto-grow. The outer ScrollPosition notifies this
+  // listener during layout (applyContentDimensions), not only on user scroll,
+  // so without a bound a single layout pass could grow the window from 25 to
+  // all 1458 before a frame painted — the 7 s freeze. Past this many, growth
+  // stops and a "Load more" button takes over (intentional UX change).
+  static const _maxVisible = 200;
   int _visible = _pageSize;
   ScrollPosition? _outerPos;
+  // Highest scroll offset seen. Growth only fires when the offset actually
+  // INCREASES (a real forward user scroll); a layout-driven notification leaves
+  // pixels at 0 or unchanged and must never grow the list.
+  double _lastPixels = 0;
+  // One growth is deferred to a post-frame callback at a time, so the setState
+  // is computed against settled extents and can never loop within a layout pass.
+  bool _growScheduled = false;
 
   @override
   void initState() {
@@ -557,26 +570,57 @@ class _LrPaymentsListState extends ConsumerState<_LrPaymentsList> {
         (old.isNotEmpty && now.isNotEmpty && old.first.id != now.first.id);
     if (headChanged || now.length < old.length) {
       _visible = _pageSize;
+      _lastPixels = 0;
     }
   }
 
   void _onOuterScroll() {
     final pos = _outerPos;
     if (pos == null || !pos.hasContentDimensions) return;
+
+    final pixels = pos.pixels;
     if (kAccPerfLog) {
-      accLog('[ACC-LIST] fire pixels=${pos.pixels.toStringAsFixed(0)},'
+      accLog('[ACC-LIST] fire pixels=${pixels.toStringAsFixed(0)},'
           'maxSE=${pos.maxScrollExtent.toStringAsFixed(0)},'
           'hasDims=${pos.hasContentDimensions}');
     }
-    if (_visible >= widget.items.length) return;
-    if (pos.pixels >= pos.maxScrollExtent - 800) {
+
+    // Growth is allowed ONLY for a real forward user scroll. A layout-triggered
+    // notification keeps the offset at 0 or unchanged, so it fails this and can
+    // never grow the list. `_lastPixels` is updated on every fire.
+    final scrolledForward = pixels > _lastPixels && pixels > 0;
+    _lastPixels = pixels;
+    if (!scrolledForward) return;
+
+    if (_growScheduled) return; // one deferred grow already pending
+    if (_visible >= widget.items.length) return; // all shown
+    if (_visible >= _maxVisible) return; // ceiling -> "Load more" takes over
+    if (pos.maxScrollExtent <= 200) return; // no meaningful scroll extent yet
+    if (pixels < pos.maxScrollExtent - 400) return; // not near the bottom
+
+    // Defer the actual grow out of this layout/notify pass. On the next frame
+    // the extents are settled, and exactly ONE page is added — never a loop.
+    _growScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _growScheduled = false;
+      if (!mounted) return;
       setState(() {
-        final next = _visible + _pageSize;
-        final to = next > widget.items.length ? widget.items.length : next;
+        var to = _visible + _pageSize;
+        if (to > widget.items.length) to = widget.items.length;
+        if (to > _maxVisible) to = _maxVisible;
         if (kAccPerfLog) accLog('[ACC-LIST] GROW $_visible->$to');
         _visible = to;
       });
-    }
+    });
+  }
+
+  void _loadMore() {
+    setState(() {
+      var to = _visible + _maxVisible;
+      if (to > widget.items.length) to = widget.items.length;
+      if (kAccPerfLog) accLog('[ACC-LIST] LOAD-MORE $_visible->$to');
+      _visible = to;
+    });
   }
 
   @override
@@ -589,9 +633,11 @@ class _LrPaymentsListState extends ConsumerState<_LrPaymentsList> {
   @override
   Widget build(BuildContext context) {
     if (kAccPerfLog) accLog('[ACC-LIST] build visible=$_visible');
-    final items = _visible >= widget.items.length
-        ? widget.items
-        : widget.items.take(_visible).toList();
+    final full = _visible >= widget.items.length;
+    final items = full ? widget.items : widget.items.take(_visible).toList();
+    // Auto-grow stops at the ceiling; a manual button reveals the rest so a huge
+    // filtered result set never renders hundreds of cards in one frame on its own.
+    final showLoadMore = !full && _visible >= _maxVisible;
     return Column(
       children: [
         for (final lr in items)
@@ -603,6 +649,17 @@ class _LrPaymentsListState extends ConsumerState<_LrPaymentsList> {
               canCust: widget.canCust,
               canMargin: widget.canMargin,
               transporter: widget.transportersById[lr.transporter.id],
+            ),
+          ),
+        if (showLoadMore)
+          Padding(
+            padding: EdgeInsets.only(top: widget.gap),
+            child: Center(
+              child: OutlinedButton.icon(
+                onPressed: _loadMore,
+                icon: const Icon(Icons.expand_more, size: 18),
+                label: Text('Load more (${widget.items.length - _visible} left)'),
+              ),
             ),
           ),
       ],
