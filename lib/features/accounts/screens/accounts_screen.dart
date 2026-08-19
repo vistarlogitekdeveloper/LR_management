@@ -45,6 +45,163 @@ final _accountsDateRangeProvider = StateProvider<DateTimeRange?>((ref) => null);
 // Region filter (region_id). null = all regions.
 final _accountsRegionProvider = StateProvider<String?>((ref) => null);
 
+// ── Memoised derived data ────────────────────────────────────────────────────
+// AccountsScreen stays alive offstage in the shell's IndexedStack, so its build
+// runs on every lrListProvider emission and every rebuild. Deriving the source
+// set, sort, region map, KPIs and filtered list inline meant that whole ~5-block
+// pipeline re-ran each time. Split into providers so each recomputes ONLY when
+// its own inputs change: typing in search re-runs the filter alone, and a plain
+// rebuild (e.g. a MediaQuery change) recomputes nothing.
+
+/// LRs an ops user explicitly "sent for payment" — the base set Accounts sees.
+final accountsSourceLrsProvider = Provider<List<LorryReceipt>>((ref) {
+  final sw = kAccPerfLog ? (Stopwatch()..start()) : null;
+  final lrs =
+      ref.watch(lrListProvider).where((lr) => lr.sentForPayment).toList();
+  if (kAccPerfLog) {
+    sw!.stop();
+    accLog('[ACC-BUILD] sentForPayment ${sw.elapsedMicroseconds / 1000}ms '
+        'n=${lrs.length}');
+  }
+  return lrs;
+});
+
+/// Source set sorted newest-first.
+final accountsSortedProvider = Provider<List<LorryReceipt>>((ref) {
+  final sw = kAccPerfLog ? (Stopwatch()..start()) : null;
+  final sorted = [...ref.watch(accountsSourceLrsProvider)]
+    ..sort((a, b) => b.date.compareTo(a.date));
+  if (kAccPerfLog) {
+    sw!.stop();
+    accLog('[ACC-BUILD] sort ${sw.elapsedMicroseconds / 1000}ms '
+        'n=${sorted.length}');
+  }
+  return sorted;
+});
+
+/// region_id -> short code (embedded in the LR number) for the region filter.
+final accountsRegionCodesProvider = Provider<Map<String, String>>((ref) {
+  final sw = kAccPerfLog ? (Stopwatch()..start()) : null;
+  final sorted = ref.watch(accountsSortedProvider);
+  final regionCodes = <String, String>{};
+  for (final lr in sorted) {
+    final rid = lr.regionId;
+    if (rid == null || rid.isEmpty) continue;
+    final parts = lr.number.split('/');
+    if (parts.length > 1 && RegExp(r'^[A-Za-z]{2,6}$').hasMatch(parts[1])) {
+      regionCodes[rid] = parts[1].toUpperCase();
+    }
+  }
+  if (kAccPerfLog) {
+    sw!.stop();
+    accLog('[ACC-BUILD] regionCodes ${sw.elapsedMicroseconds / 1000}ms '
+        'n=${regionCodes.length}');
+  }
+  return regionCodes;
+});
+
+/// The five KPI values, computed in a SINGLE pass over the source set.
+class AccountsKpis {
+  const AccountsKpis({
+    required this.totalAdvance,
+    required this.totalPending,
+    required this.countPending,
+    required this.countAdvancePaid,
+    required this.countFullyPaid,
+  });
+  final double totalAdvance;
+  final double totalPending;
+  final int countPending; // awaiting advance (nothing paid)
+  final int countAdvancePaid; // advance paid, balance against POD pending
+  final int countFullyPaid; // advance + balance both settled
+}
+
+final accountsKpisProvider = Provider<AccountsKpis>((ref) {
+  final sw = kAccPerfLog ? (Stopwatch()..start()) : null;
+  final lrs = ref.watch(accountsSourceLrsProvider);
+  var totalAdvance = 0.0;
+  var totalPending = 0.0;
+  var countPending = 0;
+  var countAdvancePaid = 0;
+  var countFullyPaid = 0;
+  for (final l in lrs) {
+    final advance = l.freight.advance;
+    final freight = l.freight.freight;
+    totalAdvance += advance;
+    final pend = freight - advance;
+    if (pend > 0) totalPending += pend;
+    if (freight <= 0) continue;
+    if (advance <= 0) {
+      countPending++;
+    } else if (pend > 0.01) {
+      countAdvancePaid++;
+    } else {
+      countFullyPaid++;
+    }
+  }
+  final kpis = AccountsKpis(
+    totalAdvance: totalAdvance,
+    totalPending: totalPending,
+    countPending: countPending,
+    countAdvancePaid: countAdvancePaid,
+    countFullyPaid: countFullyPaid,
+  );
+  if (kAccPerfLog) {
+    sw!.stop();
+    accLog('[ACC-BUILD] kpis ${sw.elapsedMicroseconds / 1000}ms');
+  }
+  return kpis;
+});
+
+/// Sorted set narrowed by the filter chip, search query, date range and region.
+final accountsFilteredProvider = Provider<List<LorryReceipt>>((ref) {
+  final sw = kAccPerfLog ? (Stopwatch()..start()) : null;
+  final sorted = ref.watch(accountsSortedProvider);
+  final filter = ref.watch(_accountsFilterProvider);
+  final query = ref.watch(_accountsSearchProvider).trim().toLowerCase();
+  final range = ref.watch(_accountsDateRangeProvider);
+  final region = ref.watch(_accountsRegionProvider);
+  final rangeStart = range == null ? null : DateUtils.dateOnly(range.start);
+  final rangeEnd = range == null ? null : DateUtils.dateOnly(range.end);
+
+  // Accounts pays the transporter, so payment state is tracked against the
+  // transporter freight (the LR's advance % up front, the rest against POD),
+  // not the customer total. `balance` here means transporter freight unpaid.
+  final filtered = sorted.where((lr) {
+    final freight = lr.freight.freight;
+    final balance = freight - lr.freight.advance;
+    final matchesPay = switch (filter) {
+      _PayFilter.all => true,
+      _PayFilter.awaitingAdvance => lr.freight.advance <= 0 && freight > 0,
+      _PayFilter.awaitingBalance => lr.freight.advance > 0 && balance > 0.01,
+      _PayFilter.paid => freight > 0 && balance <= 0.01,
+    };
+    if (!matchesPay) return false;
+    if (region != null && lr.regionId != region) return false;
+    if (rangeStart != null) {
+      final d = DateUtils.dateOnly(lr.date);
+      if (d.isBefore(rangeStart) || d.isAfter(rangeEnd!)) return false;
+    }
+    if (query.isEmpty) return true;
+    final hay = [
+      lr.number,
+      lr.consignor.name,
+      lr.consignee.name,
+      lr.customerName,
+      lr.vehicle.number,
+      lr.route,
+      lr.transporter.name,
+    ].join(' ').toLowerCase();
+    return hay.contains(query);
+  }).toList();
+  if (kAccPerfLog) {
+    sw!.stop();
+    accLog('[ACC-BUILD] filter+search ${sw.elapsedMicroseconds / 1000}ms '
+        'n=${filtered.length}');
+  }
+  return filtered;
+});
+
 class AccountsScreen extends ConsumerStatefulWidget {
   const AccountsScreen({super.key});
 
@@ -70,23 +227,13 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
     }
 
     final swTotal = kAccPerfLog ? (Stopwatch()..start()) : null;
-    final sw = kAccPerfLog ? Stopwatch() : null;
 
-    // Accounts only sees LRs an ops user has explicitly "sent for payment".
-    // (Legacy LRs from before this feature default to sent, so nothing is lost.)
-    sw?..reset()..start();
-    final lrs = ref
-        .watch(lrListProvider)
-        .where((lr) => lr.sentForPayment)
-        .toList();
-    if (kAccPerfLog) {
-      sw!.stop();
-      accLog('[ACC-BUILD] sentForPayment ${sw.elapsedMicroseconds / 1000}ms '
-          'n=${lrs.length}');
-    }
+    // All the heavy derivation now lives in memoised providers at the top of
+    // this file — each recomputes only when its own inputs change, so a plain
+    // rebuild here (e.g. a MediaQuery change) does zero list work.
+    final lrs = ref.watch(accountsSourceLrsProvider);
     final loading = ref.watch(lrListLoadingProvider);
     final filter = ref.watch(_accountsFilterProvider);
-    final query = ref.watch(_accountsSearchProvider).trim().toLowerCase();
     final range = ref.watch(_accountsDateRangeProvider);
     final region = ref.watch(_accountsRegionProvider);
     // Role visibility flags hoisted to the parent — every _LrPaymentCard used
@@ -103,95 +250,20 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
     final transportersById = <String, Transporter>{
       for (final t in ref.watch(transportersProvider)) t.id: t,
     };
-    final rangeStart = range == null ? null : DateUtils.dateOnly(range.start);
-    final rangeEnd = range == null ? null : DateUtils.dateOnly(range.end);
 
-    sw?..reset()..start();
-    final sorted = [...lrs]..sort((a, b) => b.date.compareTo(a.date));
-    // Region options (region_id -> short code embedded in the LR number) for
-    // the region filter. Shown whenever at least one region is present.
-    final regionCodes = <String, String>{};
-    for (final lr in sorted) {
-      final rid = lr.regionId;
-      if (rid == null || rid.isEmpty) continue;
-      final parts = lr.number.split('/');
-      if (parts.length > 1 && RegExp(r'^[A-Za-z]{2,6}$').hasMatch(parts[1])) {
-        regionCodes[rid] = parts[1].toUpperCase();
-      }
-    }
+    final regionCodes = ref.watch(accountsRegionCodesProvider);
     final regionIds = regionCodes.keys.toList()
       ..sort((a, b) => regionCodes[a]!.compareTo(regionCodes[b]!));
     final hasRegions = regionIds.isNotEmpty;
-    if (kAccPerfLog) {
-      sw!.stop();
-      accLog('[ACC-BUILD] sort+regionCodes ${sw.elapsedMicroseconds / 1000}ms '
-          'n=${sorted.length}');
-    }
-    // Accounts pays the transporter, so payment state is tracked against the
-    // transporter freight (the LR's advance % up front, the rest against POD),
-    // not the customer
-    // total. `balance` here means the transporter freight still unpaid.
-    sw?..reset()..start();
-    final filtered = sorted.where((lr) {
-      final freight = lr.freight.freight;
-      final balance = freight - lr.freight.advance;
-      final matchesPay = switch (filter) {
-        _PayFilter.all => true,
-        _PayFilter.awaitingAdvance => lr.freight.advance <= 0 && freight > 0,
-        _PayFilter.awaitingBalance => lr.freight.advance > 0 && balance > 0.01,
-        _PayFilter.paid => freight > 0 && balance <= 0.01,
-      };
-      if (!matchesPay) return false;
-      if (region != null && lr.regionId != region) return false;
-      if (rangeStart != null) {
-        final d = DateUtils.dateOnly(lr.date);
-        if (d.isBefore(rangeStart) || d.isAfter(rangeEnd!)) return false;
-      }
-      if (query.isEmpty) return true;
-      final hay = [
-        lr.number,
-        lr.consignor.name,
-        lr.consignee.name,
-        lr.customerName,
-        lr.vehicle.number,
-        lr.route,
-        lr.transporter.name,
-      ].join(' ').toLowerCase();
-      return hay.contains(query);
-    }).toList();
-    if (kAccPerfLog) {
-      sw!.stop();
-      accLog('[ACC-BUILD] filter+search ${sw.elapsedMicroseconds / 1000}ms '
-          'n=${filtered.length}');
-    }
 
-    sw?..reset()..start();
-    final totalAdvance = lrs.fold<double>(0, (s, l) => s + l.freight.advance);
-    final totalPending = lrs.fold<double>(0, (s, l) {
-      final pend = l.freight.freight - l.freight.advance;
-      return s + (pend > 0 ? pend : 0);
-    });
+    final filtered = ref.watch(accountsFilteredProvider);
 
-    // Status counts — same buckets as the filter chips below.
-    var countPending = 0; // awaiting advance (nothing paid)
-    var countAdvancePaid = 0; // advance paid, balance against POD pending
-    var countFullyPaid = 0; // advance + balance both settled
-    for (final l in lrs) {
-      final f = l.freight.freight;
-      if (f <= 0) continue;
-      final bal = f - l.freight.advance;
-      if (l.freight.advance <= 0) {
-        countPending++;
-      } else if (bal > 0.01) {
-        countAdvancePaid++;
-      } else {
-        countFullyPaid++;
-      }
-    }
-    if (kAccPerfLog) {
-      sw!.stop();
-      accLog('[ACC-BUILD] kpis ${sw.elapsedMicroseconds / 1000}ms');
-    }
+    final kpis = ref.watch(accountsKpisProvider);
+    final totalAdvance = kpis.totalAdvance;
+    final totalPending = kpis.totalPending;
+    final countPending = kpis.countPending;
+    final countAdvancePaid = kpis.countAdvancePaid;
+    final countFullyPaid = kpis.countFullyPaid;
 
     final isMobile = MediaQuery.of(context).size.width < 600;
 
