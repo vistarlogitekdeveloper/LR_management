@@ -761,31 +761,51 @@ class _LrPaymentsListState extends ConsumerState<_LrPaymentsList> {
     // Auto-grow stops at the ceiling; a manual button reveals the rest so a huge
     // filtered result set never renders hundreds of cards in one frame on its own.
     final showLoadMore = !full && _visible >= _maxVisible;
-    return Column(
-      children: [
-        for (final lr in items)
-          Padding(
-            padding: EdgeInsets.only(bottom: widget.gap),
-            child: _LrPaymentCard(
-              lr: lr,
-              canT: widget.canT,
-              canCust: widget.canCust,
-              canMargin: widget.canMargin,
-              transporter: widget.transportersById[lr.transporter.id],
-            ),
-          ),
-        if (showLoadMore)
-          Padding(
-            padding: EdgeInsets.only(top: widget.gap),
-            child: Center(
-              child: OutlinedButton.icon(
-                onPressed: _loadMore,
-                icon: const Icon(Icons.expand_more, size: 18),
-                label: Text('Load more (${widget.items.length - _visible} left)'),
+    // Screen-width flag drives each card's padding; measured once here instead
+    // of by a MediaQuery lookup inside every card.
+    final mobile = MediaQuery.of(context).size.width < 600;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Every card stretches to the full list width, so the wide/narrow
+        // (720px) breakpoint is identical for all of them: the list width minus
+        // the card's own horizontal padding. Resolving it once here lets each
+        // card drop its per-card LayoutBuilder — up to 200 of them.
+        final wide = (constraints.maxWidth - (mobile ? 24 : 32)) >= 720;
+        return Column(
+          children: [
+            for (final lr in items)
+              Padding(
+                padding: EdgeInsets.only(bottom: widget.gap),
+                // Isolate each card's raster so growing the window or repainting
+                // one card doesn't re-raster the whole (long) list.
+                child: RepaintBoundary(
+                  child: _LrPaymentCard(
+                    lr: lr,
+                    canT: widget.canT,
+                    canCust: widget.canCust,
+                    canMargin: widget.canMargin,
+                    transporter: widget.transportersById[lr.transporter.id],
+                    mobile: mobile,
+                    wide: wide,
+                  ),
+                ),
               ),
-            ),
-          ),
-      ],
+            if (showLoadMore)
+              Padding(
+                padding: EdgeInsets.only(top: widget.gap),
+                child: Center(
+                  child: OutlinedButton.icon(
+                    onPressed: _loadMore,
+                    icon: const Icon(Icons.expand_more, size: 18),
+                    label: Text(
+                      'Load more (${widget.items.length - _visible} left)',
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -799,12 +819,22 @@ class _LrPaymentCard extends ConsumerWidget {
   final bool canCust;
   final bool canMargin;
   final Transporter? transporter;
+  // Layout decisions are resolved once by the parent list and passed down, so
+  // each card avoids a MediaQuery lookup and a LayoutBuilder of its own:
+  //   mobile — screen width < 600 (drives padding), same for every card.
+  //   wide   — the card's content width clears the 720px breakpoint (Row vs
+  //            Column). Every card stretches to the same width, so this is
+  //            identical across the list.
+  final bool mobile;
+  final bool wide;
   const _LrPaymentCard({
     required this.lr,
     required this.canT,
     required this.canCust,
     required this.canMargin,
     required this.transporter,
+    required this.mobile,
+    required this.wide,
   });
 
   @override
@@ -818,7 +848,144 @@ class _LrPaymentCard extends ConsumerWidget {
     final hasBalance = transBalance > 0.01;
     final fullyPaid = freight > 0 && !hasBalance;
 
-    final mobile = MediaQuery.of(context).size.width < 600;
+    final header = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              lr.number,
+              style: const TextStyle(
+                color: AppColors.ink,
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
+              ),
+            ),
+            StatusPill(status: lr.status),
+            if (fullyPaid)
+              const _BadgePill(text: 'Paid', fg: AppColors.ok)
+            else if (!hasAdvance)
+              const _BadgePill(
+                text: 'Awaiting Advance',
+                fg: AppColors.orange,
+              )
+            else
+              const _BadgePill(
+                text: 'Awaiting Balance',
+                fg: AppColors.red,
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${lr.consignor.name} → ${lr.consignee.name}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppColors.slate,
+            fontWeight: FontWeight.w600,
+            fontSize: 12.5,
+          ),
+        ),
+        Text(
+          '${formatDate(lr.date)} · ${lr.route}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: AppColors.slate, fontSize: 12),
+        ),
+      ],
+    );
+
+    final amounts = Wrap(
+      spacing: 18,
+      runSpacing: 8,
+      children: [
+        _Amount(
+          label: 'Transporter Freight',
+          value: freight,
+          hidden: !canT,
+        ),
+        _Amount(
+          label: 'Advance',
+          value: advance,
+          color: AppColors.ok,
+          hidden: !canT,
+        ),
+        _Amount(
+          label: 'Balance (after POD)',
+          value: transBalance,
+          color: hasBalance ? AppColors.red : AppColors.ok,
+          emphasis: true,
+          hidden: !canT,
+        ),
+      ],
+    );
+
+    final actions = Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      alignment: WrapAlignment.end,
+      children: [
+        if (!hasAdvance && lr.freight.freight > 0)
+          AppButton(
+            label: 'Mark Advance Paid',
+            kind: BtnKind.soft,
+            icon: Icons.savings_outlined,
+            small: true,
+            onPressed: () => _markAdvancePaid(context, ref),
+          ),
+        if (hasAdvance && hasBalance)
+          AppButton(
+            label: 'Add Advance',
+            kind: BtnKind.ghost,
+            icon: Icons.add_rounded,
+            small: true,
+            onPressed: () => _payAdvance(context, ref),
+          ),
+        if (hasBalance)
+          AppButton(
+            label: 'Complete Payment',
+            kind: BtnKind.primary,
+            icon: Icons.check_circle_outline,
+            small: true,
+            onPressed: () => _completePayment(context, ref),
+          ),
+        if (fullyPaid)
+          const _BadgePill(text: 'Settled', fg: AppColors.ok),
+        AppButton(
+          label: 'Billing / MIS',
+          kind: BtnKind.ghost,
+          icon: Icons.receipt_long_outlined,
+          small: true,
+          onPressed: () => _editBillingMis(context, ref),
+        ),
+      ],
+    );
+
+    final main = wide
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(flex: 3, child: header),
+              const SizedBox(width: 16),
+              Expanded(flex: 3, child: amounts),
+              const SizedBox(width: 16),
+              Expanded(flex: 2, child: actions),
+            ],
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              header,
+              const SizedBox(height: 12),
+              amounts,
+              const SizedBox(height: 12),
+              actions,
+            ],
+          );
     return Container(
       padding: EdgeInsets.all(mobile ? 12 : 16),
       decoration: BoxDecoration(
@@ -826,162 +993,19 @@ class _LrPaymentCard extends ConsumerWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.line),
       ),
-      child: LayoutBuilder(
-        builder: (context, c) {
-          final wide = c.maxWidth >= 720;
-          final header = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(
-                    lr.number,
-                    style: const TextStyle(
-                      color: AppColors.ink,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
-                    ),
-                  ),
-                  StatusPill(status: lr.status),
-                  if (fullyPaid)
-                    const _BadgePill(text: 'Paid', fg: AppColors.ok)
-                  else if (!hasAdvance)
-                    const _BadgePill(
-                      text: 'Awaiting Advance',
-                      fg: AppColors.orange,
-                    )
-                  else
-                    const _BadgePill(
-                      text: 'Awaiting Balance',
-                      fg: AppColors.red,
-                    ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${lr.consignor.name} → ${lr.consignee.name}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppColors.slate,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12.5,
-                ),
-              ),
-              Text(
-                '${formatDate(lr.date)} · ${lr.route}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: AppColors.slate, fontSize: 12),
-              ),
-            ],
-          );
-
-          final amounts = Wrap(
-            spacing: 18,
-            runSpacing: 8,
-            children: [
-              _Amount(
-                label: 'Transporter Freight',
-                value: freight,
-                hidden: !canT,
-              ),
-              _Amount(
-                label: 'Advance',
-                value: advance,
-                color: AppColors.ok,
-                hidden: !canT,
-              ),
-              _Amount(
-                label: 'Balance (after POD)',
-                value: transBalance,
-                color: hasBalance ? AppColors.red : AppColors.ok,
-                emphasis: true,
-                hidden: !canT,
-              ),
-            ],
-          );
-
-          final actions = Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            alignment: WrapAlignment.end,
-            children: [
-              if (!hasAdvance && lr.freight.freight > 0)
-                AppButton(
-                  label: 'Mark Advance Paid',
-                  kind: BtnKind.soft,
-                  icon: Icons.savings_outlined,
-                  small: true,
-                  onPressed: () => _markAdvancePaid(context, ref),
-                ),
-              if (hasAdvance && hasBalance)
-                AppButton(
-                  label: 'Add Advance',
-                  kind: BtnKind.ghost,
-                  icon: Icons.add_rounded,
-                  small: true,
-                  onPressed: () => _payAdvance(context, ref),
-                ),
-              if (hasBalance)
-                AppButton(
-                  label: 'Complete Payment',
-                  kind: BtnKind.primary,
-                  icon: Icons.check_circle_outline,
-                  small: true,
-                  onPressed: () => _completePayment(context, ref),
-                ),
-              if (fullyPaid)
-                const _BadgePill(text: 'Settled', fg: AppColors.ok),
-              AppButton(
-                label: 'Billing / MIS',
-                kind: BtnKind.ghost,
-                icon: Icons.receipt_long_outlined,
-                small: true,
-                onPressed: () => _editBillingMis(context, ref),
-              ),
-            ],
-          );
-
-          final main = wide
-              ? Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(flex: 3, child: header),
-                    const SizedBox(width: 16),
-                    Expanded(flex: 3, child: amounts),
-                    const SizedBox(width: 16),
-                    Expanded(flex: 2, child: actions),
-                  ],
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    header,
-                    const SizedBox(height: 12),
-                    amounts,
-                    const SizedBox(height: 12),
-                    actions,
-                  ],
-                );
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              main,
-              // The advance plan is a transporter-freight breakdown.
-              if (canT) _advancePlan(context),
-              // Client incentive charges: driver share is released with the
-              // balance, so Accounts sees it alongside the advance plan.
-              if (canT)
-                _driverIncentivePlan(context, canViewVistarMargin: canMargin),
-              _billingMisInfo(context, canViewCustomerRate: canCust),
-              _payInfo(context, ref, transporter),
-            ],
-          );
-        },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          main,
+          // The advance plan is a transporter-freight breakdown.
+          if (canT) _advancePlan(context),
+          // Client incentive charges: driver share is released with the
+          // balance, so Accounts sees it alongside the advance plan.
+          if (canT)
+            _driverIncentivePlan(context, canViewVistarMargin: canMargin),
+          _billingMisInfo(context, canViewCustomerRate: canCust),
+          _payInfo(context, ref, transporter),
+        ],
       ),
     );
   }
