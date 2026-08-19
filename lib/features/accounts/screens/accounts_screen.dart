@@ -45,11 +45,30 @@ final _accountsDateRangeProvider = StateProvider<DateTimeRange?>((ref) => null);
 // Region filter (region_id). null = all regions.
 final _accountsRegionProvider = StateProvider<String?>((ref) => null);
 
-class AccountsScreen extends ConsumerWidget {
+class AccountsScreen extends ConsumerStatefulWidget {
   const AccountsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AccountsScreen> createState() => _AccountsScreenState();
+}
+
+class _AccountsScreenState extends ConsumerState<AccountsScreen> {
+  // The first build after this screen mounts returns a shimmer shell
+  // immediately and schedules the real (heavier) build for the next frame, so a
+  // click always paints within one frame instead of leaving the previous screen
+  // frozen while the payment list computes. The prior `loading && lrs.isEmpty`
+  // skeleton never showed on a warm re-entry (loading false, list non-empty).
+  bool _firstPaintDone = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_firstPaintDone) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _firstPaintDone = true);
+      });
+      return const _AccountsSkeleton();
+    }
+
     final swTotal = kAccPerfLog ? (Stopwatch()..start()) : null;
     final sw = kAccPerfLog ? Stopwatch() : null;
 
@@ -416,6 +435,34 @@ class AccountsScreen extends ConsumerWidget {
     if (picked != null) {
       ref.read(_accountsDateRangeProvider.notifier).state = picked;
     }
+  }
+}
+
+/// The instant first-frame shell: the real topbar over a few shimmer cards, in
+/// the same style as the loading state, so entry paints immediately.
+class _AccountsSkeleton extends StatelessWidget {
+  const _AccountsSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    return Scaffold(
+      backgroundColor: AppColors.mist,
+      body: Column(
+        children: [
+          const AppTopbar(
+            title: 'Accounts & Billing',
+            subtitle: 'Collect advance, settle balance on each LR',
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.all(isMobile ? 14 : 28),
+              child: const ShimmerCards(cards: 5),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
