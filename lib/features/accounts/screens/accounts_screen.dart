@@ -79,6 +79,10 @@ final accountsSortedProvider = Provider<List<LorryReceipt>>((ref) {
   return sorted;
 });
 
+// The region code is the 2–6 letter segment after the first '/' in an LR
+// number. Built once, not per LR row.
+final _regionCodeRe = RegExp(r'^[A-Za-z]{2,6}$');
+
 /// region_id -> short code (embedded in the LR number) for the region filter.
 final accountsRegionCodesProvider = Provider<Map<String, String>>((ref) {
   final sw = kAccPerfLog ? (Stopwatch()..start()) : null;
@@ -88,7 +92,7 @@ final accountsRegionCodesProvider = Provider<Map<String, String>>((ref) {
     final rid = lr.regionId;
     if (rid == null || rid.isEmpty) continue;
     final parts = lr.number.split('/');
-    if (parts.length > 1 && RegExp(r'^[A-Za-z]{2,6}$').hasMatch(parts[1])) {
+    if (parts.length > 1 && _regionCodeRe.hasMatch(parts[1])) {
       regionCodes[rid] = parts[1].toUpperCase();
     }
   }
@@ -1695,6 +1699,9 @@ class _LrPaymentCard extends ConsumerWidget {
   }
 }
 
+// Numeric-with-decimal input mask; built once rather than on every dialog build.
+final _amountInputMask = RegExp(r'[0-9.]');
+
 Future<double?> _showAmountDialog({
   required BuildContext context,
   required String title,
@@ -1727,7 +1734,7 @@ Future<double?> _showAmountDialog({
                   decimal: true,
                 ),
                 inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                  FilteringTextInputFormatter.allow(_amountInputMask),
                 ],
                 decoration: const InputDecoration(
                   labelText: 'Amount (₹)',
