@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/file_opener.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/utils/perf_log.dart';
 import '../../../shared/models/lr_models.dart';
 import '../../../shared/models/transporter.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -48,23 +50,44 @@ class AccountsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final swTotal = kAccPerfLog ? (Stopwatch()..start()) : null;
+    final sw = kAccPerfLog ? Stopwatch() : null;
+
     // Accounts only sees LRs an ops user has explicitly "sent for payment".
     // (Legacy LRs from before this feature default to sent, so nothing is lost.)
+    sw?..reset()..start();
     final lrs = ref
         .watch(lrListProvider)
         .where((lr) => lr.sentForPayment)
         .toList();
+    if (kAccPerfLog) {
+      sw!.stop();
+      accLog('[ACC-BUILD] sentForPayment ${sw.elapsedMicroseconds / 1000}ms '
+          'n=${lrs.length}');
+    }
     final loading = ref.watch(lrListLoadingProvider);
     final filter = ref.watch(_accountsFilterProvider);
     final query = ref.watch(_accountsSearchProvider).trim().toLowerCase();
     final range = ref.watch(_accountsDateRangeProvider);
     final region = ref.watch(_accountsRegionProvider);
-    // The two money totals are transporter-side amounts (VIEW_TRANSPORTER_RATE);
-    // the status-count tiles are not gated.
-    final canT = ref.watch(currentUserProvider)?.canViewTransporterRate ?? false;
+    // Role visibility flags hoisted to the parent — every _LrPaymentCard used
+    // to `ref.watch(currentUserProvider)` three times of its own, so with a
+    // few hundred sent-for-payment LRs a single frame was doing hundreds of
+    // provider subscriptions + rebuilds. Read them once here and pass down.
+    final user = ref.watch(currentUserProvider);
+    final canT = user?.canViewTransporterRate ?? false;
+    final canCust = user?.canViewCustomerRate ?? false;
+    final canMargin = user?.canViewVistarMargin ?? false;
+    // Transporter lookup used to be an O(n) `.where(...).firstOrNull` per card;
+    // for 500 cards × 200 transporters that's 100k comparisons per frame. Build
+    // an id → transporter map once at the parent so each card is O(1).
+    final transportersById = <String, Transporter>{
+      for (final t in ref.watch(transportersProvider)) t.id: t,
+    };
     final rangeStart = range == null ? null : DateUtils.dateOnly(range.start);
     final rangeEnd = range == null ? null : DateUtils.dateOnly(range.end);
 
+    sw?..reset()..start();
     final sorted = [...lrs]..sort((a, b) => b.date.compareTo(a.date));
     // Region options (region_id -> short code embedded in the LR number) for
     // the region filter. Shown whenever at least one region is present.
@@ -80,10 +103,16 @@ class AccountsScreen extends ConsumerWidget {
     final regionIds = regionCodes.keys.toList()
       ..sort((a, b) => regionCodes[a]!.compareTo(regionCodes[b]!));
     final hasRegions = regionIds.isNotEmpty;
+    if (kAccPerfLog) {
+      sw!.stop();
+      accLog('[ACC-BUILD] sort+regionCodes ${sw.elapsedMicroseconds / 1000}ms '
+          'n=${sorted.length}');
+    }
     // Accounts pays the transporter, so payment state is tracked against the
     // transporter freight (the LR's advance % up front, the rest against POD),
     // not the customer
     // total. `balance` here means the transporter freight still unpaid.
+    sw?..reset()..start();
     final filtered = sorted.where((lr) {
       final freight = lr.freight.freight;
       final balance = freight - lr.freight.advance;
@@ -111,7 +140,13 @@ class AccountsScreen extends ConsumerWidget {
       ].join(' ').toLowerCase();
       return hay.contains(query);
     }).toList();
+    if (kAccPerfLog) {
+      sw!.stop();
+      accLog('[ACC-BUILD] filter+search ${sw.elapsedMicroseconds / 1000}ms '
+          'n=${filtered.length}');
+    }
 
+    sw?..reset()..start();
     final totalAdvance = lrs.fold<double>(0, (s, l) => s + l.freight.advance);
     final totalPending = lrs.fold<double>(0, (s, l) {
       final pend = l.freight.freight - l.freight.advance;
@@ -134,8 +169,17 @@ class AccountsScreen extends ConsumerWidget {
         countFullyPaid++;
       }
     }
+    if (kAccPerfLog) {
+      sw!.stop();
+      accLog('[ACC-BUILD] kpis ${sw.elapsedMicroseconds / 1000}ms');
+    }
 
     final isMobile = MediaQuery.of(context).size.width < 600;
+
+    if (kAccPerfLog) {
+      swTotal!.stop();
+      accLog('[ACC-BUILD] total ${swTotal.elapsedMicroseconds / 1000}ms');
+    }
 
     return Scaffold(
       backgroundColor: AppColors.mist,
@@ -335,16 +379,13 @@ class AccountsScreen extends ConsumerWidget {
                             ),
                           )
                         else
-                          Column(
-                            children: [
-                              for (final lr in filtered)
-                                Padding(
-                                  padding: EdgeInsets.only(
-                                    bottom: isMobile ? 8 : 12,
-                                  ),
-                                  child: _LrPaymentCard(lr: lr),
-                                ),
-                            ],
+                          _LrPaymentsList(
+                            items: filtered,
+                            canT: canT,
+                            canCust: canCust,
+                            canMargin: canMargin,
+                            transportersById: transportersById,
+                            gap: isMobile ? 8 : 12,
                           ),
                       ],
                     ),
@@ -449,9 +490,142 @@ class _DateRangeChip extends StatelessWidget {
   }
 }
 
+/// Windowed list of LR payment cards. Each card is heavy (nested containers,
+/// three amount blocks, an advance plan, incentive plan, MIS chips, bank card,
+/// action buttons), so materialising all N cards in one frame stalls the main
+/// thread for hundreds of ms once N passes ~100. Render only [_pageSize] cards
+/// initially and extend the window as the outer page scroller nears the bottom
+/// — same pattern the LR list table uses, and cheap to keep in sync because
+/// the notifier still owns the full data.
+class _LrPaymentsList extends ConsumerStatefulWidget {
+  final List<LorryReceipt> items;
+  final bool canT;
+  final bool canCust;
+  final bool canMargin;
+  final Map<String, Transporter> transportersById;
+  final double gap;
+  const _LrPaymentsList({
+    required this.items,
+    required this.canT,
+    required this.canCust,
+    required this.canMargin,
+    required this.transportersById,
+    required this.gap,
+  });
+
+  @override
+  ConsumerState<_LrPaymentsList> createState() => _LrPaymentsListState();
+}
+
+class _LrPaymentsListState extends ConsumerState<_LrPaymentsList> {
+  // Cards are large; a smaller window than the LR-list table (which uses 50)
+  // still fills the initial viewport but keeps first-paint fast.
+  static const _pageSize = 25;
+  int _visible = _pageSize;
+  ScrollPosition? _outerPos;
+
+  @override
+  void initState() {
+    super.initState();
+    if (kAccPerfLog) accLog('[ACC-LIST] INIT');
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The Accounts screen wraps everything in a SingleChildScrollView; hook
+    // its ScrollPosition so we can extend the window as the user nears the
+    // bottom instead of using a nested Scrollable (which would double-scroll).
+    final pos = Scrollable.maybeOf(context)?.position;
+    if (!identical(pos, _outerPos)) {
+      _outerPos?.removeListener(_onOuterScroll);
+      _outerPos = pos;
+      _outerPos?.addListener(_onOuterScroll);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _LrPaymentsList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reset the window on a genuinely different result set (search / filter /
+    // date change), but not when the same list just grows — the notifier's
+    // progressive loading appends pages and resetting mid-scroll would snap
+    // the user's position back to the top.
+    final old = oldWidget.items;
+    final now = widget.items;
+    final headChanged = old.isEmpty != now.isEmpty ||
+        (old.isNotEmpty && now.isNotEmpty && old.first.id != now.first.id);
+    if (headChanged || now.length < old.length) {
+      _visible = _pageSize;
+    }
+  }
+
+  void _onOuterScroll() {
+    final pos = _outerPos;
+    if (pos == null || !pos.hasContentDimensions) return;
+    if (kAccPerfLog) {
+      accLog('[ACC-LIST] fire pixels=${pos.pixels.toStringAsFixed(0)},'
+          'maxSE=${pos.maxScrollExtent.toStringAsFixed(0)},'
+          'hasDims=${pos.hasContentDimensions}');
+    }
+    if (_visible >= widget.items.length) return;
+    if (pos.pixels >= pos.maxScrollExtent - 800) {
+      setState(() {
+        final next = _visible + _pageSize;
+        final to = next > widget.items.length ? widget.items.length : next;
+        if (kAccPerfLog) accLog('[ACC-LIST] GROW $_visible->$to');
+        _visible = to;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    if (kAccPerfLog) accLog('[ACC-LIST] DISPOSE');
+    _outerPos?.removeListener(_onOuterScroll);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (kAccPerfLog) accLog('[ACC-LIST] build visible=$_visible');
+    final items = _visible >= widget.items.length
+        ? widget.items
+        : widget.items.take(_visible).toList();
+    return Column(
+      children: [
+        for (final lr in items)
+          Padding(
+            padding: EdgeInsets.only(bottom: widget.gap),
+            child: _LrPaymentCard(
+              lr: lr,
+              canT: widget.canT,
+              canCust: widget.canCust,
+              canMargin: widget.canMargin,
+              transporter: widget.transportersById[lr.transporter.id],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class _LrPaymentCard extends ConsumerWidget {
   final LorryReceipt lr;
-  const _LrPaymentCard({required this.lr});
+  // Role-visibility flags + transporter are hoisted from the parent so a
+  // hundred cards don't each subscribe to currentUserProvider three times
+  // (and re-scan transportersProvider) on every rebuild.
+  final bool canT;
+  final bool canCust;
+  final bool canMargin;
+  final Transporter? transporter;
+  const _LrPaymentCard({
+    required this.lr,
+    required this.canT,
+    required this.canCust,
+    required this.canMargin,
+    required this.transporter,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -463,20 +637,6 @@ class _LrPaymentCard extends ConsumerWidget {
     final hasAdvance = advance > 0;
     final hasBalance = transBalance > 0.01;
     final fullyPaid = freight > 0 && !hasBalance;
-    // Visibility perms (migration 072): redact transporter-side amounts and the
-    // customer-side billing fields when the perm is revoked. (The backend also
-    // zeroes/blanks these, which already auto-hides the payment actions below.)
-    final canT = ref.watch(currentUserProvider)?.canViewTransporterRate ?? false;
-    final canCust =
-        ref.watch(currentUserProvider)?.canViewCustomerRate ?? false;
-    final canMargin =
-        ref.watch(currentUserProvider)?.canViewVistarMargin ?? false;
-    // Resolve the full transporter (with bank details) from the masters list so
-    // accounts can pay the correct party.
-    final transporter = ref
-        .watch(transportersProvider)
-        .where((t) => t.id == lr.transporter.id)
-        .firstOrNull;
 
     final mobile = MediaQuery.of(context).size.width < 600;
     return Container(
@@ -1096,7 +1256,7 @@ class _LrPaymentCard extends ConsumerWidget {
           .markAdvancePaid(lr.id, lr.version);
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not mark advance paid: $e')),
+        SnackBar(content: Text(friendlyErrorMessage(e))),
       );
       return;
     }
@@ -1134,7 +1294,7 @@ class _LrPaymentCard extends ConsumerWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Could not record advance: $e')));
+      ).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
       return;
     }
     if (!context.mounted) return;
@@ -1190,7 +1350,7 @@ class _LrPaymentCard extends ConsumerWidget {
           .completePayment(lr.id, lr.version);
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not complete payment: $e')),
+        SnackBar(content: Text(friendlyErrorMessage(e))),
       );
       return;
     }
@@ -1349,7 +1509,7 @@ class _LrPaymentCard extends ConsumerWidget {
           .updateLr(lr.id, lr.version, payload);
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not save billing details: $e')),
+        SnackBar(content: Text(friendlyErrorMessage(e))),
       );
       return;
     }
