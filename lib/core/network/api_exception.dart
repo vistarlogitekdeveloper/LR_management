@@ -1,3 +1,17 @@
+/// UI-friendly rendering of an error caught from an API write. Version
+/// conflicts get a recovery-oriented message (the notifier has already
+/// refetched the row, so a fresh click will use the current version) instead
+/// of the raw class dump.
+String friendlyErrorMessage(Object e) {
+  if (e is ApiException) {
+    if (e.isVersionConflict) {
+      return 'This record was updated in the background — its details have been refreshed. Please review and try again.';
+    }
+    return e.message;
+  }
+  return e.toString();
+}
+
 class ApiException implements Exception {
   ApiException({
     required this.status,

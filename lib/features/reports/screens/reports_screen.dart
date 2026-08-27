@@ -1,6 +1,8 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../shared/models/lr_models.dart';
@@ -11,6 +13,7 @@ import '../../../shared/widgets/section_title.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../lr/providers/lr_providers.dart';
 import '../../shell/widgets/app_topbar.dart';
+import '../data/reports_repository.dart';
 import '../providers/reports_providers.dart';
 import '../services/export_service.dart';
 
@@ -566,7 +569,30 @@ class _AccountsTab extends ConsumerWidget {
                             }
                           },
                         ),
+                        // The reverse trip: fill the Accounts-owned columns in
+                        // the downloaded sheet and push them back in.
+                        AppButton(
+                          label: 'Upload updated MIS',
+                          icon: Icons.upload_file_outlined,
+                          kind: BtnKind.soft,
+                          small: true,
+                          onPressed: () => _uploadMis(context, ref),
+                        ),
                       ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Fill in Balance Paid Date, Vistar Bill No and Vistar '
+                      'Bill Date in the downloaded sheet and upload it back — '
+                      'those three columns are saved against each LR (matched '
+                      'on LR No) and appear in every later download. Blank '
+                      'cells are left untouched, and every other column in the '
+                      'sheet is read-only.',
+                      style: TextStyle(
+                        color: AppColors.slate.withValues(alpha: 0.85),
+                        fontSize: 11.5,
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                   ],
                 ),
@@ -753,6 +779,288 @@ class _AccountsTab extends ConsumerWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  /// Picks a filled-in MIS workbook and pushes its Accounts-owned columns back
+  /// into the app. Two server round-trips: a dry run that parses and diffs
+  /// without writing (shown as a confirmation preview, so nobody commits a
+  /// mis-edited sheet blind), then the real write once the user approves.
+  Future<void> _uploadMis(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['xlsx'],
+      // Bytes, not a path: web has no filesystem path, and the file is posted
+      // straight through rather than kept.
+      withData: true,
+      dialogTitle: 'Select the filled-in MIS workbook',
+    );
+    if (picked == null || picked.files.isEmpty) return;
+    final file = picked.files.first;
+    final bytes = file.bytes;
+    if (bytes == null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not read that file — try again.')),
+      );
+      return;
+    }
+
+    final repo = ref.read(reportsRepositoryProvider);
+    final MisImportResult preview;
+    try {
+      preview = await repo.importMisXlsx(
+        bytes: bytes,
+        filename: file.name,
+        dryRun: true,
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not read the MIS: ${friendlyErrorMessage(e)}')),
+      );
+      return;
+    }
+    if (!context.mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => _MisImportDialog(
+        result: preview,
+        filename: file.name,
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    // The write is sequential server-side and can run for a while on a big
+    // sheet, so block the UI with a spinner rather than leaving the button
+    // looking idle.
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2.5),
+            ),
+            SizedBox(width: 16),
+            Expanded(child: Text('Saving MIS updates…')),
+          ],
+        ),
+      ),
+    );
+
+    MisImportResult? applied;
+    Object? failure;
+    try {
+      applied = await repo.importMisXlsx(bytes: bytes, filename: file.name);
+    } catch (e) {
+      failure = e;
+    }
+    if (!context.mounted) return;
+    Navigator.of(context, rootNavigator: true).pop(); // close the spinner
+
+    if (failure != null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('MIS upload failed: ${friendlyErrorMessage(failure)}')),
+      );
+      return;
+    }
+
+    // Pull the LRs back down so the Accounts list (and the next MIS download)
+    // shows the values that were just written.
+    await ref.read(lrListProvider.notifier).refresh(force: true);
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => _MisImportDialog(
+        result: applied!,
+        filename: file.name,
+      ),
+    );
+  }
+}
+
+/// Renders a MIS import summary. Doubles as the pre-write confirmation (when
+/// `result.dryRun`, with Cancel / Apply actions) and the post-write receipt,
+/// since the server returns the same shape for both.
+class _MisImportDialog extends StatelessWidget {
+  final MisImportResult result;
+  final String filename;
+
+  const _MisImportDialog({required this.result, required this.filename});
+
+  @override
+  Widget build(BuildContext context) {
+    final dry = result.dryRun;
+    final nothingToDo = !result.hasWork;
+    return AlertDialog(
+      title: Text(dry ? 'Review MIS updates' : 'MIS upload complete'),
+      content: SizedBox(
+        width: 520,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                filename,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 10),
+              _stat(dry ? 'LRs to update' : 'LRs updated', result.updatedCount,
+                  AppColors.plum),
+              _stat('Rows read from the sheet', result.rowsRead, AppColors.slate),
+              _stat('Already up to date', result.unchangedCount, AppColors.slate),
+              if (result.notFoundCount > 0)
+                _stat('LR No not found', result.notFoundCount, Colors.orange),
+              if (result.errorCount > 0)
+                _stat('Rows with problems', result.errorCount, Colors.red),
+              if (result.ignoredColumns.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                _note(
+                  'Ignored (you do not have permission to change these): '
+                  '${result.ignoredColumns.join(', ')}.',
+                  Colors.orange,
+                ),
+              ],
+              if (nothingToDo) ...[
+                const SizedBox(height: 10),
+                _note(
+                  result.rowsWithValues == 0
+                      ? 'None of the editable columns had a value in them, so '
+                          'there is nothing to save.'
+                      : 'Every value in the sheet already matches what is '
+                          'stored, so there is nothing to save.',
+                  AppColors.slate,
+                ),
+              ],
+              if (result.updated.isNotEmpty)
+                _rowList(
+                  dry ? 'Will change' : 'Changed',
+                  result.updated,
+                  (r) => r.changes.map((c) => c.summary).join('  ·  '),
+                  result.updatedCount,
+                ),
+              if (result.notFound.isNotEmpty)
+                _rowList(
+                  'No such LR (skipped)',
+                  result.notFound,
+                  (_) => 'not in your LRs — check the LR No, or it may belong '
+                      'to another region',
+                  result.notFoundCount,
+                ),
+              if (result.errors.isNotEmpty)
+                _rowList(
+                  'Problems (skipped)',
+                  result.errors,
+                  (r) => r.message ?? '',
+                  result.errorCount,
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        if (dry && !nothingToDo) ...[
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Save ${result.updatedCount} '
+                '${result.updatedCount == 1 ? 'LR' : 'LRs'}'),
+          ),
+        ] else
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Close'),
+          ),
+      ],
+    );
+  }
+
+  static Widget _stat(String label, int value, Color color) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(label, style: const TextStyle(fontSize: 13)),
+            ),
+            Text(
+              '$value',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      );
+
+  static Widget _note(String text, Color color) => Text(
+        text,
+        style: TextStyle(fontSize: 11.5, color: color),
+      );
+
+  /// A collapsed list of affected rows. Only the first 200 of each kind come
+  /// back from the server, so say so when the count runs past what's shown.
+  static Widget _rowList(
+    String title,
+    List<MisImportRow> rows,
+    String Function(MisImportRow) detail,
+    int total,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Theme(
+        data: ThemeData(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          title: Text(
+            '$title ($total)',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          ),
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: const EdgeInsets.only(bottom: 8),
+          children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 220),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: rows.length,
+                itemBuilder: (_, i) {
+                  final r = rows[i];
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Text(
+                      'Row ${r.row} · ${r.lrNo} — ${detail(r)}',
+                      style: const TextStyle(fontSize: 11.5),
+                    ),
+                  );
+                },
+              ),
+            ),
+            if (total > rows.length)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '…and ${total - rows.length} more',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

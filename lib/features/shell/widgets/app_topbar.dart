@@ -21,7 +21,11 @@ class AppTopbar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     // Compact on phones so the header doesn't eat vertical space — smaller
     // padding/title and a single-line (ellipsised) subtitle.
-    final mobile = MediaQuery.of(context).size.width < 600;
+    final width = MediaQuery.of(context).size.width;
+    final mobile = width < 600;
+    // Title + actions can't share one line on narrower viewports (e.g. with
+    // devtools open) — stack the actions below the title to avoid overflow.
+    final stackActions = actions.isNotEmpty && width < 900;
     final titleBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -60,9 +64,9 @@ class AppTopbar extends StatelessWidget implements PreferredSizeWidget {
         color: AppColors.white,
         border: Border(bottom: BorderSide(color: AppColors.line)),
       ),
-      // On phones, actions can't share a single line with the title without
-      // overflowing — stack the title and wrap the actions below.
-      child: mobile && actions.isNotEmpty
+      // On narrow viewports, actions can't share a single line with the title
+      // without overflowing — stack the title and wrap the actions below.
+      child: stackActions
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,

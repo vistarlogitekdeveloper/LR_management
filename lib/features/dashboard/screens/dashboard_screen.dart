@@ -84,6 +84,12 @@ class DashboardScreen extends ConsumerWidget {
                 ? null
                 : '${user.role.label} · ${flow?.tagline ?? ''}',
             actions: [
+              AppButton(
+                label: 'Live Tracking',
+                icon: Icons.my_location_rounded,
+                kind: BtnKind.ghost,
+                onPressed: () => context.go('/tracking'),
+              ),
               if (canCreate)
                 AppButton(
                   label: 'New LR',
