@@ -52,4 +52,9 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy build/web --project-name=lr-management --branch=main
+          # The Pages PROJECT is named vistar-transport-management-system; it
+          # keeps the lr-management.pages.dev domain from before it was renamed.
+          # Deploying to --project-name=lr-management targeted a project that no
+          # longer exists, so this step never published — verified 2026-08-27
+          # against `wrangler pages project list`.
+          command: pages deploy build/web --project-name=vistar-transport-management-system --branch=main
