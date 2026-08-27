@@ -59,7 +59,7 @@ void main() {
       expect(find.text('Passwords do not match'), findsOneWidget);
     });
 
-    testWidgets('new password shorter than 10 chars is rejected',
+    testWidgets('new password shorter than 6 chars is rejected',
         (tester) async {
       await _pump(tester);
       await tester.enterText(find.byType(TextFormField).at(0), 'oldpass99');
@@ -67,7 +67,32 @@ void main() {
       await tester.enterText(find.byType(TextFormField).at(2), 'ab1');
       await tester.tap(find.text('Update password'));
       await tester.pump();
-      expect(find.text('Min 10 characters'), findsOneWidget);
+      expect(find.text('Min 6 characters'), findsOneWidget);
+    });
+
+    // Pins the boundary itself, not just "something short fails" — the minimum
+    // has already moved once (10 → 6) and the length-only test above kept
+    // passing its old assertion right up until the message text changed.
+    testWidgets('6 characters clears the length rule, 5 does not',
+        (tester) async {
+      await _pump(tester);
+      await tester.enterText(find.byType(TextFormField).at(0), 'oldpass99');
+      await tester.enterText(find.byType(TextFormField).at(1), 'abcd1');
+      await tester.enterText(find.byType(TextFormField).at(2), 'abcd1');
+      await tester.tap(find.text('Update password'));
+      await tester.pump();
+      expect(find.text('Min 6 characters'), findsOneWidget);
+
+      // Six characters, but no digit — so the length rule is satisfied while
+      // the form stays invalid on the *next* rule. That keeps this a pure
+      // validator check: a fully valid form would submit and leave the real
+      // network call pending, which the test binding rejects.
+      await tester.enterText(find.byType(TextFormField).at(1), 'abcdef');
+      await tester.enterText(find.byType(TextFormField).at(2), 'abcdef');
+      await tester.tap(find.text('Update password'));
+      await tester.pump();
+      expect(find.text('Min 6 characters'), findsNothing);
+      expect(find.text('Must contain a number'), findsOneWidget);
     });
   });
 }
