@@ -1,3 +1,14 @@
-name = "lr-management"
+# Cloudflare Pages config for the Flutter web app.
+#
+# `name` must match the real Pages PROJECT, which is
+# "vistar-transport-management-system" — it kept the lr-management.pages.dev
+# domain from before the project was renamed, so the domain and the project
+# name no longer match. A bare `wrangler pages deploy` reads this name, so
+# leaving the old "lr-management" here targeted a project that does not exist.
+#
+# `build/web` is produced by `flutter build web --release` and is gitignored;
+# it is NEVER committed. The deploy is .github/workflows/deploy-cloudflare.yml,
+# which builds it in CI and uploads it directly.
+name = "vistar-transport-management-system"
 compatibility_date = "2025-05-22"
 pages_build_output_dir = "build/web"

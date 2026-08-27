@@ -3,12 +3,24 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
 
-# Content-hashed / version-pinned assets — safe to cache forever.
+# Flutter does NOT content-hash asset filenames: build/web/assets holds
+# AssetManifest.bin, FontManifest.json, fonts/MaterialIcons-Regular.otf and
+# assets/images/*.png — every one a stable name whose CONTENTS change between
+# deploys. Serving those `immutable` for a year is the exact trap called out
+# for the entry files below: a returning browser pins the old bytes and never
+# re-fetches. Worse, a stale AssetManifest.bin makes assets added in a later
+# release unresolvable, and because /* rewrites a miss to index.html (200,
+# text/html) an immutable rule here can pin an HTML page under an asset URL.
+# These must revalidate; Cloudflare answers unchanged files with a cheap 304.
 /assets/*
-  Cache-Control: public, max-age=31536000, immutable
+  Cache-Control: public, max-age=0, must-revalidate
 
+# Same reasoning — /canvaskit/canvaskit.js is a stable path whose contents move
+# with the Flutter engine. (Currently dead config: flutter_bootstrap.js has no
+# useLocalCanvasKit, so the engine is fetched from the versioned gstatic URL and
+# this folder is never requested. Kept correct in case that is switched on.)
 /canvaskit/*
-  Cache-Control: public, max-age=31536000, immutable
+  Cache-Control: public, max-age=0, must-revalidate
 
 # App icons + favicon keep the SAME name across deploys but their contents can
 # change on a rebrand, so they must revalidate — otherwise a returning browser
