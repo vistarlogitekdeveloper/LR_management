@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/file_opener.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/utils/perf_log.dart';
 import '../../../shared/models/lr_models.dart';
 import '../../../shared/models/transporter.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -43,99 +45,236 @@ final _accountsDateRangeProvider = StateProvider<DateTimeRange?>((ref) => null);
 // Region filter (region_id). null = all regions.
 final _accountsRegionProvider = StateProvider<String?>((ref) => null);
 
-class AccountsScreen extends ConsumerWidget {
+// ── Memoised derived data ────────────────────────────────────────────────────
+// AccountsScreen stays alive offstage in the shell's IndexedStack, so its build
+// runs on every lrListProvider emission and every rebuild. Deriving the source
+// set, sort, region map, KPIs and filtered list inline meant that whole ~5-block
+// pipeline re-ran each time. Split into providers so each recomputes ONLY when
+// its own inputs change: typing in search re-runs the filter alone, and a plain
+// rebuild (e.g. a MediaQuery change) recomputes nothing.
+
+/// LRs an ops user explicitly "sent for payment" — the base set Accounts sees.
+final accountsSourceLrsProvider = Provider<List<LorryReceipt>>((ref) {
+  final sw = kAccPerfLog ? (Stopwatch()..start()) : null;
+  final lrs =
+      ref.watch(lrListProvider).where((lr) => lr.sentForPayment).toList();
+  if (kAccPerfLog) {
+    sw!.stop();
+    accLog('[ACC-BUILD] sentForPayment ${sw.elapsedMicroseconds / 1000}ms '
+        'n=${lrs.length}');
+  }
+  return lrs;
+});
+
+/// Source set sorted newest-first.
+final accountsSortedProvider = Provider<List<LorryReceipt>>((ref) {
+  final sw = kAccPerfLog ? (Stopwatch()..start()) : null;
+  final sorted = [...ref.watch(accountsSourceLrsProvider)]
+    ..sort((a, b) => b.date.compareTo(a.date));
+  if (kAccPerfLog) {
+    sw!.stop();
+    accLog('[ACC-BUILD] sort ${sw.elapsedMicroseconds / 1000}ms '
+        'n=${sorted.length}');
+  }
+  return sorted;
+});
+
+// The region code is the 2–6 letter segment after the first '/' in an LR
+// number. Built once, not per LR row.
+final _regionCodeRe = RegExp(r'^[A-Za-z]{2,6}$');
+
+/// region_id -> short code (embedded in the LR number) for the region filter.
+final accountsRegionCodesProvider = Provider<Map<String, String>>((ref) {
+  final sw = kAccPerfLog ? (Stopwatch()..start()) : null;
+  final sorted = ref.watch(accountsSortedProvider);
+  final regionCodes = <String, String>{};
+  for (final lr in sorted) {
+    final rid = lr.regionId;
+    if (rid == null || rid.isEmpty) continue;
+    final parts = lr.number.split('/');
+    if (parts.length > 1 && _regionCodeRe.hasMatch(parts[1])) {
+      regionCodes[rid] = parts[1].toUpperCase();
+    }
+  }
+  if (kAccPerfLog) {
+    sw!.stop();
+    accLog('[ACC-BUILD] regionCodes ${sw.elapsedMicroseconds / 1000}ms '
+        'n=${regionCodes.length}');
+  }
+  return regionCodes;
+});
+
+/// The five KPI values, computed in a SINGLE pass over the source set.
+class AccountsKpis {
+  const AccountsKpis({
+    required this.totalAdvance,
+    required this.totalPending,
+    required this.countPending,
+    required this.countAdvancePaid,
+    required this.countFullyPaid,
+  });
+  final double totalAdvance;
+  final double totalPending;
+  final int countPending; // awaiting advance (nothing paid)
+  final int countAdvancePaid; // advance paid, balance against POD pending
+  final int countFullyPaid; // advance + balance both settled
+}
+
+final accountsKpisProvider = Provider<AccountsKpis>((ref) {
+  final sw = kAccPerfLog ? (Stopwatch()..start()) : null;
+  final lrs = ref.watch(accountsSourceLrsProvider);
+  var totalAdvance = 0.0;
+  var totalPending = 0.0;
+  var countPending = 0;
+  var countAdvancePaid = 0;
+  var countFullyPaid = 0;
+  for (final l in lrs) {
+    final advance = l.freight.advance;
+    final freight = l.freight.freight;
+    totalAdvance += advance;
+    final pend = freight - advance;
+    if (pend > 0) totalPending += pend;
+    if (freight <= 0) continue;
+    if (advance <= 0) {
+      countPending++;
+    } else if (pend > 0.01) {
+      countAdvancePaid++;
+    } else {
+      countFullyPaid++;
+    }
+  }
+  final kpis = AccountsKpis(
+    totalAdvance: totalAdvance,
+    totalPending: totalPending,
+    countPending: countPending,
+    countAdvancePaid: countAdvancePaid,
+    countFullyPaid: countFullyPaid,
+  );
+  if (kAccPerfLog) {
+    sw!.stop();
+    accLog('[ACC-BUILD] kpis ${sw.elapsedMicroseconds / 1000}ms');
+  }
+  return kpis;
+});
+
+/// Sorted set narrowed by the filter chip, search query, date range and region.
+final accountsFilteredProvider = Provider<List<LorryReceipt>>((ref) {
+  final sw = kAccPerfLog ? (Stopwatch()..start()) : null;
+  final sorted = ref.watch(accountsSortedProvider);
+  final filter = ref.watch(_accountsFilterProvider);
+  final query = ref.watch(_accountsSearchProvider).trim().toLowerCase();
+  final range = ref.watch(_accountsDateRangeProvider);
+  final region = ref.watch(_accountsRegionProvider);
+  final rangeStart = range == null ? null : DateUtils.dateOnly(range.start);
+  final rangeEnd = range == null ? null : DateUtils.dateOnly(range.end);
+
+  // Accounts pays the transporter, so payment state is tracked against the
+  // transporter freight (the LR's advance % up front, the rest against POD),
+  // not the customer total. `balance` here means transporter freight unpaid.
+  final filtered = sorted.where((lr) {
+    final freight = lr.freight.freight;
+    final balance = freight - lr.freight.advance;
+    final matchesPay = switch (filter) {
+      _PayFilter.all => true,
+      _PayFilter.awaitingAdvance => lr.freight.advance <= 0 && freight > 0,
+      _PayFilter.awaitingBalance => lr.freight.advance > 0 && balance > 0.01,
+      _PayFilter.paid => freight > 0 && balance <= 0.01,
+    };
+    if (!matchesPay) return false;
+    if (region != null && lr.regionId != region) return false;
+    if (rangeStart != null) {
+      final d = DateUtils.dateOnly(lr.date);
+      if (d.isBefore(rangeStart) || d.isAfter(rangeEnd!)) return false;
+    }
+    if (query.isEmpty) return true;
+    final hay = [
+      lr.number,
+      lr.consignor.name,
+      lr.consignee.name,
+      lr.customerName,
+      lr.vehicle.number,
+      lr.route,
+      lr.transporter.name,
+    ].join(' ').toLowerCase();
+    return hay.contains(query);
+  }).toList();
+  if (kAccPerfLog) {
+    sw!.stop();
+    accLog('[ACC-BUILD] filter+search ${sw.elapsedMicroseconds / 1000}ms '
+        'n=${filtered.length}');
+  }
+  return filtered;
+});
+
+class AccountsScreen extends ConsumerStatefulWidget {
   const AccountsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // Accounts only sees LRs an ops user has explicitly "sent for payment".
-    // (Legacy LRs from before this feature default to sent, so nothing is lost.)
-    final lrs = ref
-        .watch(lrListProvider)
-        .where((lr) => lr.sentForPayment)
-        .toList();
+  ConsumerState<AccountsScreen> createState() => _AccountsScreenState();
+}
+
+class _AccountsScreenState extends ConsumerState<AccountsScreen> {
+  // The first build after this screen mounts returns a shimmer shell
+  // immediately and schedules the real (heavier) build for the next frame, so a
+  // click always paints within one frame instead of leaving the previous screen
+  // frozen while the payment list computes. The prior `loading && lrs.isEmpty`
+  // skeleton never showed on a warm re-entry (loading false, list non-empty).
+  bool _firstPaintDone = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_firstPaintDone) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _firstPaintDone = true);
+      });
+      return const _AccountsSkeleton();
+    }
+
+    final swTotal = kAccPerfLog ? (Stopwatch()..start()) : null;
+
+    // All the heavy derivation now lives in memoised providers at the top of
+    // this file — each recomputes only when its own inputs change, so a plain
+    // rebuild here (e.g. a MediaQuery change) does zero list work.
+    final lrs = ref.watch(accountsSourceLrsProvider);
     final loading = ref.watch(lrListLoadingProvider);
     final filter = ref.watch(_accountsFilterProvider);
-    final query = ref.watch(_accountsSearchProvider).trim().toLowerCase();
     final range = ref.watch(_accountsDateRangeProvider);
     final region = ref.watch(_accountsRegionProvider);
-    // The two money totals are transporter-side amounts (VIEW_TRANSPORTER_RATE);
-    // the status-count tiles are not gated.
-    final canT = ref.watch(currentUserProvider)?.canViewTransporterRate ?? false;
-    final rangeStart = range == null ? null : DateUtils.dateOnly(range.start);
-    final rangeEnd = range == null ? null : DateUtils.dateOnly(range.end);
+    // Role visibility flags hoisted to the parent — every _LrPaymentCard used
+    // to `ref.watch(currentUserProvider)` three times of its own, so with a
+    // few hundred sent-for-payment LRs a single frame was doing hundreds of
+    // provider subscriptions + rebuilds. Read them once here and pass down.
+    final user = ref.watch(currentUserProvider);
+    final canT = user?.canViewTransporterRate ?? false;
+    final canCust = user?.canViewCustomerRate ?? false;
+    final canMargin = user?.canViewVistarMargin ?? false;
+    // Transporter lookup used to be an O(n) `.where(...).firstOrNull` per card;
+    // for 500 cards × 200 transporters that's 100k comparisons per frame. Build
+    // an id → transporter map once at the parent so each card is O(1).
+    final transportersById = <String, Transporter>{
+      for (final t in ref.watch(transportersProvider)) t.id: t,
+    };
 
-    final sorted = [...lrs]..sort((a, b) => b.date.compareTo(a.date));
-    // Region options (region_id -> short code embedded in the LR number) for
-    // the region filter. Shown whenever at least one region is present.
-    final regionCodes = <String, String>{};
-    for (final lr in sorted) {
-      final rid = lr.regionId;
-      if (rid == null || rid.isEmpty) continue;
-      final parts = lr.number.split('/');
-      if (parts.length > 1 && RegExp(r'^[A-Za-z]{2,6}$').hasMatch(parts[1])) {
-        regionCodes[rid] = parts[1].toUpperCase();
-      }
-    }
+    final regionCodes = ref.watch(accountsRegionCodesProvider);
     final regionIds = regionCodes.keys.toList()
       ..sort((a, b) => regionCodes[a]!.compareTo(regionCodes[b]!));
     final hasRegions = regionIds.isNotEmpty;
-    // Accounts pays the transporter, so payment state is tracked against the
-    // transporter freight (the LR's advance % up front, the rest against POD),
-    // not the customer
-    // total. `balance` here means the transporter freight still unpaid.
-    final filtered = sorted.where((lr) {
-      final freight = lr.freight.freight;
-      final balance = freight - lr.freight.advance;
-      final matchesPay = switch (filter) {
-        _PayFilter.all => true,
-        _PayFilter.awaitingAdvance => lr.freight.advance <= 0 && freight > 0,
-        _PayFilter.awaitingBalance => lr.freight.advance > 0 && balance > 0.01,
-        _PayFilter.paid => freight > 0 && balance <= 0.01,
-      };
-      if (!matchesPay) return false;
-      if (region != null && lr.regionId != region) return false;
-      if (rangeStart != null) {
-        final d = DateUtils.dateOnly(lr.date);
-        if (d.isBefore(rangeStart) || d.isAfter(rangeEnd!)) return false;
-      }
-      if (query.isEmpty) return true;
-      final hay = [
-        lr.number,
-        lr.consignor.name,
-        lr.consignee.name,
-        lr.customerName,
-        lr.vehicle.number,
-        lr.route,
-        lr.transporter.name,
-      ].join(' ').toLowerCase();
-      return hay.contains(query);
-    }).toList();
 
-    final totalAdvance = lrs.fold<double>(0, (s, l) => s + l.freight.advance);
-    final totalPending = lrs.fold<double>(0, (s, l) {
-      final pend = l.freight.freight - l.freight.advance;
-      return s + (pend > 0 ? pend : 0);
-    });
+    final filtered = ref.watch(accountsFilteredProvider);
 
-    // Status counts — same buckets as the filter chips below.
-    var countPending = 0; // awaiting advance (nothing paid)
-    var countAdvancePaid = 0; // advance paid, balance against POD pending
-    var countFullyPaid = 0; // advance + balance both settled
-    for (final l in lrs) {
-      final f = l.freight.freight;
-      if (f <= 0) continue;
-      final bal = f - l.freight.advance;
-      if (l.freight.advance <= 0) {
-        countPending++;
-      } else if (bal > 0.01) {
-        countAdvancePaid++;
-      } else {
-        countFullyPaid++;
-      }
-    }
+    final kpis = ref.watch(accountsKpisProvider);
+    final totalAdvance = kpis.totalAdvance;
+    final totalPending = kpis.totalPending;
+    final countPending = kpis.countPending;
+    final countAdvancePaid = kpis.countAdvancePaid;
+    final countFullyPaid = kpis.countFullyPaid;
 
     final isMobile = MediaQuery.of(context).size.width < 600;
+
+    if (kAccPerfLog) {
+      swTotal!.stop();
+      accLog('[ACC-BUILD] total ${swTotal.elapsedMicroseconds / 1000}ms');
+    }
 
     return Scaffold(
       backgroundColor: AppColors.mist,
@@ -335,16 +474,13 @@ class AccountsScreen extends ConsumerWidget {
                             ),
                           )
                         else
-                          Column(
-                            children: [
-                              for (final lr in filtered)
-                                Padding(
-                                  padding: EdgeInsets.only(
-                                    bottom: isMobile ? 8 : 12,
-                                  ),
-                                  child: _LrPaymentCard(lr: lr),
-                                ),
-                            ],
+                          _LrPaymentsList(
+                            items: filtered,
+                            canT: canT,
+                            canCust: canCust,
+                            canMargin: canMargin,
+                            transportersById: transportersById,
+                            gap: isMobile ? 8 : 12,
                           ),
                       ],
                     ),
@@ -375,6 +511,34 @@ class AccountsScreen extends ConsumerWidget {
     if (picked != null) {
       ref.read(_accountsDateRangeProvider.notifier).state = picked;
     }
+  }
+}
+
+/// The instant first-frame shell: the real topbar over a few shimmer cards, in
+/// the same style as the loading state, so entry paints immediately.
+class _AccountsSkeleton extends StatelessWidget {
+  const _AccountsSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    return Scaffold(
+      backgroundColor: AppColors.mist,
+      body: Column(
+        children: [
+          const AppTopbar(
+            title: 'Accounts & Billing',
+            subtitle: 'Collect advance, settle balance on each LR',
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.all(isMobile ? 14 : 28),
+              child: const ShimmerCards(cards: 5),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -449,9 +613,229 @@ class _DateRangeChip extends StatelessWidget {
   }
 }
 
+/// Windowed list of LR payment cards. Each card is heavy (nested containers,
+/// three amount blocks, an advance plan, incentive plan, MIS chips, bank card,
+/// action buttons), so materialising all N cards in one frame stalls the main
+/// thread for hundreds of ms once N passes ~100. Render only [_pageSize] cards
+/// initially and extend the window as the outer page scroller nears the bottom
+/// — same pattern the LR list table uses, and cheap to keep in sync because
+/// the notifier still owns the full data.
+class _LrPaymentsList extends ConsumerStatefulWidget {
+  final List<LorryReceipt> items;
+  final bool canT;
+  final bool canCust;
+  final bool canMargin;
+  final Map<String, Transporter> transportersById;
+  final double gap;
+  const _LrPaymentsList({
+    required this.items,
+    required this.canT,
+    required this.canCust,
+    required this.canMargin,
+    required this.transportersById,
+    required this.gap,
+  });
+
+  @override
+  ConsumerState<_LrPaymentsList> createState() => _LrPaymentsListState();
+}
+
+class _LrPaymentsListState extends ConsumerState<_LrPaymentsList> {
+  // Cards are large; a smaller window than the LR-list table (which uses 50)
+  // still fills the initial viewport but keeps first-paint fast.
+  static const _pageSize = 25;
+  // Hard safety ceiling for auto-grow. The outer ScrollPosition notifies this
+  // listener during layout (applyContentDimensions), not only on user scroll,
+  // so without a bound a single layout pass could grow the window from 25 to
+  // all 1458 before a frame painted — the 7 s freeze. Past this many, growth
+  // stops and a "Load more" button takes over (intentional UX change).
+  static const _maxVisible = 200;
+  int _visible = _pageSize;
+  ScrollPosition? _outerPos;
+  // Highest scroll offset seen. Growth only fires when the offset actually
+  // INCREASES (a real forward user scroll); a layout-driven notification leaves
+  // pixels at 0 or unchanged and must never grow the list.
+  double _lastPixels = 0;
+  // One growth is deferred to a post-frame callback at a time, so the setState
+  // is computed against settled extents and can never loop within a layout pass.
+  bool _growScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (kAccPerfLog) accLog('[ACC-LIST] INIT');
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The Accounts screen wraps everything in a SingleChildScrollView; hook
+    // its ScrollPosition so we can extend the window as the user nears the
+    // bottom instead of using a nested Scrollable (which would double-scroll).
+    final pos = Scrollable.maybeOf(context)?.position;
+    if (!identical(pos, _outerPos)) {
+      _outerPos?.removeListener(_onOuterScroll);
+      _outerPos = pos;
+      _outerPos?.addListener(_onOuterScroll);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _LrPaymentsList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reset the window on a genuinely different result set (search / filter /
+    // date change), but not when the same list just grows — the notifier's
+    // progressive loading appends pages and resetting mid-scroll would snap
+    // the user's position back to the top.
+    final old = oldWidget.items;
+    final now = widget.items;
+    final headChanged = old.isEmpty != now.isEmpty ||
+        (old.isNotEmpty && now.isNotEmpty && old.first.id != now.first.id);
+    if (headChanged || now.length < old.length) {
+      _visible = _pageSize;
+      _lastPixels = 0;
+    }
+  }
+
+  void _onOuterScroll() {
+    final pos = _outerPos;
+    if (pos == null || !pos.hasContentDimensions) return;
+
+    final pixels = pos.pixels;
+    if (kAccPerfLog) {
+      accLog('[ACC-LIST] fire pixels=${pixels.toStringAsFixed(0)},'
+          'maxSE=${pos.maxScrollExtent.toStringAsFixed(0)},'
+          'hasDims=${pos.hasContentDimensions}');
+    }
+
+    // Growth is allowed ONLY for a real forward user scroll. A layout-triggered
+    // notification keeps the offset at 0 or unchanged, so it fails this and can
+    // never grow the list. `_lastPixels` is updated on every fire.
+    final scrolledForward = pixels > _lastPixels && pixels > 0;
+    _lastPixels = pixels;
+    if (!scrolledForward) return;
+
+    if (_growScheduled) return; // one deferred grow already pending
+    if (_visible >= widget.items.length) return; // all shown
+    if (_visible >= _maxVisible) return; // ceiling -> "Load more" takes over
+    if (pos.maxScrollExtent <= 200) return; // no meaningful scroll extent yet
+    if (pixels < pos.maxScrollExtent - 400) return; // not near the bottom
+
+    // Defer the actual grow out of this layout/notify pass. On the next frame
+    // the extents are settled, and exactly ONE page is added — never a loop.
+    _growScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _growScheduled = false;
+      if (!mounted) return;
+      setState(() {
+        var to = _visible + _pageSize;
+        if (to > widget.items.length) to = widget.items.length;
+        if (to > _maxVisible) to = _maxVisible;
+        if (kAccPerfLog) accLog('[ACC-LIST] GROW $_visible->$to');
+        _visible = to;
+      });
+    });
+  }
+
+  void _loadMore() {
+    setState(() {
+      var to = _visible + _maxVisible;
+      if (to > widget.items.length) to = widget.items.length;
+      if (kAccPerfLog) accLog('[ACC-LIST] LOAD-MORE $_visible->$to');
+      _visible = to;
+    });
+  }
+
+  @override
+  void dispose() {
+    if (kAccPerfLog) accLog('[ACC-LIST] DISPOSE');
+    _outerPos?.removeListener(_onOuterScroll);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (kAccPerfLog) accLog('[ACC-LIST] build visible=$_visible');
+    final full = _visible >= widget.items.length;
+    final items = full ? widget.items : widget.items.take(_visible).toList();
+    // Auto-grow stops at the ceiling; a manual button reveals the rest so a huge
+    // filtered result set never renders hundreds of cards in one frame on its own.
+    final showLoadMore = !full && _visible >= _maxVisible;
+    // Screen-width flag drives each card's padding; measured once here instead
+    // of by a MediaQuery lookup inside every card.
+    final mobile = MediaQuery.of(context).size.width < 600;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Every card stretches to the full list width, so the wide/narrow
+        // (720px) breakpoint is identical for all of them: the list width minus
+        // the card's own horizontal padding. Resolving it once here lets each
+        // card drop its per-card LayoutBuilder — up to 200 of them.
+        final wide = (constraints.maxWidth - (mobile ? 24 : 32)) >= 720;
+        return Column(
+          children: [
+            for (final lr in items)
+              Padding(
+                padding: EdgeInsets.only(bottom: widget.gap),
+                // Isolate each card's raster so growing the window or repainting
+                // one card doesn't re-raster the whole (long) list.
+                child: RepaintBoundary(
+                  child: _LrPaymentCard(
+                    lr: lr,
+                    canT: widget.canT,
+                    canCust: widget.canCust,
+                    canMargin: widget.canMargin,
+                    transporter: widget.transportersById[lr.transporter.id],
+                    mobile: mobile,
+                    wide: wide,
+                  ),
+                ),
+              ),
+            if (showLoadMore)
+              Padding(
+                padding: EdgeInsets.only(top: widget.gap),
+                child: Center(
+                  child: OutlinedButton.icon(
+                    onPressed: _loadMore,
+                    icon: const Icon(Icons.expand_more, size: 18),
+                    label: Text(
+                      'Load more (${widget.items.length - _visible} left)',
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _LrPaymentCard extends ConsumerWidget {
   final LorryReceipt lr;
-  const _LrPaymentCard({required this.lr});
+  // Role-visibility flags + transporter are hoisted from the parent so a
+  // hundred cards don't each subscribe to currentUserProvider three times
+  // (and re-scan transportersProvider) on every rebuild.
+  final bool canT;
+  final bool canCust;
+  final bool canMargin;
+  final Transporter? transporter;
+  // Layout decisions are resolved once by the parent list and passed down, so
+  // each card avoids a MediaQuery lookup and a LayoutBuilder of its own:
+  //   mobile — screen width < 600 (drives padding), same for every card.
+  //   wide   — the card's content width clears the 720px breakpoint (Row vs
+  //            Column). Every card stretches to the same width, so this is
+  //            identical across the list.
+  final bool mobile;
+  final bool wide;
+  const _LrPaymentCard({
+    required this.lr,
+    required this.canT,
+    required this.canCust,
+    required this.canMargin,
+    required this.transporter,
+    required this.mobile,
+    required this.wide,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -463,22 +847,145 @@ class _LrPaymentCard extends ConsumerWidget {
     final hasAdvance = advance > 0;
     final hasBalance = transBalance > 0.01;
     final fullyPaid = freight > 0 && !hasBalance;
-    // Visibility perms (migration 072): redact transporter-side amounts and the
-    // customer-side billing fields when the perm is revoked. (The backend also
-    // zeroes/blanks these, which already auto-hides the payment actions below.)
-    final canT = ref.watch(currentUserProvider)?.canViewTransporterRate ?? false;
-    final canCust =
-        ref.watch(currentUserProvider)?.canViewCustomerRate ?? false;
-    final canMargin =
-        ref.watch(currentUserProvider)?.canViewVistarMargin ?? false;
-    // Resolve the full transporter (with bank details) from the masters list so
-    // accounts can pay the correct party.
-    final transporter = ref
-        .watch(transportersProvider)
-        .where((t) => t.id == lr.transporter.id)
-        .firstOrNull;
 
-    final mobile = MediaQuery.of(context).size.width < 600;
+    final header = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              lr.number,
+              style: const TextStyle(
+                color: AppColors.ink,
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
+              ),
+            ),
+            StatusPill(status: lr.status),
+            if (fullyPaid)
+              const _BadgePill(text: 'Paid', fg: AppColors.ok)
+            else if (!hasAdvance)
+              const _BadgePill(
+                text: 'Awaiting Advance',
+                fg: AppColors.orange,
+              )
+            else
+              const _BadgePill(
+                text: 'Awaiting Balance',
+                fg: AppColors.red,
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${lr.consignor.name} → ${lr.consignee.name}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppColors.slate,
+            fontWeight: FontWeight.w600,
+            fontSize: 12.5,
+          ),
+        ),
+        Text(
+          '${formatDate(lr.date)} · ${lr.route}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: AppColors.slate, fontSize: 12),
+        ),
+      ],
+    );
+
+    final amounts = Wrap(
+      spacing: 18,
+      runSpacing: 8,
+      children: [
+        _Amount(
+          label: 'Transporter Freight',
+          value: freight,
+          hidden: !canT,
+        ),
+        _Amount(
+          label: 'Advance',
+          value: advance,
+          color: AppColors.ok,
+          hidden: !canT,
+        ),
+        _Amount(
+          label: 'Balance (after POD)',
+          value: transBalance,
+          color: hasBalance ? AppColors.red : AppColors.ok,
+          emphasis: true,
+          hidden: !canT,
+        ),
+      ],
+    );
+
+    final actions = Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      alignment: WrapAlignment.end,
+      children: [
+        if (!hasAdvance && lr.freight.freight > 0)
+          AppButton(
+            label: 'Mark Advance Paid',
+            kind: BtnKind.soft,
+            icon: Icons.savings_outlined,
+            small: true,
+            onPressed: () => _markAdvancePaid(context, ref),
+          ),
+        if (hasAdvance && hasBalance)
+          AppButton(
+            label: 'Add Advance',
+            kind: BtnKind.ghost,
+            icon: Icons.add_rounded,
+            small: true,
+            onPressed: () => _payAdvance(context, ref),
+          ),
+        if (hasBalance)
+          AppButton(
+            label: 'Complete Payment',
+            kind: BtnKind.primary,
+            icon: Icons.check_circle_outline,
+            small: true,
+            onPressed: () => _completePayment(context, ref),
+          ),
+        if (fullyPaid)
+          const _BadgePill(text: 'Settled', fg: AppColors.ok),
+        AppButton(
+          label: 'Billing / MIS',
+          kind: BtnKind.ghost,
+          icon: Icons.receipt_long_outlined,
+          small: true,
+          onPressed: () => _editBillingMis(context, ref),
+        ),
+      ],
+    );
+
+    final main = wide
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(flex: 3, child: header),
+              const SizedBox(width: 16),
+              Expanded(flex: 3, child: amounts),
+              const SizedBox(width: 16),
+              Expanded(flex: 2, child: actions),
+            ],
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              header,
+              const SizedBox(height: 12),
+              amounts,
+              const SizedBox(height: 12),
+              actions,
+            ],
+          );
     return Container(
       padding: EdgeInsets.all(mobile ? 12 : 16),
       decoration: BoxDecoration(
@@ -486,162 +993,19 @@ class _LrPaymentCard extends ConsumerWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.line),
       ),
-      child: LayoutBuilder(
-        builder: (context, c) {
-          final wide = c.maxWidth >= 720;
-          final header = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(
-                    lr.number,
-                    style: const TextStyle(
-                      color: AppColors.ink,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
-                    ),
-                  ),
-                  StatusPill(status: lr.status),
-                  if (fullyPaid)
-                    const _BadgePill(text: 'Paid', fg: AppColors.ok)
-                  else if (!hasAdvance)
-                    const _BadgePill(
-                      text: 'Awaiting Advance',
-                      fg: AppColors.orange,
-                    )
-                  else
-                    const _BadgePill(
-                      text: 'Awaiting Balance',
-                      fg: AppColors.red,
-                    ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${lr.consignor.name} → ${lr.consignee.name}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppColors.slate,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12.5,
-                ),
-              ),
-              Text(
-                '${formatDate(lr.date)} · ${lr.route}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: AppColors.slate, fontSize: 12),
-              ),
-            ],
-          );
-
-          final amounts = Wrap(
-            spacing: 18,
-            runSpacing: 8,
-            children: [
-              _Amount(
-                label: 'Transporter Freight',
-                value: freight,
-                hidden: !canT,
-              ),
-              _Amount(
-                label: 'Advance',
-                value: advance,
-                color: AppColors.ok,
-                hidden: !canT,
-              ),
-              _Amount(
-                label: 'Balance (after POD)',
-                value: transBalance,
-                color: hasBalance ? AppColors.red : AppColors.ok,
-                emphasis: true,
-                hidden: !canT,
-              ),
-            ],
-          );
-
-          final actions = Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            alignment: WrapAlignment.end,
-            children: [
-              if (!hasAdvance && lr.freight.freight > 0)
-                AppButton(
-                  label: 'Mark Advance Paid',
-                  kind: BtnKind.soft,
-                  icon: Icons.savings_outlined,
-                  small: true,
-                  onPressed: () => _markAdvancePaid(context, ref),
-                ),
-              if (hasAdvance && hasBalance)
-                AppButton(
-                  label: 'Add Advance',
-                  kind: BtnKind.ghost,
-                  icon: Icons.add_rounded,
-                  small: true,
-                  onPressed: () => _payAdvance(context, ref),
-                ),
-              if (hasBalance)
-                AppButton(
-                  label: 'Complete Payment',
-                  kind: BtnKind.primary,
-                  icon: Icons.check_circle_outline,
-                  small: true,
-                  onPressed: () => _completePayment(context, ref),
-                ),
-              if (fullyPaid)
-                const _BadgePill(text: 'Settled', fg: AppColors.ok),
-              AppButton(
-                label: 'Billing / MIS',
-                kind: BtnKind.ghost,
-                icon: Icons.receipt_long_outlined,
-                small: true,
-                onPressed: () => _editBillingMis(context, ref),
-              ),
-            ],
-          );
-
-          final main = wide
-              ? Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(flex: 3, child: header),
-                    const SizedBox(width: 16),
-                    Expanded(flex: 3, child: amounts),
-                    const SizedBox(width: 16),
-                    Expanded(flex: 2, child: actions),
-                  ],
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    header,
-                    const SizedBox(height: 12),
-                    amounts,
-                    const SizedBox(height: 12),
-                    actions,
-                  ],
-                );
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              main,
-              // The advance plan is a transporter-freight breakdown.
-              if (canT) _advancePlan(context),
-              // Client incentive charges: driver share is released with the
-              // balance, so Accounts sees it alongside the advance plan.
-              if (canT)
-                _driverIncentivePlan(context, canViewVistarMargin: canMargin),
-              _billingMisInfo(context, canViewCustomerRate: canCust),
-              _payInfo(context, ref, transporter),
-            ],
-          );
-        },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          main,
+          // The advance plan is a transporter-freight breakdown.
+          if (canT) _advancePlan(context),
+          // Client incentive charges: driver share is released with the
+          // balance, so Accounts sees it alongside the advance plan.
+          if (canT)
+            _driverIncentivePlan(context, canViewVistarMargin: canMargin),
+          _billingMisInfo(context, canViewCustomerRate: canCust),
+          _payInfo(context, ref, transporter),
+        ],
       ),
     );
   }
@@ -1096,7 +1460,7 @@ class _LrPaymentCard extends ConsumerWidget {
           .markAdvancePaid(lr.id, lr.version);
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not mark advance paid: $e')),
+        SnackBar(content: Text(friendlyErrorMessage(e))),
       );
       return;
     }
@@ -1134,7 +1498,7 @@ class _LrPaymentCard extends ConsumerWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Could not record advance: $e')));
+      ).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
       return;
     }
     if (!context.mounted) return;
@@ -1190,7 +1554,7 @@ class _LrPaymentCard extends ConsumerWidget {
           .completePayment(lr.id, lr.version);
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not complete payment: $e')),
+        SnackBar(content: Text(friendlyErrorMessage(e))),
       );
       return;
     }
@@ -1349,7 +1713,7 @@ class _LrPaymentCard extends ConsumerWidget {
           .updateLr(lr.id, lr.version, payload);
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not save billing details: $e')),
+        SnackBar(content: Text(friendlyErrorMessage(e))),
       );
       return;
     }
@@ -1358,6 +1722,9 @@ class _LrPaymentCard extends ConsumerWidget {
     );
   }
 }
+
+// Numeric-with-decimal input mask; built once rather than on every dialog build.
+final _amountInputMask = RegExp(r'[0-9.]');
 
 Future<double?> _showAmountDialog({
   required BuildContext context,
@@ -1391,7 +1758,7 @@ Future<double?> _showAmountDialog({
                   decimal: true,
                 ),
                 inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                  FilteringTextInputFormatter.allow(_amountInputMask),
                 ],
                 decoration: const InputDecoration(
                   labelText: 'Amount (₹)',

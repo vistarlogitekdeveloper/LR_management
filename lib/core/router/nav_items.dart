@@ -66,6 +66,13 @@ class AppNav {
           path: '/warehouse',
           canAccess: (u) => u.role != UserRole.accounts,
         ),
+        NavItem(
+          id: 'tracking',
+          label: 'Live Tracking',
+          icon: Icons.my_location_rounded,
+          path: '/tracking',
+          canAccess: (_) => true,
+        ),
       ],
     ),
     NavSection(

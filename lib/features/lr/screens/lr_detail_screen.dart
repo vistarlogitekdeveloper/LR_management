@@ -165,6 +165,12 @@ class LrDetailScreen extends ConsumerWidget {
                 icon: Icons.arrow_back_rounded,
                 onPressed: () => context.go('/lrs'),
               ),
+              AppButton(
+                label: 'Track',
+                kind: BtnKind.soft,
+                icon: Icons.my_location_rounded,
+                onPressed: () => context.go('/tracking/lr/${lr.id}'),
+              ),
               if (canEdit)
                 AppButton(
                   label: 'Status',

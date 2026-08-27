@@ -68,11 +68,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await LoginPrefs.save(remember: _rememberMe, username: username);
       if (!mounted) return;
       context.go('/dashboard');
-    } else {
-      // Clear the password on a failed attempt (standard login UX) but keep
-      // the username so the user doesn't have to retype their email.
-      _passCtrl.clear();
     }
+    // On failure keep BOTH fields as-is — the user usually needs to tweak
+    // one character, not retype the whole thing. The "Invalid credentials"
+    // banner already tells them what went wrong.
   }
 
 

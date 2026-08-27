@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/network/api_providers.dart';
 import '../../../shared/models/lr_models.dart';
 import '../../../shared/models/user.dart';
@@ -65,6 +66,21 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
   /// writes and make the list visibly jump.
   int _refreshGen = 0;
 
+  /// Timestamp of the last successful load. Used to skip a re-fetch when the
+  /// user re-navigates to a screen whose data is still fresh — see [_freshFor].
+  DateTime? _lastOk;
+
+  /// A refresh already in flight — subsequent callers await the same future
+  /// instead of triggering a duplicate walk of /lrs. Cleared when the fetch
+  /// settles (whenComplete), so a later call starts a fresh one.
+  Future<void>? _pending;
+
+  /// Data younger than this is served from cache; a re-entry within the window
+  /// is a no-op. Kept short so anything the user just changed elsewhere
+  /// (create / edit / status change) still surfaces on a fresh nav within
+  /// seconds. Explicit refresh (pull-to-refresh, force=true) bypasses this.
+  static const _freshFor = Duration(seconds: 30);
+
   /// Operators may only see the LRs they created — region scope alone still
   /// exposes peers' consignments. Admins / super admins / accounts see the full
   /// (backend-scoped) set.
@@ -79,7 +95,25 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
     return all;
   }
 
-  Future<void> refresh() async {
+  /// Fetches the LR list, applying two short-circuits:
+  ///   * TTL (`_freshFor`): a re-nav within the window returns immediately;
+  ///     the screen renders from the cached state without another API hit.
+  ///   * In-flight dedupe (`_pending`): if a fetch is already running (e.g.
+  ///     the notifier constructor kicked one off and RefreshGate then tried
+  ///     to as well), the second caller awaits the same future.
+  /// Callers that need bypass (pull-to-refresh, after a mutation elsewhere)
+  /// pass `force: true`.
+  Future<void> refresh({bool force = false}) {
+    if (!force &&
+        state.isNotEmpty &&
+        _lastOk != null &&
+        DateTime.now().difference(_lastOk!) < _freshFor) {
+      return Future.value();
+    }
+    return _pending ??= _doRefresh().whenComplete(() => _pending = null);
+  }
+
+  Future<void> _doRefresh() async {
     try {
       // Render progressively: each page repaints the list as it arrives, so the
       // first ~100 LRs show almost immediately instead of waiting for the whole
@@ -104,7 +138,10 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
       );
       // Authoritative final state — also clears stale rows on an empty result,
       // where no non-empty page callback replaced them.
-      if (mounted && gen == _refreshGen) state = _scoped(all);
+      if (mounted && gen == _refreshGen) {
+        state = _scoped(all);
+        _lastOk = DateTime.now();
+      }
     } catch (_) {
       // A transient backend/DB error shouldn't crash the UI; keep prior state.
     }
@@ -118,6 +155,44 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
     return created;
   }
 
+  /// Runs a write that carries an `If-Match: <version>` header. On a 412
+  /// VERSION_CONFLICT (the DB moved past the version we sent — e.g. another
+  /// tab/user/backend trigger bumped it between our last list fetch and this
+  /// click), silently refetch the specific LR so the UI reflects the current
+  /// server state, then rethrow. The caller shows a friendly "please try
+  /// again" message; the user's next click carries the fresh version and
+  /// succeeds.
+  ///
+  /// We deliberately don't auto-retry the write: payment endpoints trigger
+  /// notification emails and record timestamps, so re-firing without an
+  /// explicit user confirmation risks double-notifications on an already-
+  /// completed action.
+  Future<LorryReceipt> _versionSafeWrite(
+    String id,
+    Future<LorryReceipt> Function() write,
+  ) async {
+    try {
+      return await write();
+    } on ApiException catch (e) {
+      if (e.isVersionConflict) {
+        await _refetchOne(id);
+      }
+      rethrow;
+    }
+  }
+
+  /// Reload a single LR from the server and replace it in local state — used
+  /// after a version conflict so the next click carries the current version.
+  /// Best-effort: if the refetch itself fails (network drop, 5xx), we keep
+  /// the stale row and let the caller surface the original conflict.
+  Future<void> _refetchOne(String id) async {
+    try {
+      final fresh = await _repo.getById(id);
+      if (!mounted) return;
+      state = [for (final lr in state) lr.id == id ? fresh : lr];
+    } catch (_) {}
+  }
+
   Future<LorryReceipt> updateLr(
     String id,
     int version,
@@ -125,38 +200,42 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
     EwbInput? ewb,
     String? existingEwbId,
     int existingEwbVersion = 0,
-  }) async {
-    final updated = await _repo.update(id, version, payload,
-        ewb: ewb,
-        existingEwbId: existingEwbId,
-        existingEwbVersion: existingEwbVersion);
-    state = [for (final lr in state) lr.id == updated.id ? updated : lr];
-    return updated;
-  }
+  }) =>
+      _versionSafeWrite(id, () async {
+        final updated = await _repo.update(id, version, payload,
+            ewb: ewb,
+            existingEwbId: existingEwbId,
+            existingEwbVersion: existingEwbVersion);
+        state = [for (final lr in state) lr.id == updated.id ? updated : lr];
+        return updated;
+      });
 
   /// Marks the 90% transporter advance as paid (backend computes the amount and
   /// triggers the notification email), then refreshes the LR in local state.
-  Future<LorryReceipt> markAdvancePaid(String id, int version) async {
-    final updated = await _repo.markAdvancePaid(id, version);
-    state = [for (final lr in state) lr.id == updated.id ? updated : lr];
-    return updated;
-  }
+  Future<LorryReceipt> markAdvancePaid(String id, int version) =>
+      _versionSafeWrite(id, () async {
+        final updated = await _repo.markAdvancePaid(id, version);
+        state = [for (final lr in state) lr.id == updated.id ? updated : lr];
+        return updated;
+      });
 
   /// Completes the payment (releases the POD balance; backend settles the amount
   /// and triggers the notification email), then refreshes the LR in local state.
-  Future<LorryReceipt> completePayment(String id, int version) async {
-    final updated = await _repo.completePayment(id, version);
-    state = [for (final lr in state) lr.id == updated.id ? updated : lr];
-    return updated;
-  }
+  Future<LorryReceipt> completePayment(String id, int version) =>
+      _versionSafeWrite(id, () async {
+        final updated = await _repo.completePayment(id, version);
+        state = [for (final lr in state) lr.id == updated.id ? updated : lr];
+        return updated;
+      });
 
   /// Sends the LR to Accounts for payment (backend flips the flag + emails
   /// Accounts), then refreshes the LR in local state.
-  Future<LorryReceipt> sendForPayment(String id, int version) async {
-    final updated = await _repo.sendForPayment(id, version);
-    state = [for (final lr in state) lr.id == updated.id ? updated : lr];
-    return updated;
-  }
+  Future<LorryReceipt> sendForPayment(String id, int version) =>
+      _versionSafeWrite(id, () async {
+        final updated = await _repo.sendForPayment(id, version);
+        state = [for (final lr in state) lr.id == updated.id ? updated : lr];
+        return updated;
+      });
 
   Future<void> changeStatus(String id, LrStatus to, {String? reason}) async {
     await _repo.changeStatus(id, to.code, reason: reason);

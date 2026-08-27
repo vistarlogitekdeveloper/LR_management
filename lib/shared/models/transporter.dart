@@ -61,9 +61,13 @@ class Transporter {
   bool get hasDocument => chequeFileKey.isNotEmpty;
   bool get hasTdsDocument => tdsFileKey.isNotEmpty;
 
+  // Built once, not per comparison — these run for every transporter row.
+  static final _whitespace = RegExp(r'\s');
+  static final _nonDigits = RegExp(r'[^0-9]');
+
   static String _normIfsc(String s) =>
-      s.toUpperCase().replaceAll(RegExp(r'\s'), '');
-  static String _digits(String s) => s.replaceAll(RegExp(r'[^0-9]'), '');
+      s.toUpperCase().replaceAll(_whitespace, '');
+  static String _digits(String s) => s.replaceAll(_nonDigits, '');
 
   /// Does the OCR'd cheque IFSC match the entered one? `null` = not checked
   /// (no cheque OCR yet, or nothing entered to compare). Pass [entered] to
