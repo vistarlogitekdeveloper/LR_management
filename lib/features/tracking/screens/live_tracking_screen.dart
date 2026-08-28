@@ -156,7 +156,7 @@ class _FleetMap extends StatelessWidget {
                       child: Tooltip(
                         message:
                             '${v.lrNumber}${v.truckNumber != null ? ' · ${v.truckNumber}' : ''}',
-                        child: const _TruckPin(),
+                        child: _TruckPin(consent: v.consentStatus),
                       ),
                     ),
                   ),
@@ -189,16 +189,24 @@ class _FleetMap extends StatelessWidget {
 }
 
 class _TruckPin extends StatelessWidget {
-  const _TruckPin();
+  final String? consent;
+  const _TruckPin({this.consent});
   @override
   Widget build(BuildContext context) {
+    // Ring colour reflects consent so the fleet map reads at a glance: green =
+    // consent granted (fixes flow), amber = still pending.
+    final ok = (consent ?? '').toUpperCase().contains('ALLOW');
+    final ring = ok ? AppColors.ok : AppColors.warn;
     return Container(
+      width: 40,
+      height: 40,
+      alignment: Alignment.center,
       decoration: BoxDecoration(
         color: AppColors.plum,
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 2),
+        border: Border.all(color: ring, width: 3),
         boxShadow: const [
-          BoxShadow(color: Color(0x33000000), blurRadius: 4, offset: Offset(0, 2)),
+          BoxShadow(color: Color(0x40000000), blurRadius: 5, offset: Offset(0, 2)),
         ],
       ),
       child: const Icon(Icons.local_shipping_rounded, color: Colors.white, size: 22),

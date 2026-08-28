@@ -51,6 +51,9 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
   String? _vehicleTypeId;
   String? _capacityId;
   bool _saving = false;
+  // Set once the user tries to save, so the "pick on map" errors only appear
+  // after an attempt (not on a fresh form).
+  bool _triedSave = false;
 
   RouteMaster? get _existing => widget.existing;
 
@@ -107,7 +110,24 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
       address.contains(',') ? address.split(',').first.trim() : address.trim();
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+    final formOk = _formKey.currentState!.validate();
+    // From/To map coordinates are mandatory: SIM tracking needs origin +
+    // destination points, and a route saved with only city labels fails to
+    // start a trip ("Insufficient Data"). Enforce the pin here at the source.
+    final locOk = _fromLoc != null && _toLoc != null;
+    if (!formOk || !locOk) {
+      if (!locOk) {
+        setState(() => _triedSave = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Please pick both the From and To locations on the map — this is required for vehicle tracking.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
     setState(() => _saving = true);
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
@@ -224,15 +244,23 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
                         width: c.maxWidth,
                         child: LabeledField(
                           label: 'From Location (map)',
-                          child: LocationPickerField(
-                            value: _fromLoc,
-                            hintText: 'Pick the pickup location on the map',
-                            onPicked: (loc) => setState(() {
-                              _fromLoc = loc;
-                              if (_fromCity.text.trim().isEmpty) {
-                                _fromCity.text = _shortLabel(loc.address);
-                              }
-                            }),
+                          required: true,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              LocationPickerField(
+                                value: _fromLoc,
+                                hintText: 'Pick the pickup location on the map',
+                                onPicked: (loc) => setState(() {
+                                  _fromLoc = loc;
+                                  if (_fromCity.text.trim().isEmpty) {
+                                    _fromCity.text = _shortLabel(loc.address);
+                                  }
+                                }),
+                              ),
+                              if (_triedSave && _fromLoc == null)
+                                _pickError('Pick the pickup location on the map.'),
+                            ],
                           ),
                         ),
                       ),
@@ -240,15 +268,23 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
                         width: c.maxWidth,
                         child: LabeledField(
                           label: 'To Location (map)',
-                          child: LocationPickerField(
-                            value: _toLoc,
-                            hintText: 'Pick the delivery location on the map',
-                            onPicked: (loc) => setState(() {
-                              _toLoc = loc;
-                              if (_toCity.text.trim().isEmpty) {
-                                _toCity.text = _shortLabel(loc.address);
-                              }
-                            }),
+                          required: true,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              LocationPickerField(
+                                value: _toLoc,
+                                hintText: 'Pick the delivery location on the map',
+                                onPicked: (loc) => setState(() {
+                                  _toLoc = loc;
+                                  if (_toCity.text.trim().isEmpty) {
+                                    _toCity.text = _shortLabel(loc.address);
+                                  }
+                                }),
+                              ),
+                              if (_triedSave && _toLoc == null)
+                                _pickError('Pick the delivery location on the map.'),
+                            ],
                           ),
                         ),
                       ),
@@ -371,6 +407,24 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
       ),
     );
   }
+
+  // Inline validation message for the map pickers (they are not FormFields, so
+  // they can't hook into the Form validator — we render the error ourselves).
+  Widget _pickError(String msg) => Padding(
+    padding: const EdgeInsets.only(top: 6, left: 2),
+    child: Row(
+      children: [
+        Icon(Icons.error_outline_rounded, size: 14, color: Colors.red.shade700),
+        const SizedBox(width: 5),
+        Expanded(
+          child: Text(
+            msg,
+            style: TextStyle(color: Colors.red.shade700, fontSize: 12),
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _footer() => Container(
     padding: const EdgeInsets.all(20),
