@@ -1650,9 +1650,16 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     final canViewTransporterRate = _canViewTransporterRate;
     final canViewVistarMargin = _canViewVistarMargin;
 
+    // Preview LR number: prefer the backend-authoritative value (mirrors the
+    // real counter, incl. the auto-heal max-used bump); fall back to the local
+    // list-based guess while the API call is in flight or if it fails, so the
+    // banner is never blank.
+    final backendPreview = _isEdit ? null : ref.watch(nextLrNumberProvider);
     final previewNumber = _isEdit
         ? (_editing?.number ?? '')
-        : _previewLrNumber(ref.watch(lrListProvider));
+        : ((backendPreview?.asData?.value.isNotEmpty ?? false)
+            ? backendPreview!.asData!.value
+            : _previewLrNumber(ref.watch(lrListProvider)));
 
     return Scaffold(
       backgroundColor: AppColors.mist,
