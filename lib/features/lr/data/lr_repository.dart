@@ -96,6 +96,14 @@ class LrRepository {
     return mapRows(rows);
   }
 
+  /// Backend-authoritative next LR number (mirrors the atomic counter, incl.
+  /// the auto-heal max-used bump). Preferred over the local-list heuristic on
+  /// the Create LR screen — the local heuristic drifts after a DB migration.
+  Future<String> nextNumber() async {
+    final res = await _api.dio.get('/lrs/next-number');
+    return ((res.data['data'] as Map)['next_number'] ?? '').toString();
+  }
+
   Future<LorryReceipt> getById(String id) async {
     final res = await _api.dio.get('/lrs/$id');
     return LorryReceipt.fromJson(

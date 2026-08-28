@@ -323,3 +323,11 @@ final lrDetailProvider =
     FutureProvider.autoDispose.family<LorryReceipt, String>((ref, id) async {
   return ref.watch(lrRepositoryProvider).getById(id);
 });
+
+/// Backend-authoritative preview of the next LR number (used by the Create LR
+/// banner). Fetches from GET /lrs/next-number instead of guessing from the
+/// loaded LR list — the local guess drifts after a DB migration.
+final nextLrNumberProvider =
+    FutureProvider.autoDispose<String>((ref) async {
+  return ref.watch(lrRepositoryProvider).nextNumber();
+});
