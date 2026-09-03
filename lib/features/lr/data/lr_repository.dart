@@ -5,6 +5,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/paginate.dart';
 import '../../../features/lookups/data/lookup_value.dart';
 import '../../../shared/models/lr_models.dart';
+import '../../../shared/models/scan_result.dart';
 
 /// Optional E-way bill payload attached to an LR on create/update. EWBs live in
 /// their own backend table (`/ewb`) linked by `lr_id`, so the repository creates
@@ -109,6 +110,42 @@ class LrRepository {
     return LorryReceipt.fromJson(
       (res.data['data'] as Map).cast<String, dynamic>(),
       resolveLookup: _resolver,
+    );
+  }
+
+  /// Reads a consignor invoice, e-way bill or consignment note into a DRAFT
+  /// LR, resolving parties/vehicle/route against this tenant's masters.
+  ///
+  /// Creates nothing. The draft is deliberately NOT directly submittable — an
+  /// LR needs delivery_type_id and pay_type_id, which appear on no supplier
+  /// document — so the result carries `missingRequired` rather than implying
+  /// it can be saved as-is.
+  ///
+  /// [profile] selects how the document is read: 'gst-invoice' (default),
+  /// 'eway-bill', or 'lr-consignment'. It matters for money: only a
+  /// transporter's own consignment note states FREIGHT. On an invoice the
+  /// total is the value of the GOODS, and the server puts it on the invoice
+  /// item rather than into freight for exactly that reason.
+  Future<ScannedLrDraft> scanDocument({
+    required String fileName,
+    List<int>? bytes,
+    String? filePath,
+    String profile = 'gst-invoice',
+  }) async {
+    final MultipartFile multipart;
+    if (bytes != null) {
+      multipart = MultipartFile.fromBytes(bytes, filename: fileName);
+    } else if (filePath != null) {
+      multipart = await MultipartFile.fromFile(filePath, filename: fileName);
+    } else {
+      throw ArgumentError('Either bytes or filePath is required');
+    }
+    final res = await _api.dio.post(
+      '/lrs/scan',
+      data: FormData.fromMap({'file': multipart, 'profile': profile}),
+    );
+    return ScannedLrDraft.fromJson(
+      (res.data['data'] as Map).cast<String, dynamic>(),
     );
   }
 

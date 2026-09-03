@@ -1,0 +1,275 @@
+{
+  "success": true,
+  "data": {
+    "scanId": null,
+    "readable": true,
+    "profile": "gst-invoice",
+    "engine": "tesseract",
+    "confidence": 84,
+    "draft": {
+      "lr_date": "2026-12-25",
+      "consignor_id": "c-1",
+      "consignee_id": "e-1",
+      "vehicle_id": "v-1",
+      "transporter_id": "t-9",
+      "route_id": "r-1",
+      "from_city": "Pune",
+      "to_city": "Chakan",
+      "invoice_items": [
+        {
+          "invoice_no": "ACM2026-27/00412",
+          "invoice_date": "2026-12-25",
+          "gross_value": 11800,
+          "quantity": 60,
+          "part_description": "BRAKE PAD SET, CLUTCH PLATE"
+        }
+      ]
+    },
+    "review": {
+      "invoiceNo": {
+        "value": "ACM2026-27/00412",
+        "confidence": 0.554,
+        "needsReview": true,
+        "source": "label:Invoice No",
+        "reason": "reference shape"
+      },
+      "invoiceDate": {
+        "value": "2026-12-25",
+        "confidence": 0.873,
+        "needsReview": false,
+        "source": "label:Invoice Date",
+        "reason": "day-first (day > 12, unambiguous)"
+      },
+      "gstin": {
+        "value": "27AAPFU0939F1ZV",
+        "confidence": 0.88,
+        "needsReview": false,
+        "source": "label:GSTIN",
+        "reason": "checksum valid after OCR repair (read as 27AAPFU0939F12V)",
+        "note": "Read as \"27AAPFU0939F 12V\" and corrected to a valid format — please confirm.",
+        "verifiedBy": [
+          "checksum"
+        ]
+      },
+      "vendorName": {
+        "value": "ACME AUTO COMPONENTS PVT LTD",
+        "confidence": 0.78,
+        "needsReview": false,
+        "source": "geometry",
+        "reason": "largest text in the letterhead, carrying a company suffix"
+      },
+      "buyerName": {
+        "value": "VISTAR LOGITEK PVT LTD",
+        "confidence": 0.661,
+        "needsReview": true,
+        "source": "label:Billed To",
+        "reason": "free text beside label"
+      },
+      "poNumber": {
+        "value": "4500123456",
+        "confidence": 0.666,
+        "needsReview": true,
+        "source": "label:PO No",
+        "reason": "reference shape"
+      },
+      "challanNo": {
+        "value": "DC-88214",
+        "confidence": 0.554,
+        "needsReview": true,
+        "source": "label:Challan No",
+        "reason": "reference shape"
+      },
+      "ewayBillNo": {
+        "value": "381004512377",
+        "confidence": 0.776,
+        "needsReview": false,
+        "source": "label:E-Way Bill No",
+        "reason": "12-digit e-way bill"
+      },
+      "vehicleNo": {
+        "value": "MH12AB1234",
+        "confidence": 0.608,
+        "needsReview": true,
+        "source": "label:Vehicle No",
+        "reason": "classic plate"
+      },
+      "taxableValue": {
+        "value": 10000,
+        "confidence": 0.95,
+        "needsReview": false,
+        "source": "label:Taxable Value",
+        "reason": "numeric amount",
+        "verifiedBy": [
+          "tax-arithmetic"
+        ]
+      },
+      "cgstAmount": {
+        "value": 900,
+        "confidence": 0.95,
+        "needsReview": false,
+        "source": "label:CGST",
+        "reason": "numeric amount",
+        "verifiedBy": [
+          "tax-arithmetic"
+        ]
+      },
+      "sgstAmount": {
+        "value": 900,
+        "confidence": 0.95,
+        "needsReview": false,
+        "source": "label:SGST",
+        "reason": "numeric amount",
+        "verifiedBy": [
+          "tax-arithmetic"
+        ]
+      },
+      "grandTotal": {
+        "value": 11800,
+        "confidence": 0.98,
+        "needsReview": false,
+        "source": "label:Grand Total",
+        "reason": "numeric amount",
+        "verifiedBy": [
+          "tax-arithmetic",
+          "amount-in-words"
+        ]
+      },
+      "pan": {
+        "value": "AAPFU0939F",
+        "confidence": 0.88,
+        "needsReview": false,
+        "source": "derived:gstin",
+        "verifiedBy": [
+          "gstin-embedded-pan"
+        ]
+      },
+      "consignor_id": {
+        "value": "c-1",
+        "confidence": 0.97,
+        "needsReview": false,
+        "source": "master-lookup",
+        "reason": "GSTIN (checksum-valid) matched exactly in the master"
+      },
+      "consignee_id": {
+        "value": "e-1",
+        "confidence": 1,
+        "needsReview": false,
+        "source": "master-lookup",
+        "reason": "name matched in the master",
+        "alternatives": [
+          {
+            "id": "e-1",
+            "name": "VISTAR LOGITEK PVT LTD",
+            "gstin": null,
+            "city": "Chakan",
+            "score": 1
+          }
+        ]
+      },
+      "vehicle_id": {
+        "value": "v-1",
+        "confidence": 0.92,
+        "needsReview": false,
+        "source": "master-lookup",
+        "reason": "registration number matched a vehicle in the master"
+      },
+      "transporter_id": {
+        "value": null,
+        "confidence": 0,
+        "needsReview": true,
+        "source": "master-lookup",
+        "reason": "no transporter name could be read"
+      },
+      "route_id": {
+        "value": "r-1",
+        "confidence": 0.85,
+        "needsReview": true,
+        "source": "master-lookup",
+        "reason": "route matched on from/to city"
+      },
+      "pay_type_id": {
+        "value": null,
+        "confidence": 0,
+        "needsReview": true,
+        "source": "master-lookup",
+        "reason": "no configured payment type appears on the document"
+      }
+    },
+    "resolved": {
+      "consignor": {
+        "id": "c-1",
+        "name": "ACME AUTO COMPONENTS PVT LTD",
+        "city": "Pune",
+        "confidence": 0.97,
+        "matchedOn": "GSTIN (checksum-valid) matched exactly in the master",
+        "candidates": []
+      },
+      "consignee": {
+        "id": "e-1",
+        "name": "VISTAR LOGITEK PVT LTD",
+        "city": "Chakan",
+        "confidence": 1,
+        "matchedOn": "name matched in the master",
+        "candidates": [
+          {
+            "id": "e-1",
+            "name": "VISTAR LOGITEK PVT LTD",
+            "gstin": null,
+            "city": "Chakan",
+            "score": 1
+          }
+        ]
+      },
+      "vehicle": {
+        "id": "v-1",
+        "registrationNo": "MH 12 AB 1234",
+        "transporterId": "t-9",
+        "confidence": 0.92,
+        "matchedOn": "registration number matched a vehicle in the master",
+        "candidates": []
+      },
+      "transporter": {
+        "id": null,
+        "name": null,
+        "confidence": 0,
+        "matchedOn": "no transporter name could be read",
+        "candidates": []
+      },
+      "route": {
+        "id": "r-1",
+        "confidence": 0.85,
+        "matchedOn": "route matched on from/to city",
+        "candidates": []
+      },
+      "payType": {
+        "id": null,
+        "code": null,
+        "confidence": 0,
+        "matchedOn": "no configured payment type appears on the document",
+        "candidates": []
+      }
+    },
+    "missingRequired": [
+      "pay_type_id",
+      "delivery_type_id"
+    ],
+    "warnings": [
+      {
+        "code": "GOODS_VALUE_NOT_FREIGHT",
+        "message": "₹11800 is the value of the goods from the invoice and has been put in invoice_items.gross_value. Freight has NOT been filled — enter the negotiated freight yourself.",
+        "fields": [
+          "freight"
+        ]
+      },
+      {
+        "code": "DRAFT_INCOMPLETE",
+        "message": "This draft cannot be submitted as-is — pay_type_id, delivery_type_id are required and cannot be read from a document.",
+        "fields": [
+          "pay_type_id",
+          "delivery_type_id"
+        ]
+      }
+    ],
+    "durationMs": 1177
+  }
+}

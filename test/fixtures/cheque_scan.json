@@ -1,0 +1,65 @@
+{
+  "success": true,
+  "data": {
+    "scanId": null,
+    "readable": true,
+    "bankAccount": {
+      "ifsc": "HDFC0000123",
+      "account_no": "50200012345678",
+      "bank_name": "HDFC BANK LTD",
+      "account_holder": "KRISHNA ROADLINES PVT LTD",
+      "branch": "CHAKAN PUNE"
+    },
+    "review": {
+      "ifscCode": {
+        "value": "HDFC0000123",
+        "confidence": 0.787,
+        "needsReview": false,
+        "reason": "IFSC shape"
+      },
+      "accountNo": {
+        "value": "50200012345678",
+        "confidence": 0.516,
+        "needsReview": true,
+        "reason": "digit run"
+      },
+      "bankName": {
+        "value": "HDFC BANK LTD",
+        "confidence": 0.78,
+        "needsReview": false,
+        "reason": "largest text in the letterhead, carrying a company suffix"
+      },
+      "accountHolder": {
+        "value": "KRISHNA ROADLINES PVT LTD",
+        "confidence": 0.505,
+        "needsReview": true,
+        "reason": "free text beside label"
+      },
+      "branch": {
+        "value": "CHAKAN PUNE",
+        "confidence": 0.661,
+        "needsReview": true,
+        "reason": "free text beside label"
+      },
+      "bankCode": {
+        "value": "HDFC",
+        "confidence": 0.787,
+        "needsReview": false,
+        "verifiedBy": [
+          "ifsc-bank-code"
+        ]
+      }
+    },
+    "warnings": [
+      {
+        "code": "VERIFY_ACCOUNT_NUMBER",
+        "message": "Check every digit of the account number against the cheque. It cannot be verified automatically, and a wrong one sends the payment to the wrong account.",
+        "fields": [
+          "account_no"
+        ]
+      }
+    ],
+    "confidence": 82,
+    "durationMs": 232
+  }
+}
