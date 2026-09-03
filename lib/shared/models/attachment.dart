@@ -22,17 +22,17 @@ class Attachment {
   });
 
   factory Attachment.fromJson(Map<String, dynamic> json) => Attachment(
-        id: (json['id'] as String?) ?? '',
-        name: (json['file_name'] as String?) ?? (json['name'] as String?) ?? '',
-        sizeBytes: asInt(json['size_bytes']),
-        mimeType: json['mime_type'] as String?,
-        uploadedAt:
-            DateTime.tryParse(json['uploaded_at']?.toString() ?? '') ??
-                DateTime.now(),
-        uploadedBy: (json['uploaded_by'] as String?) ?? '',
-        fileKey: json['file_key'] as String?,
-        attachmentType: json['attachment_type'] as String?,
-      );
+    id: (json['id'] as String?) ?? '',
+    name: (json['file_name'] as String?) ?? (json['name'] as String?) ?? '',
+    sizeBytes: asInt(json['size_bytes']),
+    mimeType: json['mime_type'] as String?,
+    uploadedAt:
+        DateTime.tryParse(json['uploaded_at']?.toString() ?? '') ??
+        DateTime.now(),
+    uploadedBy: (json['uploaded_by'] as String?) ?? '',
+    fileKey: json['file_key'] as String?,
+    attachmentType: json['attachment_type'] as String?,
+  );
 
   String get sizeLabel {
     if (sizeBytes < 1024) return '$sizeBytes B';

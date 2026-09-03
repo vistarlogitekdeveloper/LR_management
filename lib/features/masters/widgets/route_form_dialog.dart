@@ -23,8 +23,10 @@ class RouteFormDialog extends ConsumerStatefulWidget {
 
   /// Returns the saved route (created or updated), or null if the form was
   /// dismissed — so a caller can select it straight away.
-  static Future<RouteMaster?> show(BuildContext context,
-      {RouteMaster? existing}) {
+  static Future<RouteMaster?> show(
+    BuildContext context, {
+    RouteMaster? existing,
+  }) {
     return showDialog<RouteMaster>(
       context: context,
       builder: (_) => Dialog(
@@ -179,10 +181,14 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final vehicleTypes =
-        lookupList(ref.watch(lookupsMapProvider), 'VEHICLE_TYPE');
-    final capacities =
-        lookupList(ref.watch(lookupsMapProvider), 'VEHICLE_CAPACITY');
+    final vehicleTypes = lookupList(
+      ref.watch(lookupsMapProvider),
+      'VEHICLE_TYPE',
+    );
+    final capacities = lookupList(
+      ref.watch(lookupsMapProvider),
+      'VEHICLE_CAPACITY',
+    );
     // Visibility perms (migration 072): hide the rate inputs the user may not
     // see. Controllers stay initialised — only the fields are dropped — and the
     // backend strips any redacted value on save.
@@ -191,8 +197,9 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
     final canViewCustomerRate = user?.canViewCustomerRate ?? false;
     // Resolve the selected option from the loaded lookups by id; fall back to a
     // synthetic value (from the edited route) while lookups are still loading.
-    LookupValue? selectedVt =
-        vehicleTypes.where((v) => v.id == _vehicleTypeId).firstOrNull;
+    LookupValue? selectedVt = vehicleTypes
+        .where((v) => v.id == _vehicleTypeId)
+        .firstOrNull;
     if (selectedVt == null && (_vehicleTypeId ?? '').isNotEmpty) {
       selectedVt = LookupValue(
         id: _vehicleTypeId!,
@@ -201,8 +208,9 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
         label: _existing?.vehicleTypeLabel ?? '',
       );
     }
-    LookupValue? selectedCap =
-        capacities.where((v) => v.id == _capacityId).firstOrNull;
+    LookupValue? selectedCap = capacities
+        .where((v) => v.id == _capacityId)
+        .firstOrNull;
     if (selectedCap == null && (_capacityId ?? '').isNotEmpty) {
       selectedCap = LookupValue(
         id: _capacityId!,
@@ -266,7 +274,9 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
                                 }),
                               ),
                               if (_triedSave && _fromLoc == null)
-                                _pickError('Pick the pickup location on the map.'),
+                                _pickError(
+                                  'Pick the pickup location on the map.',
+                                ),
                             ],
                           ),
                         ),
@@ -281,7 +291,8 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
                             children: [
                               LocationPickerField(
                                 value: _toLoc,
-                                hintText: 'Pick the delivery location on the map',
+                                hintText:
+                                    'Pick the delivery location on the map',
                                 onPicked: (loc) => setState(() {
                                   _toLoc = loc;
                                   if (_toCity.text.trim().isEmpty) {
@@ -290,7 +301,9 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
                                 }),
                               ),
                               if (_triedSave && _toLoc == null)
-                                _pickError('Pick the delivery location on the map.'),
+                                _pickError(
+                                  'Pick the delivery location on the map.',
+                                ),
                             ],
                           ),
                         ),

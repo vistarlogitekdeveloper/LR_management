@@ -26,9 +26,7 @@ Future<void> _pumpLogin(WidgetTester tester) async {
   SharedPreferences.setMockInitialValues({});
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [
-        tokenStorageProvider.overrideWithValue(_FakeTokenStorage()),
-      ],
+      overrides: [tokenStorageProvider.overrideWithValue(_FakeTokenStorage())],
       child: const MaterialApp(home: LoginScreen()),
     ),
   );
@@ -39,8 +37,9 @@ Future<void> _pumpLogin(WidgetTester tester) async {
 
 void main() {
   group('LoginScreen', () {
-    testWidgets('renders the sign-in form without any demo credentials',
-        (tester) async {
+    testWidgets('renders the sign-in form without any demo credentials', (
+      tester,
+    ) async {
       await _pumpLogin(tester);
 
       expect(find.text('Welcome back'), findsOneWidget);
@@ -58,8 +57,9 @@ void main() {
       expect(find.text('admin'), findsNothing);
     });
 
-    testWidgets('blocks submit and shows errors when fields are empty',
-        (tester) async {
+    testWidgets('blocks submit and shows errors when fields are empty', (
+      tester,
+    ) async {
       await _pumpLogin(tester);
 
       await tester.tap(find.text('Sign in'));
@@ -71,16 +71,16 @@ void main() {
       expect(find.text('Welcome back'), findsOneWidget);
     });
 
-    testWidgets('validation clears once valid input is entered',
-        (tester) async {
+    testWidgets('validation clears once valid input is entered', (
+      tester,
+    ) async {
       await _pumpLogin(tester);
 
       await tester.tap(find.text('Sign in'));
       await tester.pump();
       expect(find.text('Username is required'), findsOneWidget);
 
-      await tester.enterText(
-          find.byType(TextFormField).first, 'operator');
+      await tester.enterText(find.byType(TextFormField).first, 'operator');
       await tester.pump();
       expect(find.text('Username is required'), findsNothing);
     });

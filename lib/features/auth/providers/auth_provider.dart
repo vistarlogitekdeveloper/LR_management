@@ -46,7 +46,7 @@ class AuthState {
 
 class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier(this._api, this._tokens)
-      : super(const AuthState(initializing: true)) {
+    : super(const AuthState(initializing: true)) {
     _bootstrap();
   }
 
@@ -87,11 +87,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }) async {
     state = state.copyWith(loading: true, clearError: true);
     try {
-      final res = await _api.dio.post('/auth/login', data: {
-        'tenant_code': tenantCode ?? ApiConfig.defaultTenantCode,
-        'username': username.trim(),
-        'password': password,
-      });
+      final res = await _api.dio.post(
+        '/auth/login',
+        data: {
+          'tenant_code': tenantCode ?? ApiConfig.defaultTenantCode,
+          'username': username.trim(),
+          'password': password,
+        },
+      );
       final data = (res.data['data'] as Map).cast<String, dynamic>();
       final access = data['access_token'] as String;
       final refresh = data['refresh_token'] as String;
@@ -103,14 +106,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return true;
     } on DioException catch (e) {
       final err = e.error;
-      final msg =
-          err is ApiException ? err.message : 'Invalid username or password';
+      final msg = err is ApiException
+          ? err.message
+          : 'Invalid username or password';
       state = state.copyWith(loading: false, error: msg);
       return false;
     } catch (_) {
       // Never leave the button stuck on a non-network failure.
       state = state.copyWith(
-          loading: false, error: 'Login failed. Please try again.');
+        loading: false,
+        error: 'Login failed. Please try again.',
+      );
       return false;
     }
   }
@@ -125,10 +131,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String currentPassword,
     required String newPassword,
   }) async {
-    await _api.dio.post('/auth/change-password', data: {
-      'old_password': currentPassword,
-      'new_password': newPassword,
-    });
+    await _api.dio.post(
+      '/auth/change-password',
+      data: {'old_password': currentPassword, 'new_password': newPassword},
+    );
   }
 
   Future<void> logout() async {
@@ -137,9 +143,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // logout without it returns 200 but leaves the session usable). This makes
       // logout a real session kill, not just a client-side token wipe.
       final refresh = await _tokens.readRefresh();
-      await _api.dio.post('/auth/logout', data: {
-        if (refresh != null && refresh.isNotEmpty) 'refresh_token': refresh,
-      });
+      await _api.dio.post(
+        '/auth/logout',
+        data: {
+          if (refresh != null && refresh.isNotEmpty) 'refresh_token': refresh,
+        },
+      );
     } catch (_) {
       // best-effort; clear local session regardless
     }

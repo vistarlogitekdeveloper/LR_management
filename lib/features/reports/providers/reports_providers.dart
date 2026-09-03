@@ -7,7 +7,8 @@ import '../../auth/providers/auth_provider.dart';
 import '../data/reports_repository.dart';
 
 final reportsRepositoryProvider = Provider<ReportsRepository>(
-    (ref) => ReportsRepository(ref.watch(apiClientProvider)));
+  (ref) => ReportsRepository(ref.watch(apiClientProvider)),
+);
 
 /// Server-side aggregates for the dashboard headline tiles. Refetches when the
 /// authenticated user changes (i.e. after login).
@@ -17,8 +18,9 @@ final reportsRepositoryProvider = Provider<ReportsRepository>(
 /// figures instead of re-hitting /reports/dashboard, which was the biggest
 /// nav-lag on the Dashboard tile. Same window as [LrNotifier]'s TTL so both
 /// caches line up.
-final dashboardSummaryProvider =
-    FutureProvider.autoDispose<DashboardSummary>((ref) async {
+final dashboardSummaryProvider = FutureProvider.autoDispose<DashboardSummary>((
+  ref,
+) async {
   final user = ref.watch(currentUserProvider);
   if (user == null) return const DashboardSummary();
   final link = ref.keepAlive();

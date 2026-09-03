@@ -86,10 +86,13 @@ void main() {
   testWidgets('the typed search text reaches the create form and the entry '
       'survives a no-match search', (tester) async {
     String? seen;
-    await pumpPicker(tester, onAddNew: (query) async {
-      seen = query;
-      return null;
-    });
+    await pumpPicker(
+      tester,
+      onAddNew: (query) async {
+        seen = query;
+        return null;
+      },
+    );
     await tester.tap(find.text('Select vehicle'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'MH31ZZ');

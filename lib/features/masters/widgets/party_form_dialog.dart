@@ -16,7 +16,11 @@ import 'master_actions.dart';
 class PartyFormDialog extends ConsumerStatefulWidget {
   final Party? existing;
   final bool defaultCustomer;
-  const PartyFormDialog({super.key, this.existing, this.defaultCustomer = false});
+  const PartyFormDialog({
+    super.key,
+    this.existing,
+    this.defaultCustomer = false,
+  });
 
   static Future<Party?> show(
     BuildContext context, {
@@ -111,7 +115,9 @@ class _PartyFormDialogState extends ConsumerState<PartyFormDialog> {
         isCustomer: _isCustomer,
         version: _existing?.version ?? 0,
       );
-      final saved = _existing == null ? await n.add(base) : await n.update(base);
+      final saved = _existing == null
+          ? await n.add(base)
+          : await n.update(base);
       if (!mounted) return;
       navigator.pop(saved);
     } catch (e) {
@@ -149,10 +155,18 @@ class _PartyFormDialogState extends ConsumerState<PartyFormDialog> {
                       ),
                       SizedBox(
                         width: w,
-                        child: _text(_gst, 'GST Number', maxLength: 15, upper: true),
+                        child: _text(
+                          _gst,
+                          'GST Number',
+                          maxLength: 15,
+                          upper: true,
+                        ),
                       ),
                       SizedBox(width: w, child: _text(_city, 'City')),
-                      SizedBox(width: w, child: _text(_contact, 'Contact Person')),
+                      SizedBox(
+                        width: w,
+                        child: _text(_contact, 'Contact Person'),
+                      ),
                       SizedBox(
                         width: w,
                         child: _text(_mobile, 'Mobile', maxLength: 12),
@@ -263,9 +277,7 @@ class _PartyFormDialogState extends ConsumerState<PartyFormDialog> {
       ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: BorderSide(
-          color: selected ? AppColors.plum : AppColors.line,
-        ),
+        side: BorderSide(color: selected ? AppColors.plum : AppColors.line),
       ),
       backgroundColor: Colors.white,
     );

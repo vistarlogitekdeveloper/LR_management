@@ -9,15 +9,19 @@ class RoutesRepository {
   final ApiClient _api;
 
   Future<List<RouteMaster>> list({String? query}) async {
-    final rows = await fetchAllPages(_api, '/routes',
-        query: {if (query != null && query.isNotEmpty) 'q': query});
+    final rows = await fetchAllPages(
+      _api,
+      '/routes',
+      query: {if (query != null && query.isNotEmpty) 'q': query},
+    );
     return rows.map(RouteMaster.fromJson).toList();
   }
 
   Future<RouteMaster> create(RouteMaster r) async {
     final res = await _api.dio.post('/routes', data: r.toJson());
     return RouteMaster.fromJson(
-        (res.data['data'] as Map).cast<String, dynamic>());
+      (res.data['data'] as Map).cast<String, dynamic>(),
+    );
   }
 
   Future<RouteMaster> update(RouteMaster r) async {
@@ -27,7 +31,8 @@ class RoutesRepository {
       options: Options(headers: {'If-Match': r.version.toString()}),
     );
     return RouteMaster.fromJson(
-        (res.data['data'] as Map).cast<String, dynamic>());
+      (res.data['data'] as Map).cast<String, dynamic>(),
+    );
   }
 
   Future<void> remove(String id) async {

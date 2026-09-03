@@ -21,13 +21,19 @@ Future<List<Map<String, dynamic>>> fetchAllPages(
   String? cursor;
   var pages = 0;
   do {
-    final size = (pages == 0 && firstPageSize != null) ? firstPageSize : pageSize;
-    final res = await api.dio.get(path, queryParameters: {
-      'limit': size,
-      if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
-      ...?query,
-    });
-    final data = (res.data['data'] as List?)?.cast<Map<String, dynamic>>() ??
+    final size = (pages == 0 && firstPageSize != null)
+        ? firstPageSize
+        : pageSize;
+    final res = await api.dio.get(
+      path,
+      queryParameters: {
+        'limit': size,
+        if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
+        ...?query,
+      },
+    );
+    final data =
+        (res.data['data'] as List?)?.cast<Map<String, dynamic>>() ??
         const <Map<String, dynamic>>[];
     rows.addAll(data);
     // Emit every page — including an empty first/only page — so a progressive

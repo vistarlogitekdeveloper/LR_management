@@ -24,32 +24,31 @@ class Consignee {
   });
 
   factory Consignee.fromJson(Map<String, dynamic> json) => Consignee(
-        id: json['id'] as String,
-        name: (json['name'] as String?) ?? '',
-        gst: (json['gstin'] as String?) ?? (json['gst'] as String?) ?? '',
-        location: (json['city'] as String?) ??
-            (json['location'] as String?) ??
-            '',
-        state: (json['state'] as String?) ?? '',
-        address: (json['address'] as String?) ?? '',
-        contact: (json['contact_person'] as String?) ??
-            (json['contact'] as String?) ??
-            '',
-        mobile: (json['mobile'] as String?) ?? '',
-        email: (json['email'] as String?) ?? '',
-        version: (json['version'] as num?)?.toInt() ?? 0,
-      );
+    id: json['id'] as String,
+    name: (json['name'] as String?) ?? '',
+    gst: (json['gstin'] as String?) ?? (json['gst'] as String?) ?? '',
+    location: (json['city'] as String?) ?? (json['location'] as String?) ?? '',
+    state: (json['state'] as String?) ?? '',
+    address: (json['address'] as String?) ?? '',
+    contact:
+        (json['contact_person'] as String?) ??
+        (json['contact'] as String?) ??
+        '',
+    mobile: (json['mobile'] as String?) ?? '',
+    email: (json['email'] as String?) ?? '',
+    version: (json['version'] as num?)?.toInt() ?? 0,
+  );
 
   Map<String, dynamic> toJson() => {
-        'name': name,
-        'gstin': gst,
-        'city': location,
-        if (state.isNotEmpty) 'state': state,
-        'address': address,
-        'contact_person': contact,
-        'mobile': mobile,
-        if (email.isNotEmpty) 'email': email,
-      };
+    'name': name,
+    'gstin': gst,
+    'city': location,
+    if (state.isNotEmpty) 'state': state,
+    'address': address,
+    'contact_person': contact,
+    'mobile': mobile,
+    if (email.isNotEmpty) 'email': email,
+  };
 
   Consignee copyWith({
     String? name,

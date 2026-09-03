@@ -47,14 +47,18 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
     setState(() => _saving = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await ref.read(authProvider.notifier).changePassword(
+      await ref
+          .read(authProvider.notifier)
+          .changePassword(
             currentPassword: _currentCtrl.text,
             newPassword: _newCtrl.text,
           );
       if (!mounted) return;
       messenger.showSnackBar(
         const SnackBar(
-          content: Text('Password updated. Please sign in with your new password.'),
+          content: Text(
+            'Password updated. Please sign in with your new password.',
+          ),
           backgroundColor: AppColors.ok,
         ),
       );
@@ -124,7 +128,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
     final gap = isMobile ? 10.0 : 14.0;
     return Scaffold(
       backgroundColor: AppColors.mist,
@@ -165,7 +169,8 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                             controller: _currentCtrl,
                             obscure: _obscureCurrent,
                             onToggle: () => setState(
-                                () => _obscureCurrent = !_obscureCurrent),
+                              () => _obscureCurrent = !_obscureCurrent,
+                            ),
                             validator: (v) =>
                                 (v?.isEmpty ?? true) ? 'Required' : null,
                           ),
@@ -198,7 +203,8 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                             controller: _confirmCtrl,
                             obscure: _obscureConfirm,
                             onToggle: () => setState(
-                                () => _obscureConfirm = !_obscureConfirm),
+                              () => _obscureConfirm = !_obscureConfirm,
+                            ),
                             textInputAction: TextInputAction.done,
                             onSubmitted: (_) => _submit(),
                             validator: (v) {
@@ -211,8 +217,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                           ),
                           SizedBox(height: isMobile ? 16 : 22),
                           AppButton(
-                            label:
-                                _saving ? 'Updating…' : 'Update password',
+                            label: _saving ? 'Updating…' : 'Update password',
                             icon: Icons.save_outlined,
                             expanded: true,
                             loading: _saving,

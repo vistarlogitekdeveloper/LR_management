@@ -58,7 +58,7 @@ class _MasterPageState extends State<MasterPage> {
             return hay.contains(_query.toLowerCase());
           }).toList();
 
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
     final pad = isMobile ? 14.0 : 28.0;
 
     return Scaffold(

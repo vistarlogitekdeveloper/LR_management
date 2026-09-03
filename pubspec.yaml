@@ -4,7 +4,13 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.11.5
+  # Raised from ^3.11.5 so the toolchain the team actually runs is the one the
+  # pubspec declares, and so `very_good_analysis` 10.3.x (sdk ^3.12.0) resolves.
+  # The `flutter` floor was previously absent entirely, which is how production
+  # drifted to a 3.41.9 builder while everyone developed on 3.44.4 — keep this
+  # in step with cloudflare-build.sh and .github/workflows/deploy-cloudflare.yml.
+  sdk: ^3.12.0
+  flutter: ">=3.44.0"
 
 dependencies:
   flutter:
@@ -42,8 +48,16 @@ dependencies:
   # HTTP client
   dio: ^5.7.0
 
-  # Secure storage for JWT (access + refresh)
-  flutter_secure_storage: ^9.2.2
+  # Secure storage for JWT (access + refresh).
+  # 10.x is required for the WASM web build: 9.x pulls flutter_secure_storage_web
+  # 1.2.1, which imports dart:html + dart:js_util unguarded and is registered in
+  # the generated web plugin registrant, so dart2wasm compiles it and fails with
+  # 47 errors. 10.3.1 pulls _web 2.1.x, which uses package:web.
+  # Web behaviour is unaffected either way — token_storage.dart routes every web
+  # read/write to shared_preferences and never reaches the secure plugin. NATIVE
+  # needs a device smoke test: 10.0.0 changes the Android key/storage ciphers
+  # (auto-migrating via migrateOnAlgorithmChange) and defaults resetOnError true.
+  flutter_secure_storage: ^10.3.1
 
   # Maps — free OpenStreetMap stack for the route location picker.
   # flutter_map renders OSM tiles (no API key); geocoding/search goes through
@@ -53,6 +67,10 @@ dependencies:
 
   # Client-side .xlsx generation for the Reports "Download Excel" export.
   excel: ^4.0.6
+
+  # Browser APIs for the web attachment viewer (Blob + object URLs). Replaces
+  # dart:html, which is deprecated and unavailable under dart2wasm.
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:
@@ -66,8 +84,17 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
+  # Listed file by file, not as a directory glob: the glob was shipping
+  # vistar_logo.png (2.18 MB) which is referenced nowhere in lib/ or web/, and
+  # would silently re-ship any stray file dropped into the folder.
+  # NOTE: logo-symbol.png (2.1 MB) and vistar_logo_trimmed.png (1.5 MB) are
+  # still far larger than their render size and want re-exporting — the *_pdf
+  # variants below show ~60 KB is achievable.
   assets:
-    - assets/images/
+    - assets/images/logo-symbol.png
+    - assets/images/logo_symbol_pdf.png
+    - assets/images/vistar_logo_pdf.png
+    - assets/images/vistar_logo_trimmed.png
 
 # Native launcher icons — run `dart run flutter_launcher_icons` after changing
 # icon/app_icon.png. Web icons are generated separately (web: false).

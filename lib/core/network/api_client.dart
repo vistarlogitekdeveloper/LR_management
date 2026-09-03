@@ -6,7 +6,8 @@ import 'token_storage.dart';
 
 class ApiClient {
   ApiClient(this._tokens)
-      : _dio = Dio(BaseOptions(
+    : _dio = Dio(
+        BaseOptions(
           baseUrl: ApiConfig.baseUrl,
           connectTimeout: ApiConfig.connectTimeout,
           receiveTimeout: ApiConfig.receiveTimeout,
@@ -14,11 +15,9 @@ class ApiClient {
           responseType: ResponseType.json,
           // Never serve stale data from the browser HTTP cache — this is a
           // live operational app, so every read must hit the server.
-          headers: const {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
-          },
-        )) {
+          headers: const {'Cache-Control': 'no-cache', 'Pragma': 'no-cache'},
+        ),
+      ) {
     _dio.interceptors.add(_buildAuthInterceptor());
   }
 
@@ -121,16 +120,19 @@ class ApiClient {
     // A pre-connection failure (DNS lookup / connect timeout) means the request
     // never reached the server, so retrying is safe for ANY method — this is
     // the common flaky-mobile-network case (e.g. "Failed host lookup").
-    final preConnect = e.type == DioExceptionType.connectionError ||
+    final preConnect =
+        e.type == DioExceptionType.connectionError ||
         e.type == DioExceptionType.connectionTimeout;
     final retryGet5xx = opts.method.toUpperCase() == 'GET' && transient5xx;
     if (!preConnect && !retryGet5xx) return false;
 
-    final bare = Dio(BaseOptions(
-      baseUrl: ApiConfig.baseUrl,
-      connectTimeout: ApiConfig.connectTimeout,
-      receiveTimeout: ApiConfig.receiveTimeout,
-    ));
+    final bare = Dio(
+      BaseOptions(
+        baseUrl: ApiConfig.baseUrl,
+        connectTimeout: ApiConfig.connectTimeout,
+        receiveTimeout: ApiConfig.receiveTimeout,
+      ),
+    );
     for (var attempt = 1; attempt <= 2; attempt++) {
       await Future.delayed(Duration(milliseconds: 400 * attempt));
       try {
@@ -150,11 +152,13 @@ class ApiClient {
     // after inactivity) doesn't fail the refresh and nuke the session on
     // reopen. The refresh token is only rotated on a SUCCESSFUL response, so
     // retrying after a transient failure is safe (the token wasn't consumed).
-    final raw = Dio(BaseOptions(
-      baseUrl: ApiConfig.baseUrl,
-      connectTimeout: ApiConfig.connectTimeout,
-      receiveTimeout: ApiConfig.receiveTimeout,
-    ));
+    final raw = Dio(
+      BaseOptions(
+        baseUrl: ApiConfig.baseUrl,
+        connectTimeout: ApiConfig.connectTimeout,
+        receiveTimeout: ApiConfig.receiveTimeout,
+      ),
+    );
     DioException? lastErr;
     for (var attempt = 1; attempt <= 3; attempt++) {
       try {
@@ -233,9 +237,8 @@ class ApiClient {
     if (body is Map) {
       code = body['code']?.toString() ?? code;
       // Envelope responses use `error`; the global error handler uses `message`.
-      message = body['error']?.toString() ??
-          body['message']?.toString() ??
-          message;
+      message =
+          body['error']?.toString() ?? body['message']?.toString() ?? message;
       traceId = body['traceId']?.toString();
       // VALIDATION_ERROR ships Joi's details[]; VERSION_CONFLICT ships
       // current_version; HAS_REFERENCES ships references{}. Keep the whole

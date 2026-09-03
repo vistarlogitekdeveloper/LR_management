@@ -14,7 +14,7 @@ final activeVehiclesProvider = FutureProvider.autoDispose<List<FleetVehicle>>(
 );
 
 /// Trail + consent for one LR.
-final lrTrackingProvider =
-    FutureProvider.autoDispose.family<LrTracking, String>(
-  (ref, lrId) => ref.watch(trackingRepositoryProvider).lrTracking(lrId),
-);
+final lrTrackingProvider = FutureProvider.autoDispose
+    .family<LrTracking, String>(
+      (ref, lrId) => ref.watch(trackingRepositoryProvider).lrTracking(lrId),
+    );

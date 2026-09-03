@@ -74,6 +74,7 @@ class _MasterFormDialogState extends State<MasterFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final Map<String, TextEditingController> _ctrls;
   late final Map<String, String?> _dropdownValues;
+
   /// Names of required dropdowns left empty on the last save attempt.
   final _dropdownErrors = <String>{};
   bool _saving = false;
@@ -108,17 +109,21 @@ class _MasterFormDialogState extends State<MasterFormDialog> {
     // SearchableField is not a FormField, so Form.validate() never sees the
     // dropdowns — a required one has to be checked by hand or it submits empty.
     final missing = widget.fields
-        .where((f) =>
-            f.type == FieldType.dropdown &&
-            f.required &&
-            (_dropdownValues[f.name] ?? '').isEmpty)
+        .where(
+          (f) =>
+              f.type == FieldType.dropdown &&
+              f.required &&
+              (_dropdownValues[f.name] ?? '').isEmpty,
+        )
         .map((f) => f.name)
         .toSet();
     final textOk = _formKey.currentState!.validate();
     if (missing.isNotEmpty) {
-      setState(() => _dropdownErrors
-        ..clear()
-        ..addAll(missing));
+      setState(
+        () => _dropdownErrors
+          ..clear()
+          ..addAll(missing),
+      );
       return;
     }
     setState(() => _dropdownErrors.clear());

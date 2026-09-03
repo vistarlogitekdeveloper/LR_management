@@ -40,8 +40,18 @@ final _plMonthProvider = StateProvider<int?>((ref) => null);
 final _plRangeProvider = StateProvider<DateTimeRange?>((ref) => null);
 
 const _plMonthNames = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 String _plMonthName(int m) => _plMonthNames[(m - 1).clamp(0, 11)];
 
@@ -96,7 +106,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
         children: [
           AppTopbar(
             title: 'Reports',
-            subtitle: _canAmounts ? 'Daily · Monthly · Accounts' : 'Daily · Monthly',
+            subtitle: _canAmounts
+                ? 'Daily · Monthly · Accounts'
+                : 'Daily · Monthly',
             actions: [
               AppButton(
                 label: 'Download Excel',
@@ -132,7 +144,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
                     filenameSuffix: choice.range == null
                         ? null
                         : '${_fileStamp(choice.range!.start)}-'
-                            '${_fileStamp(choice.range!.end)}',
+                              '${_fileStamp(choice.range!.end)}',
                   );
                   if (!context.mounted) return;
                   messenger.showSnackBar(
@@ -141,8 +153,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
                         choice.range == null
                             ? '${rows.length} LRs exported as Excel'
                             : '${rows.length} LRs exported for '
-                                '${formatDate(choice.range!.start)} – '
-                                '${formatDate(choice.range!.end)}',
+                                  '${formatDate(choice.range!.start)} – '
+                                  '${formatDate(choice.range!.end)}',
                       ),
                     ),
                   );
@@ -206,7 +218,7 @@ class _DailyTab extends StatelessWidget {
       vehicleWise[lr.vehicle.number] =
           (vehicleWise[lr.vehicle.number] ?? 0) + 1;
     }
-    final mobile = MediaQuery.of(context).size.width < 600;
+    final mobile = MediaQuery.sizeOf(context).width < 600;
     final pad = mobile ? 14.0 : 28.0;
     final gap = mobile ? 10.0 : 20.0;
     return SingleChildScrollView(
@@ -265,7 +277,7 @@ class _MonthlyTab extends StatelessWidget {
           (vehicleUtilization[lr.vehicle.number] ?? 0) + 1;
     }
     final totalFreight = lrs.fold<double>(0, (s, l) => s + l.freight.total);
-    final mobile = MediaQuery.of(context).size.width < 600;
+    final mobile = MediaQuery.sizeOf(context).width < 600;
     final pad = mobile ? 14.0 : 28.0;
     final gap = mobile ? 10.0 : 20.0;
     final gap2 = mobile ? 10.0 : 16.0;
@@ -358,7 +370,7 @@ class _AccountsTab extends ConsumerWidget {
         .where((l) => l.freight.balance > 0)
         .fold<double>(0, (s, l) => s + l.freight.balance);
     final margin = lrs.fold<double>(0, (s, l) => s + l.freight.vistarMargin);
-    final mobile = MediaQuery.of(context).size.width < 600;
+    final mobile = MediaQuery.sizeOf(context).width < 600;
     final pad = mobile ? 14.0 : 28.0;
     final gap = mobile ? 10.0 : 20.0;
     // The MIS export carries accounts-owned billing / payment fields, so it's
@@ -471,12 +483,14 @@ class _AccountsTab extends ConsumerWidget {
                     Text(
                       misRange == null
                           ? 'Download the Transport Business Tracker MIS (Excel) — '
-                              'all LRs with billing, payment and POD details.'
+                                'all LRs with billing, payment and POD details.'
                           : 'MIS (Excel) for ${formatDate(misRange.start)} – '
-                              '${formatDate(misRange.end)} — billing, payment '
-                              'and POD details.',
-                      style:
-                          const TextStyle(color: AppColors.slate, fontSize: 13),
+                                '${formatDate(misRange.end)} — billing, payment '
+                                'and POD details.',
+                      style: const TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 13,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Wrap(
@@ -505,14 +519,14 @@ class _AccountsTab extends ConsumerWidget {
                             misRange == null
                                 ? 'All dates'
                                 : '${formatDate(misRange.start)} – '
-                                    '${formatDate(misRange.end)}',
+                                      '${formatDate(misRange.end)}',
                           ),
                         ),
                         if (misRange != null)
                           TextButton(
-                            onPressed: () => ref
-                                .read(_misRangeProvider.notifier)
-                                .state = null,
+                            onPressed: () =>
+                                ref.read(_misRangeProvider.notifier).state =
+                                    null,
                             child: const Text('Clear'),
                           ),
                         if (misRegions.isNotEmpty)
@@ -521,15 +535,17 @@ class _AccountsTab extends ConsumerWidget {
                             child: SearchableField<String>(
                               value: misRegion,
                               options: misRegions.keys.toList()
-                                ..sort((a, b) =>
-                                    misRegions[a]!.compareTo(misRegions[b]!)),
+                                ..sort(
+                                  (a, b) =>
+                                      misRegions[a]!.compareTo(misRegions[b]!),
+                                ),
                               labelOf: (id) => misRegions[id] ?? id,
                               hintText: 'All regions',
                               dialogTitle: 'Region',
                               clearable: true,
-                              onChanged: (v) => ref
-                                  .read(_misRegionProvider.notifier)
-                                  .state = v,
+                              onChanged: (v) =>
+                                  ref.read(_misRegionProvider.notifier).state =
+                                      v,
                             ),
                           ),
                         if (misCreators.isNotEmpty)
@@ -538,15 +554,18 @@ class _AccountsTab extends ConsumerWidget {
                             child: SearchableField<String>(
                               value: misCreator,
                               options: misCreators.keys.toList()
-                                ..sort((a, b) =>
-                                    misCreators[a]!.compareTo(misCreators[b]!)),
+                                ..sort(
+                                  (a, b) => misCreators[a]!.compareTo(
+                                    misCreators[b]!,
+                                  ),
+                                ),
                               labelOf: (id) => misCreators[id] ?? id,
                               hintText: 'All creators',
                               dialogTitle: 'Created by',
                               clearable: true,
-                              onChanged: (v) => ref
-                                  .read(_misCreatorProvider.notifier)
-                                  .state = v,
+                              onChanged: (v) =>
+                                  ref.read(_misCreatorProvider.notifier).state =
+                                      v,
                             ),
                           ),
                         // Payment-stage filter. Clearing it (the ✕) returns to
@@ -580,9 +599,10 @@ class _AccountsTab extends ConsumerWidget {
                                     from: range?.start
                                         .toIso8601String()
                                         .substring(0, 10),
-                                    to: range?.end
-                                        .toIso8601String()
-                                        .substring(0, 10),
+                                    to: range?.end.toIso8601String().substring(
+                                      0,
+                                      10,
+                                    ),
                                     regionId: ref.read(_misRegionProvider),
                                     createdBy: ref.read(_misCreatorProvider),
                                     sentForPayment: ref.read(_misSentProvider),
@@ -649,18 +669,20 @@ class _AccountsTab extends ConsumerWidget {
                     Text(
                       plRange != null
                           ? 'Profit & Loss (Excel) for '
-                              '${formatDate(plRange.start)} – ${formatDate(plRange.end)} — '
-                              'sales, transport cost, gross & net profit per customer'
-                              '${plRange.start.month != plRange.end.month || plRange.start.year != plRange.end.year ? ', plus a detailed sheet for each month in the range.' : '.'}'
+                                '${formatDate(plRange.start)} – ${formatDate(plRange.end)} — '
+                                'sales, transport cost, gross & net profit per customer'
+                                '${plRange.start.month != plRange.end.month || plRange.start.year != plRange.end.year ? ', plus a detailed sheet for each month in the range.' : '.'}'
                           : plMonth == null
-                              ? 'Download Profit & Loss (Excel) for the financial year '
-                                  'Apr $plYear – Mar ${plYear + 1} — sales, transport cost, '
-                                  'gross & net profit per customer, a monthly summary, and '
-                                  'a separate detailed sheet for each month.'
-                              : 'Profit & Loss (Excel) for ${_plMonthName(plMonth)} $plYear — '
-                                  'sales, transport cost, gross & net profit per customer.',
-                      style:
-                          const TextStyle(color: AppColors.slate, fontSize: 13),
+                          ? 'Download Profit & Loss (Excel) for the financial year '
+                                'Apr $plYear – Mar ${plYear + 1} — sales, transport cost, '
+                                'gross & net profit per customer, a monthly summary, and '
+                                'a separate detailed sheet for each month.'
+                          : 'Profit & Loss (Excel) for ${_plMonthName(plMonth)} $plYear — '
+                                'sales, transport cost, gross & net profit per customer.',
+                      style: const TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 13,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -692,7 +714,8 @@ class _AccountsTab extends ConsumerWidget {
                               saveText: 'Apply',
                             );
                             if (picked != null) {
-                              ref.read(_plRangeProvider.notifier).state = picked;
+                              ref.read(_plRangeProvider.notifier).state =
+                                  picked;
                             }
                           },
                           icon: const Icon(Icons.date_range_rounded, size: 16),
@@ -700,14 +723,14 @@ class _AccountsTab extends ConsumerWidget {
                             plRange == null
                                 ? 'Custom range'
                                 : '${formatDate(plRange.start)} – '
-                                    '${formatDate(plRange.end)}',
+                                      '${formatDate(plRange.end)}',
                           ),
                         ),
                         if (plRange != null)
                           TextButton(
-                            onPressed: () => ref
-                                .read(_plRangeProvider.notifier)
-                                .state = null,
+                            onPressed: () =>
+                                ref.read(_plRangeProvider.notifier).state =
+                                    null,
                             child: const Text('Clear'),
                           ),
                         // Year / Month are ignored while a custom range is set.
@@ -732,7 +755,18 @@ class _AccountsTab extends ConsumerWidget {
                             child: SearchableField<int>(
                               value: plMonth,
                               options: const [
-                                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
+                                1,
+                                2,
+                                3,
+                                4,
+                                5,
+                                6,
+                                7,
+                                8,
+                                9,
+                                10,
+                                11,
+                                12,
                               ],
                               labelOf: _plMonthName,
                               hintText: 'Full year (FY)',
@@ -749,15 +783,17 @@ class _AccountsTab extends ConsumerWidget {
                             child: SearchableField<String>(
                               value: plRegion,
                               options: misRegions.keys.toList()
-                                ..sort((a, b) =>
-                                    misRegions[a]!.compareTo(misRegions[b]!)),
+                                ..sort(
+                                  (a, b) =>
+                                      misRegions[a]!.compareTo(misRegions[b]!),
+                                ),
                               labelOf: (id) => misRegions[id] ?? id,
                               hintText: 'All regions',
                               dialogTitle: 'Region',
                               clearable: true,
-                              onChanged: (v) => ref
-                                  .read(_plRegionProvider.notifier)
-                                  .state = v,
+                              onChanged: (v) =>
+                                  ref.read(_plRegionProvider.notifier).state =
+                                      v,
                             ),
                           ),
                         AppButton(
@@ -795,8 +831,9 @@ class _AccountsTab extends ConsumerWidget {
                               );
                               messenger.showSnackBar(
                                 const SnackBar(
-                                  content:
-                                      Text('Profit & Loss Excel generated'),
+                                  content: Text(
+                                    'Profit & Loss Excel generated',
+                                  ),
                                 ),
                               );
                             } catch (e) {
@@ -853,7 +890,9 @@ class _AccountsTab extends ConsumerWidget {
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not read the MIS: ${friendlyErrorMessage(e)}')),
+        SnackBar(
+          content: Text('Could not read the MIS: ${friendlyErrorMessage(e)}'),
+        ),
       );
       return;
     }
@@ -861,10 +900,7 @@ class _AccountsTab extends ConsumerWidget {
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => _MisImportDialog(
-        result: preview,
-        filename: file.name,
-      ),
+      builder: (ctx) => _MisImportDialog(result: preview, filename: file.name),
     );
     if (confirmed != true || !context.mounted) return;
 
@@ -901,7 +937,9 @@ class _AccountsTab extends ConsumerWidget {
 
     if (failure != null) {
       messenger.showSnackBar(
-        SnackBar(content: Text('MIS upload failed: ${friendlyErrorMessage(failure)}')),
+        SnackBar(
+          content: Text('MIS upload failed: ${friendlyErrorMessage(failure)}'),
+        ),
       );
       return;
     }
@@ -912,10 +950,7 @@ class _AccountsTab extends ConsumerWidget {
     if (!context.mounted) return;
     await showDialog<void>(
       context: context,
-      builder: (ctx) => _MisImportDialog(
-        result: applied!,
-        filename: file.name,
-      ),
+      builder: (ctx) => _MisImportDialog(result: applied!, filename: file.name),
     );
   }
 }
@@ -950,10 +985,21 @@ class _MisImportDialog extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 10),
-              _stat(dry ? 'LRs to update' : 'LRs updated', result.updatedCount,
-                  AppColors.plum),
-              _stat('Rows read from the sheet', result.rowsRead, AppColors.slate),
-              _stat('Already up to date', result.unchangedCount, AppColors.slate),
+              _stat(
+                dry ? 'LRs to update' : 'LRs updated',
+                result.updatedCount,
+                AppColors.plum,
+              ),
+              _stat(
+                'Rows read from the sheet',
+                result.rowsRead,
+                AppColors.slate,
+              ),
+              _stat(
+                'Already up to date',
+                result.unchangedCount,
+                AppColors.slate,
+              ),
               if (result.notFoundCount > 0)
                 _stat('LR No not found', result.notFoundCount, Colors.orange),
               if (result.errorCount > 0)
@@ -971,9 +1017,9 @@ class _MisImportDialog extends StatelessWidget {
                 _note(
                   result.rowsWithValues == 0
                       ? 'None of the editable columns had a value in them, so '
-                          'there is nothing to save.'
+                            'there is nothing to save.'
                       : 'Every value in the sheet already matches what is '
-                          'stored, so there is nothing to save.',
+                            'stored, so there is nothing to save.',
                   AppColors.slate,
                 ),
               ],
@@ -988,7 +1034,8 @@ class _MisImportDialog extends StatelessWidget {
                 _rowList(
                   'No such LR (skipped)',
                   result.notFound,
-                  (_) => 'not in your LRs — check the LR No, or it may belong '
+                  (_) =>
+                      'not in your LRs — check the LR No, or it may belong '
                       'to another region',
                   result.notFoundCount,
                 ),
@@ -1011,8 +1058,10 @@ class _MisImportDialog extends StatelessWidget {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('Save ${result.updatedCount} '
-                '${result.updatedCount == 1 ? 'LR' : 'LRs'}'),
+            child: Text(
+              'Save ${result.updatedCount} '
+              '${result.updatedCount == 1 ? 'LR' : 'LRs'}',
+            ),
           ),
         ] else
           TextButton(
@@ -1024,28 +1073,24 @@ class _MisImportDialog extends StatelessWidget {
   }
 
   static Widget _stat(String label, int value, Color color) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(label, style: const TextStyle(fontSize: 13)),
-            ),
-            Text(
-              '$value',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: color,
-              ),
-            ),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: [
+        Expanded(child: Text(label, style: const TextStyle(fontSize: 13))),
+        Text(
+          '$value',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: color,
+          ),
         ),
-      );
+      ],
+    ),
+  );
 
-  static Widget _note(String text, Color color) => Text(
-        text,
-        style: TextStyle(fontSize: 11.5, color: color),
-      );
+  static Widget _note(String text, Color color) =>
+      Text(text, style: TextStyle(fontSize: 11.5, color: color));
 
   /// A collapsed list of affected rows. Only the first 200 of each kind come
   /// back from the server, so say so when the count runs past what's shown.
@@ -1175,7 +1220,7 @@ class _BreakdownCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mobile = MediaQuery.of(context).size.width < 600;
+    final mobile = MediaQuery.sizeOf(context).width < 600;
     return AppCard(
       padding: EdgeInsets.all(mobile ? 12 : 20),
       child: Column(
@@ -1234,8 +1279,11 @@ List<LorryReceipt> lrsInExportRange(
 ) {
   if (range == null) return lrs;
   final from = DateTime(range.start.year, range.start.month, range.start.day);
-  final to = DateTime(range.end.year, range.end.month, range.end.day)
-      .add(const Duration(days: 1));
+  final to = DateTime(
+    range.end.year,
+    range.end.month,
+    range.end.day,
+  ).add(const Duration(days: 1));
   return lrs
       .where((lr) => !lr.date.isBefore(from) && lr.date.isBefore(to))
       .toList();
@@ -1310,7 +1358,7 @@ class _ExportRangeDialogState extends State<_ExportRangeDialog> {
                   _range == null
                       ? 'All dates'
                       : '${formatDate(_range!.start)} – '
-                          '${formatDate(_range!.end)}',
+                            '${formatDate(_range!.end)}',
                 ),
               ),
               if (_range != null)

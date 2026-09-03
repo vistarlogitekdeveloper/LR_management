@@ -34,22 +34,52 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.41.9
+          # MUST equal FLUTTER_VERSION in cloudflare-build.sh — the step below
+          # fails the run if they drift. Cloudflare compiles production with that
+          # value, so a mismatch here means CI green / production red.
+          flutter-version: 3.44.4
           cache: true
 
       - name: Verify Flutter
         run: flutter --version
 
+      # Guards the drift that let production build on 3.41.9 while the team ran
+      # 3.44.4 for months.
+      - name: Flutter pin matches the production build script
+        run: |
+          ci_pin="3.44.4"
+          prod_pin="$(sed -n 's/^FLUTTER_VERSION="\(.*\)"$/\1/p' cloudflare-build.sh)"
+          echo "CI pin: $ci_pin / cloudflare-build.sh pin: $prod_pin"
+          if [ "$ci_pin" != "$prod_pin" ]; then
+            echo "::error::Flutter pin mismatch — CI checks would not predict the production build."
+            exit 1
+          fi
+
       - name: Install dependencies
         run: flutter pub get
 
-      # Info-level lints (style / deprecation hints) must not block a deploy;
-      # warnings and errors still fail the build.
-      - name: Analyze
-        run: flutter analyze --no-fatal-infos
+      # CLAUDE.md §12/§13.2. Kept ahead of analyze because a formatting diff is
+      # the cheapest possible failure to read.
+      - name: Format
+        run: dart format --set-exit-if-changed .
 
+      # CLAUDE.md §13.1 wants --fatal-infos --fatal-warnings, and the tree is at
+      # zero issues as of the dart:html removal, so the strict gate holds.
+      #
+      # Caveat: verified on Flutter 3.44.4 locally, while this job pins 3.41.9 to
+      # match cloudflare-build.sh (see "Set up Flutter" above). A different SDK
+      # ships a different analyzer, so if this step goes red on an info-level
+      # lint that never fires locally, align the two versions rather than
+      # loosening the gate back to --no-fatal-infos.
+      - name: Analyze
+        run: flutter analyze --fatal-infos --fatal-warnings
+
+      # --coverage writes coverage/lcov.info. No threshold is enforced yet: the
+      # suite is 76 widget/unit tests and nowhere near §12's >=60% overall bar,
+      # so a gate here would just be permanently red. Publish the number first,
+      # then ratchet.
       - name: Test
-        run: flutter test
+        run: flutter test --coverage
 
       - name: Build web (release)
         # Current Flutter no longer keeps a caching service worker: the build

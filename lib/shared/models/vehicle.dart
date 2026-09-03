@@ -58,7 +58,8 @@ class Vehicle {
 
     return Vehicle(
       id: json['id'] as String,
-      number: (json['registration_no'] as String?) ??
+      number:
+          (json['registration_no'] as String?) ??
           (json['number'] as String?) ??
           '',
       typeId: (json['vehicle_type_id'] as String?) ?? '',
@@ -78,18 +79,18 @@ class Vehicle {
 
   // Optional FKs are always sent (null when unset) so an edit can clear them.
   Map<String, dynamic> toJson() => {
-        'registration_no': number,
-        'vehicle_type_id': typeId.isNotEmpty ? typeId : null,
-        'capacity_mt': capacityMt > 0 ? capacityMt : null,
-        'transporter_id': (transporterId != null && transporterId!.isNotEmpty)
-            ? transporterId
-            : null,
-        'current_driver_id':
-            (currentDriverId != null && currentDriverId!.isNotEmpty)
-                ? currentDriverId
-                : null,
-        'route_id': (routeId != null && routeId!.isNotEmpty) ? routeId : null,
-      };
+    'registration_no': number,
+    'vehicle_type_id': typeId.isNotEmpty ? typeId : null,
+    'capacity_mt': capacityMt > 0 ? capacityMt : null,
+    'transporter_id': (transporterId != null && transporterId!.isNotEmpty)
+        ? transporterId
+        : null,
+    'current_driver_id':
+        (currentDriverId != null && currentDriverId!.isNotEmpty)
+        ? currentDriverId
+        : null,
+    'route_id': (routeId != null && routeId!.isNotEmpty) ? routeId : null,
+  };
 
   Vehicle copyWith({
     String? number,

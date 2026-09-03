@@ -17,11 +17,11 @@ class RouteOption {
   });
 
   factory RouteOption.fromJson(Map<String, dynamic> j) => RouteOption(
-        kind: (j['kind'] ?? '').toString(),
-        points: _pointsFromJson(j['points']),
-        distanceKm: (j['distance_km'] as num?)?.toDouble() ?? 0,
-        durationMin: (j['duration_min'] as num?)?.toInt() ?? 0,
-      );
+    kind: (j['kind'] ?? '').toString(),
+    points: _pointsFromJson(j['points']),
+    distanceKm: (j['distance_km'] as num?)?.toDouble() ?? 0,
+    durationMin: (j['duration_min'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// Parse a list of [lat, lng] pairs into LatLng, dropping anything out of range.

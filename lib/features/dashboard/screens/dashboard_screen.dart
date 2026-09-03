@@ -101,225 +101,247 @@ class DashboardScreen extends ConsumerWidget {
           Expanded(
             child: SingleChildScrollView(
               padding: EdgeInsets.all(
-                MediaQuery.of(context).size.width < 600 ? 14 : 20,
+                MediaQuery.sizeOf(context).width < 600 ? 14 : 20,
               ),
               child: firstLoading
                   ? const ShimmerCards(cards: 6)
                   : Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (flow != null) ...[
-                    _RoleFlowStrip(flow: flow),
-                    const SizedBox(height: 14),
-                  ],
-                  LayoutBuilder(
-                    builder: (context, c) {
-                      // Compact KPI tiles, four per row (two only when very
-                      // narrow) — same small card on web and mobile.
-                      final cols = c.maxWidth < 480 ? 2 : 4;
-                      final spacing = c.maxWidth < 600 ? 8.0 : 12.0;
-                      // Each tile drills into the matching filtered view. The
-                      // LR-list filter is reset to only the relevant criterion
-                      // so the destination shows exactly what the tile counts.
-                      final now = DateTime.now();
-                      final todayDate = DateTime(now.year, now.month, now.day);
-                      void openLrs(LrFilter f) {
-                        ref.read(lrFilterProvider.notifier).state = f;
-                        context.go('/lrs');
-                      }
-
-                      // Tiles follow the operational funnel: booked → vehicle
-                      // placed → dispatched → in transit → completed, then the
-                      // two backlogs.
-                      //
-                      // Flow tiles headline Today (the day's output); the
-                      // backlog tiles headline Total, because "pending" is a
-                      // standing figure — the ₹ still owed across every open LR
-                      // is the number being watched, not just today's slice.
-                      final stats = <_StatTile>[
-                        _StatTile(
-                          icon: Icons.description_outlined,
-                          tint: AppColors.plum,
-                          label: 'LRs Booked',
-                          metric: metrics['lrs_booked'],
-                          headline: MetricScope.today,
-                          onTap: () => openLrs(
-                            LrFilter(fromDate: todayDate, toDate: todayDate),
-                          ),
-                        ),
-                        _StatTile(
-                          icon: Icons.pin_drop_outlined,
-                          tint: AppColors.plum,
-                          label: 'Vehicle Placed',
-                          metric: metrics['vehicles_placed'],
-                          headline: MetricScope.today,
-                          onTap: () => openLrs(
-                            LrFilter(fromDate: todayDate, toDate: todayDate),
-                          ),
-                        ),
-                        _StatTile(
-                          icon: Icons.local_shipping_outlined,
-                          tint: AppColors.orange,
-                          label: 'Vehicles Dispatched',
-                          metric: metrics['vehicles_dispatched'],
-                          headline: MetricScope.today,
-                          onTap: () => openLrs(
-                            LrFilter(fromDate: todayDate, toDate: todayDate),
-                          ),
-                        ),
-                        _StatTile(
-                          icon: Icons.alt_route_rounded,
-                          tint: AppColors.amber,
-                          label: 'Trips in Transit',
-                          metric: metrics['trips_in_transit'],
-                          headline: MetricScope.total,
-                          onTap: () => openLrs(
-                            const LrFilter(status: LrStatus.inTransit),
-                          ),
-                        ),
-                        _StatTile(
-                          icon: Icons.task_alt_rounded,
-                          tint: AppColors.ok,
-                          label: 'Trips Completed',
-                          metric: metrics['trips_completed'],
-                          headline: MetricScope.today,
-                          onTap: () => openLrs(
-                            const LrFilter(status: LrStatus.delivered),
-                          ),
-                        ),
-                        _StatTile(
-                          icon: Icons.schedule_rounded,
-                          tint: AppColors.amber,
-                          label: 'Pending Delivery',
-                          // Booked + In Transit — everything not yet delivered,
-                          // deliberately wider than Trips in Transit.
-                          metric: metrics['pending_delivery'],
-                          headline: MetricScope.total,
-                          onTap: () => openLrs(
-                            const LrFilter(status: LrStatus.booked),
-                          ),
-                        ),
-                        // Money tile: the server omits `pending_freight`
-                        // entirely without VIEW_TRANSPORTER_RATE, so this is
-                        // gated on the permission AND renders nothing if the
-                        // metric never arrived.
-                        if (canViewTransporterRate)
-                          _StatTile(
-                            icon: Icons.account_balance_wallet_outlined,
-                            tint: AppColors.red,
-                            label: 'Pending Freight',
-                            metric: metrics['pending_freight'],
-                            headline: MetricScope.total,
-                            money: true,
-                            // Accounts desk gets the payments queue; everyone
-                            // else (who can see the amount) gets the LR list.
-                            onTap: () {
-                              if (user?.canViewAccounts ?? false) {
-                                context.go('/accounts');
-                              } else {
-                                openLrs(const LrFilter());
-                              }
-                            },
-                          ),
-                      ];
-                      // Distribute the tiles that actually render across the
-                      // row — a gated-out tile shouldn't leave a blank slot.
-                      final effCols = stats.length < cols ? stats.length : cols;
-                      return Wrap(
-                        spacing: spacing,
-                        runSpacing: spacing,
-                        children: [
-                          for (final s in stats)
-                            SizedBox(
-                              width:
-                                  (c.maxWidth - spacing * (effCols - 1)) /
-                                  effCols,
-                              child: s,
-                            ),
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (flow != null) ...[
+                          _RoleFlowStrip(flow: flow),
+                          const SizedBox(height: 14),
                         ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 14),
-                  LayoutBuilder(
-                    builder: (context, c) {
-                      final wide = c.maxWidth >= 1100;
-                      final left = AppCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SectionTitle(
-                              icon: Icons.history_rounded,
-                              title: 'Recent Lorry Receipts',
-                              trailing: TextButton(
-                                onPressed: () => context.go('/lrs'),
-                                child: const Text('View all'),
-                              ),
-                            ),
-                            for (final lr in recentLrs)
-                              _RecentLrRow(
-                                lr: lr,
-                                canViewTransporterRate: canViewTransporterRate,
-                              ),
-                          ],
-                        ),
-                      );
-                      // Right column (Top Customers + Vistar margin) only exists
-                      // if the viewer can see at least one of them; otherwise the
-                      // Recent LRs card takes the full width instead of pairing
-                      // with an empty Expanded.
-                      final hasSide = canViewTransporterRate || showMargin;
-                      if (!hasSide) return left;
-                      final right = Column(
-                        children: [
-                          AppCard(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Top Customers ranks per-customer freight
-                                // totals (transporter-side amount).
-                                if (canViewTransporterRate) ...[
-                                  const SectionTitle(
-                                    icon: Icons.trending_up_rounded,
-                                    title: 'Top Customers',
+                        LayoutBuilder(
+                          builder: (context, c) {
+                            // Compact KPI tiles, four per row (two only when very
+                            // narrow) — same small card on web and mobile.
+                            final cols = c.maxWidth < 480 ? 2 : 4;
+                            final spacing = c.maxWidth < 600 ? 8.0 : 12.0;
+                            // Each tile drills into the matching filtered view. The
+                            // LR-list filter is reset to only the relevant criterion
+                            // so the destination shows exactly what the tile counts.
+                            final now = DateTime.now();
+                            final todayDate = DateTime(
+                              now.year,
+                              now.month,
+                              now.day,
+                            );
+                            void openLrs(LrFilter f) {
+                              ref.read(lrFilterProvider.notifier).state = f;
+                              context.go('/lrs');
+                            }
+
+                            // Tiles follow the operational funnel: booked → vehicle
+                            // placed → dispatched → in transit → completed, then the
+                            // two backlogs.
+                            //
+                            // Flow tiles headline Today (the day's output); the
+                            // backlog tiles headline Total, because "pending" is a
+                            // standing figure — the ₹ still owed across every open LR
+                            // is the number being watched, not just today's slice.
+                            final stats = <_StatTile>[
+                              _StatTile(
+                                icon: Icons.description_outlined,
+                                tint: AppColors.plum,
+                                label: 'LRs Booked',
+                                metric: metrics['lrs_booked'],
+                                headline: MetricScope.today,
+                                onTap: () => openLrs(
+                                  LrFilter(
+                                    fromDate: todayDate,
+                                    toDate: todayDate,
                                   ),
-                                  for (final entry in topFour)
-                                    _TopCustomerRow(
-                                      name: entry.key,
-                                      value: entry.value,
-                                      max: maxCust,
+                                ),
+                              ),
+                              _StatTile(
+                                icon: Icons.pin_drop_outlined,
+                                tint: AppColors.plum,
+                                label: 'Vehicle Placed',
+                                metric: metrics['vehicles_placed'],
+                                headline: MetricScope.today,
+                                onTap: () => openLrs(
+                                  LrFilter(
+                                    fromDate: todayDate,
+                                    toDate: todayDate,
+                                  ),
+                                ),
+                              ),
+                              _StatTile(
+                                icon: Icons.local_shipping_outlined,
+                                tint: AppColors.orange,
+                                label: 'Vehicles Dispatched',
+                                metric: metrics['vehicles_dispatched'],
+                                headline: MetricScope.today,
+                                onTap: () => openLrs(
+                                  LrFilter(
+                                    fromDate: todayDate,
+                                    toDate: todayDate,
+                                  ),
+                                ),
+                              ),
+                              _StatTile(
+                                icon: Icons.alt_route_rounded,
+                                tint: AppColors.amber,
+                                label: 'Trips in Transit',
+                                metric: metrics['trips_in_transit'],
+                                headline: MetricScope.total,
+                                onTap: () => openLrs(
+                                  const LrFilter(status: LrStatus.inTransit),
+                                ),
+                              ),
+                              _StatTile(
+                                icon: Icons.task_alt_rounded,
+                                tint: AppColors.ok,
+                                label: 'Trips Completed',
+                                metric: metrics['trips_completed'],
+                                headline: MetricScope.today,
+                                onTap: () => openLrs(
+                                  const LrFilter(status: LrStatus.delivered),
+                                ),
+                              ),
+                              _StatTile(
+                                icon: Icons.schedule_rounded,
+                                tint: AppColors.amber,
+                                label: 'Pending Delivery',
+                                // Booked + In Transit — everything not yet delivered,
+                                // deliberately wider than Trips in Transit.
+                                metric: metrics['pending_delivery'],
+                                headline: MetricScope.total,
+                                onTap: () => openLrs(
+                                  const LrFilter(status: LrStatus.booked),
+                                ),
+                              ),
+                              // Money tile: the server omits `pending_freight`
+                              // entirely without VIEW_TRANSPORTER_RATE, so this is
+                              // gated on the permission AND renders nothing if the
+                              // metric never arrived.
+                              if (canViewTransporterRate)
+                                _StatTile(
+                                  icon: Icons.account_balance_wallet_outlined,
+                                  tint: AppColors.red,
+                                  label: 'Pending Freight',
+                                  metric: metrics['pending_freight'],
+                                  headline: MetricScope.total,
+                                  money: true,
+                                  // Accounts desk gets the payments queue; everyone
+                                  // else (who can see the amount) gets the LR list.
+                                  onTap: () {
+                                    if (user?.canViewAccounts ?? false) {
+                                      context.go('/accounts');
+                                    } else {
+                                      openLrs(const LrFilter());
+                                    }
+                                  },
+                                ),
+                            ];
+                            // Distribute the tiles that actually render across the
+                            // row — a gated-out tile shouldn't leave a blank slot.
+                            final effCols = stats.length < cols
+                                ? stats.length
+                                : cols;
+                            return Wrap(
+                              spacing: spacing,
+                              runSpacing: spacing,
+                              children: [
+                                for (final s in stats)
+                                  SizedBox(
+                                    width:
+                                        (c.maxWidth - spacing * (effCols - 1)) /
+                                        effCols,
+                                    child: s,
+                                  ),
+                              ],
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        LayoutBuilder(
+                          builder: (context, c) {
+                            final wide = c.maxWidth >= 1100;
+                            final left = AppCard(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SectionTitle(
+                                    icon: Icons.history_rounded,
+                                    title: 'Recent Lorry Receipts',
+                                    trailing: TextButton(
+                                      onPressed: () => context.go('/lrs'),
+                                      child: const Text('View all'),
+                                    ),
+                                  ),
+                                  for (final lr in recentLrs)
+                                    _RecentLrRow(
+                                      lr: lr,
+                                      canViewTransporterRate:
+                                          canViewTransporterRate,
                                     ),
                                 ],
-                                if (showMargin) ...[
-                                  if (canViewTransporterRate)
-                                    const SizedBox(height: 16),
-                                  _MarginCard(
-                                    margin: marginMtd,
-                                    consignments: lrs.length,
+                              ),
+                            );
+                            // Right column (Top Customers + Vistar margin) only exists
+                            // if the viewer can see at least one of them; otherwise the
+                            // Recent LRs card takes the full width instead of pairing
+                            // with an empty Expanded.
+                            final hasSide =
+                                canViewTransporterRate || showMargin;
+                            if (!hasSide) return left;
+                            final right = Column(
+                              children: [
+                                AppCard(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      // Top Customers ranks per-customer freight
+                                      // totals (transporter-side amount).
+                                      if (canViewTransporterRate) ...[
+                                        const SectionTitle(
+                                          icon: Icons.trending_up_rounded,
+                                          title: 'Top Customers',
+                                        ),
+                                        for (final entry in topFour)
+                                          _TopCustomerRow(
+                                            name: entry.key,
+                                            value: entry.value,
+                                            max: maxCust,
+                                          ),
+                                      ],
+                                      if (showMargin) ...[
+                                        if (canViewTransporterRate)
+                                          const SizedBox(height: 16),
+                                        _MarginCard(
+                                          margin: marginMtd,
+                                          consignments: lrs.length,
+                                        ),
+                                      ],
+                                    ],
                                   ),
-                                ],
+                                ),
                               ],
-                            ),
-                          ),
-                        ],
-                      );
-                      if (wide) {
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(flex: 3, child: left),
-                            const SizedBox(width: 16),
-                            Expanded(flex: 2, child: right),
-                          ],
-                        );
-                      }
-                      return Column(
-                        children: [left, const SizedBox(height: 16), right],
-                      );
-                    },
-                  ),
-                ],
-              ),
+                            );
+                            if (wide) {
+                              return Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(flex: 3, child: left),
+                                  const SizedBox(width: 16),
+                                  Expanded(flex: 2, child: right),
+                                ],
+                              );
+                            }
+                            return Column(
+                              children: [
+                                left,
+                                const SizedBox(height: 16),
+                                right,
+                              ],
+                            );
+                          },
+                        ),
+                      ],
+                    ),
             ),
           ),
         ],

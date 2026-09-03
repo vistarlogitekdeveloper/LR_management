@@ -82,8 +82,8 @@ class AdminScreen extends ConsumerWidget {
                   final cols = c.maxWidth >= 1100
                       ? 4
                       : c.maxWidth >= 700
-                          ? 2
-                          : 1;
+                      ? 2
+                      : 1;
                   return Wrap(
                     spacing: 16,
                     runSpacing: 16,

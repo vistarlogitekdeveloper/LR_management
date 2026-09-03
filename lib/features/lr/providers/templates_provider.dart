@@ -6,7 +6,8 @@ import '../../auth/providers/auth_provider.dart';
 import '../data/templates_repository.dart';
 
 final templatesRepositoryProvider = Provider<TemplatesRepository>(
-    (ref) => TemplatesRepository(ref.watch(apiClientProvider)));
+  (ref) => TemplatesRepository(ref.watch(apiClientProvider)),
+);
 
 class TemplatesNotifier extends StateNotifier<List<LrTemplate>> {
   TemplatesNotifier(this._repo, {required bool authed}) : super(const []) {
@@ -27,8 +28,11 @@ class TemplatesNotifier extends StateNotifier<List<LrTemplate>> {
     state = [t, ...state];
   }
 
-  Future<void> update(String id,
-      {String? title, Map<String, dynamic>? payload}) async {
+  Future<void> update(
+    String id, {
+    String? title,
+    Map<String, dynamic>? payload,
+  }) async {
     final u = await _repo.update(id, title: title, payload: payload);
     state = [for (final t in state) t.id == u.id ? u : t];
   }
@@ -41,7 +45,9 @@ class TemplatesNotifier extends StateNotifier<List<LrTemplate>> {
 
 final templatesProvider =
     StateNotifierProvider<TemplatesNotifier, List<LrTemplate>>((ref) {
-  final authed = ref.watch(currentUserProvider) != null;
-  return TemplatesNotifier(ref.watch(templatesRepositoryProvider),
-      authed: authed);
-});
+      final authed = ref.watch(currentUserProvider) != null;
+      return TemplatesNotifier(
+        ref.watch(templatesRepositoryProvider),
+        authed: authed,
+      );
+    });

@@ -42,9 +42,11 @@ void main() {
     // The app shows a splash with an indeterminate CircularProgressIndicator
     // while auth initializes, so pumpAndSettle() would spin forever. Pump a
     // bounded number of frames until the router redirects to the login screen.
-    for (var i = 0;
-        i < 20 && find.text('Welcome back').evaluate().isEmpty;
-        i++) {
+    for (
+      var i = 0;
+      i < 20 && find.text('Welcome back').evaluate().isEmpty;
+      i++
+    ) {
       await tester.pump(const Duration(milliseconds: 50));
     }
 

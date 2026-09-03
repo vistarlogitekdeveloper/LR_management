@@ -52,7 +52,8 @@ class _NumberingScreenState extends ConsumerState<NumberingScreen> {
   /// overwrite prefix/format if the admin hasn't started editing them.
   void _onConfig(SystemConfig next) {
     if (!mounted) return;
-    final untouched = _prefixCtrl.text == (_seeded?.lrPrefix ?? '') &&
+    final untouched =
+        _prefixCtrl.text == (_seeded?.lrPrefix ?? '') &&
         _formatCtrl.text == (_seeded?.lrFormat ?? '') &&
         _resetPeriod == (_seeded?.lrResetPeriod ?? _resetPeriod);
     setState(() {
@@ -82,16 +83,15 @@ class _NumberingScreenState extends ConsumerState<NumberingScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text('Could not save: $e')),
-      );
+      messenger.showSnackBar(SnackBar(content: Text('Could not save: $e')));
     }
   }
 
   String _preview(SystemConfig cfg) {
     final seq = int.tryParse(_nextCtrl.text.trim()) ?? cfg.nextLrNumber;
-    final template =
-        _formatCtrl.text.trim().isEmpty ? cfg.lrFormat : _formatCtrl.text;
+    final template = _formatCtrl.text.trim().isEmpty
+        ? cfg.lrFormat
+        : _formatCtrl.text;
     return formatLrNumber(
       template,
       prefix: _prefixCtrl.text,
@@ -101,28 +101,31 @@ class _NumberingScreenState extends ConsumerState<NumberingScreen> {
   }
 
   String _resetLabel(String period) => switch (period) {
-        'FINANCIAL_YEAR' => 'Resets every financial year (Apr–Mar)',
-        'YEARLY' => 'Resets every calendar year',
-        'MONTHLY' => 'Resets every month',
-        'NEVER' => 'Never resets',
-        _ => period,
-      };
+    'FINANCIAL_YEAR' => 'Resets every financial year (Apr–Mar)',
+    'YEARLY' => 'Resets every calendar year',
+    'MONTHLY' => 'Resets every month',
+    'NEVER' => 'Never resets',
+    _ => period,
+  };
 
   /// Short label for the reset-period picker options.
   String _resetOption(String period) => switch (period) {
-        'FINANCIAL_YEAR' => 'Financial Year (Apr–Mar)',
-        'YEARLY' => 'Calendar Year',
-        'MONTHLY' => 'Monthly',
-        'NEVER' => 'Never',
-        _ => period,
-      };
+    'FINANCIAL_YEAR' => 'Financial Year (Apr–Mar)',
+    'YEARLY' => 'Calendar Year',
+    'MONTHLY' => 'Monthly',
+    'NEVER' => 'Never',
+    _ => period,
+  };
 
   static const _resetPeriods = ['FINANCIAL_YEAR', 'YEARLY', 'MONTHLY', 'NEVER'];
 
   @override
   Widget build(BuildContext context) {
     final cfg = ref.watch(systemConfigProvider);
-    ref.listen<SystemConfig>(systemConfigProvider, (_, next) => _onConfig(next));
+    ref.listen<SystemConfig>(
+      systemConfigProvider,
+      (_, next) => _onConfig(next),
+    );
 
     return Scaffold(
       backgroundColor: AppColors.mist,
@@ -193,7 +196,8 @@ class _NumberingScreenState extends ConsumerState<NumberingScreen> {
                                   hintText: 'Select reset period',
                                   dialogTitle: 'Reset sequence',
                                   onChanged: (v) => setState(
-                                      () => _resetPeriod = v ?? _resetPeriod),
+                                    () => _resetPeriod = v ?? _resetPeriod,
+                                  ),
                                 ),
                               ),
                             ])
@@ -219,8 +223,10 @@ class _NumberingScreenState extends ConsumerState<NumberingScreen> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.preview_outlined,
-                              color: AppColors.plum),
+                          const Icon(
+                            Icons.preview_outlined,
+                            color: AppColors.plum,
+                          ),
                           const SizedBox(width: 12),
                           const Text(
                             'Next LR will be:',
@@ -274,8 +280,11 @@ class _NumberingScreenState extends ConsumerState<NumberingScreen> {
       ),
       child: Row(
         children: [
-          Icon(hasRegion ? Icons.public_outlined : Icons.apartment_outlined,
-              size: 18, color: AppColors.plum),
+          Icon(
+            hasRegion ? Icons.public_outlined : Icons.apartment_outlined,
+            size: 18,
+            color: AppColors.plum,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(

@@ -1,8 +1,9 @@
 /// Best-effort MIME type from a filename extension, used when opening picked
 /// files for preview (so PDFs/images render inline rather than downloading).
 String mimeForName(String fileName) {
-  final ext =
-      fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+  final ext = fileName.contains('.')
+      ? fileName.split('.').last.toLowerCase()
+      : '';
   switch (ext) {
     case 'pdf':
       return 'application/pdf';

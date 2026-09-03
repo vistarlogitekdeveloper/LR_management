@@ -48,8 +48,11 @@ class _PagedAdapter implements HttpClientAdapter {
   void close({bool force = false}) {}
 
   @override
-  Future<ResponseBody> fetch(RequestOptions options, Stream<List<int>>? _,
-      Future<void>? _) async {
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<List<int>>? _,
+    Future<void>? _,
+  ) async {
     limits.add('${options.queryParameters['limit']}');
     final hasCursor = (options.queryParameters['cursor'] ?? '') != '';
     Map<String, dynamic> body;
@@ -88,14 +91,14 @@ class _PagedAdapter implements HttpClientAdapter {
 }
 
 List<Map<String, dynamic>> _rows(String prefix, int n) => [
-      for (var i = 0; i < n; i++)
-        {
-          'id': '$prefix$i',
-          'number': 'LR/$prefix/$i',
-          'lr_date': '2026-07-01',
-          'entered_by': 'u1',
-        },
-    ];
+  for (var i = 0; i < n; i++)
+    {
+      'id': '$prefix$i',
+      'number': 'LR/$prefix/$i',
+      'lr_date': '2026-07-01',
+      'entered_by': 'u1',
+    },
+];
 
 ApiClient _client(HttpClientAdapter adapter) {
   final c = ApiClient(_MemTokens());
@@ -104,81 +107,110 @@ ApiClient _client(HttpClientAdapter adapter) {
 }
 
 void main() {
-  test('fetchAllPages: small first page, large rest, onPage per page', () async {
-    final adapter = _PagedAdapter(page1: _rows('a', 3), page2: _rows('b', 2));
-    final api = _client(adapter);
-    final pages = <int>[];
-    final all = await fetchAllPages(
-      api,
-      '/lrs',
-      firstPageSize: 100,
-      pageSize: 1000,
-      onPage: (p) => pages.add(p.length),
-    );
-    expect(pages, [3, 2]); // fired once per page, in order
-    expect(all.length, 5); // full accumulated set returned
-    expect(adapter.limits, ['100', '1000']); // first small, rest large
-  });
+  test(
+    'fetchAllPages: small first page, large rest, onPage per page',
+    () async {
+      final adapter = _PagedAdapter(page1: _rows('a', 3), page2: _rows('b', 2));
+      final api = _client(adapter);
+      final pages = <int>[];
+      final all = await fetchAllPages(
+        api,
+        '/lrs',
+        firstPageSize: 100,
+        pageSize: 1000,
+        onPage: (p) => pages.add(p.length),
+      );
+      expect(pages, [3, 2]); // fired once per page, in order
+      expect(all.length, 5); // full accumulated set returned
+      expect(adapter.limits, ['100', '1000']); // first small, rest large
+    },
+  );
 
-  test('fetchAllPages: empty result fires onPage once with an empty page',
-      () async {
-    final api = _client(_OnePageAdapter(const []));
-    final pages = <int>[];
-    final all =
-        await fetchAllPages(api, '/lrs', onPage: (p) => pages.add(p.length));
-    expect(all, isEmpty);
-    expect(pages, [0]); // empty page still emitted so consumers clear stale rows
-  });
+  test(
+    'fetchAllPages: empty result fires onPage once with an empty page',
+    () async {
+      final api = _client(_OnePageAdapter(const []));
+      final pages = <int>[];
+      final all = await fetchAllPages(
+        api,
+        '/lrs',
+        onPage: (p) => pages.add(p.length),
+      );
+      expect(all, isEmpty);
+      expect(pages, [
+        0,
+      ]); // empty page still emitted so consumers clear stale rows
+    },
+  );
 
-  test('LrNotifier paints page 1 separately, before the full set (progressive)',
-      () async {
-    final adapter = _PagedAdapter(page1: _rows('a', 100), page2: _rows('b', 50));
-    final repo = LrRepository(_client(adapter), const {});
-    final notifier = LrNotifier(repo, null);
+  test(
+    'LrNotifier paints page 1 separately, before the full set (progressive)',
+    () async {
+      final adapter = _PagedAdapter(
+        page1: _rows('a', 100),
+        page2: _rows('b', 50),
+      );
+      final repo = LrRepository(_client(adapter), const {});
+      final notifier = LrNotifier(repo, null);
 
-    // Record every list length the notifier emits, and complete once the full
-    // set (150) lands. Deterministic — no arbitrary delays to race: the notifier
-    // sets state once per page, so the first page's 100 is always emitted before
-    // the final 150 regardless of how fast the pages resolve.
-    final lengths = <int>[];
-    final done = Completer<void>();
-    notifier.addListener((state) {
-      lengths.add(state.length);
-      if (state.length == 150 && !done.isCompleted) done.complete();
-    }, fireImmediately: true);
+      // Record every list length the notifier emits, and complete once the full
+      // set (150) lands. Deterministic — no arbitrary delays to race: the notifier
+      // sets state once per page, so the first page's 100 is always emitted before
+      // the final 150 regardless of how fast the pages resolve.
+      final lengths = <int>[];
+      final done = Completer<void>();
+      notifier.addListener((state) {
+        lengths.add(state.length);
+        if (state.length == 150 && !done.isCompleted) done.complete();
+      }, fireImmediately: true);
 
-    await done.future.timeout(const Duration(seconds: 5));
+      await done.future.timeout(const Duration(seconds: 5));
 
-    expect(lengths.contains(100), isTrue,
-        reason: 'the first page painted on its own, before the rest arrived');
-    expect(lengths.last, 150, reason: 'the full set is shown once loaded');
-    expect(lengths.indexOf(100) < lengths.lastIndexOf(150), isTrue,
-        reason: '100 must be emitted before the final 150');
+      expect(
+        lengths.contains(100),
+        isTrue,
+        reason: 'the first page painted on its own, before the rest arrived',
+      );
+      expect(lengths.last, 150, reason: 'the full set is shown once loaded');
+      expect(
+        lengths.indexOf(100) < lengths.lastIndexOf(150),
+        isTrue,
+        reason: '100 must be emitted before the final 150',
+      );
 
-    notifier.dispose();
-  });
+      notifier.dispose();
+    },
+  );
 
-  test('concurrent refreshes settle to the full list (generation guard)',
-      () async {
-    final adapter = _PagedAdapter(page1: _rows('a', 100), page2: _rows('b', 50));
-    final repo = LrRepository(_client(adapter), const {});
-    final notifier = LrNotifier(repo, null); // constructor fires refresh #1
-    // A second refresh right away simulates RefreshGate's on-entry fetch racing
-    // the constructor's initial load on first mount.
-    final second = notifier.refresh();
-    final done = Completer<void>();
-    notifier.addListener((s) {
-      if (s.length == 150 && !done.isCompleted) done.complete();
-    }, fireImmediately: true);
-    await second;
-    await done.future.timeout(const Duration(seconds: 5));
-    expect(notifier.state.length, 150, reason: 'settles to the complete set');
-    notifier.dispose();
-  });
+  test(
+    'concurrent refreshes settle to the full list (generation guard)',
+    () async {
+      final adapter = _PagedAdapter(
+        page1: _rows('a', 100),
+        page2: _rows('b', 50),
+      );
+      final repo = LrRepository(_client(adapter), const {});
+      final notifier = LrNotifier(repo, null); // constructor fires refresh #1
+      // A second refresh right away simulates RefreshGate's on-entry fetch racing
+      // the constructor's initial load on first mount.
+      final second = notifier.refresh();
+      final done = Completer<void>();
+      notifier.addListener((s) {
+        if (s.length == 150 && !done.isCompleted) done.complete();
+      }, fireImmediately: true);
+      await second;
+      await done.future.timeout(const Duration(seconds: 5));
+      expect(notifier.state.length, 150, reason: 'settles to the complete set');
+      notifier.dispose();
+    },
+  );
 
   test('warm refresh with a mid-stream error keeps the FULL prior list '
       '(no truncation to the partial first page)', () async {
-    final adapter = _PagedAdapter(page1: _rows('a', 100), page2: _rows('b', 50));
+    final adapter = _PagedAdapter(
+      page1: _rows('a', 100),
+      page2: _rows('b', 50),
+    );
     final repo = LrRepository(_client(adapter), const {});
     final notifier = LrNotifier(repo, null); // load #1 succeeds fully (150)
     final loaded = Completer<void>();
@@ -191,8 +223,11 @@ void main() {
     // A refresh where the bulk page fails must NOT shrink the list to 100.
     adapter.failPage2 = true;
     await notifier.refresh();
-    expect(notifier.state.length, 150,
-        reason: 'the already-loaded full list is preserved on a mid-stream error');
+    expect(
+      notifier.state.length,
+      150,
+      reason: 'the already-loaded full list is preserved on a mid-stream error',
+    );
     notifier.dispose();
   });
 
@@ -210,20 +245,27 @@ void main() {
       if (s.length == 100 && !painted.isCompleted) painted.complete();
     }, fireImmediately: true);
     await painted.future.timeout(const Duration(seconds: 5));
-    await Future<void>.delayed(const Duration(milliseconds: 50)); // let page 2 fail
-    expect(notifier.state.length, 100,
-        reason: 'partial first page is kept rather than reset to empty');
+    await Future<void>.delayed(
+      const Duration(milliseconds: 50),
+    ); // let page 2 fail
+    expect(
+      notifier.state.length,
+      100,
+      reason: 'partial first page is kept rather than reset to empty',
+    );
     notifier.dispose();
   });
 
-  test('LrNotifier: an empty result clears to an empty list (no stale rows)',
-      () async {
-    final repo = LrRepository(_client(_OnePageAdapter(const [])), const {});
-    final notifier = LrNotifier(repo, null);
-    await Future.delayed(const Duration(milliseconds: 30));
-    expect(notifier.state, isEmpty);
-    notifier.dispose();
-  });
+  test(
+    'LrNotifier: an empty result clears to an empty list (no stale rows)',
+    () async {
+      final repo = LrRepository(_client(_OnePageAdapter(const [])), const {});
+      final notifier = LrNotifier(repo, null);
+      await Future.delayed(const Duration(milliseconds: 30));
+      expect(notifier.state, isEmpty);
+      notifier.dispose();
+    },
+  );
 }
 
 /// A single-page adapter (no next_cursor) for the empty-result cases.
@@ -233,10 +275,17 @@ class _OnePageAdapter implements HttpClientAdapter {
   @override
   void close({bool force = false}) {}
   @override
-  Future<ResponseBody> fetch(RequestOptions options, Stream<List<int>>? _,
-      Future<void>? _) async {
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<List<int>>? _,
+    Future<void>? _,
+  ) async {
     return ResponseBody.fromString(
-      jsonEncode({'success': true, 'data': data, 'meta': {'next_cursor': null}}),
+      jsonEncode({
+        'success': true,
+        'data': data,
+        'meta': {'next_cursor': null},
+      }),
       200,
       headers: {
         Headers.contentTypeHeader: [Headers.jsonContentType],

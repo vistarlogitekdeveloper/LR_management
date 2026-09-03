@@ -170,6 +170,7 @@ class FreightDetails {
   final double haltingCharge;
   final double gst;
   final double advance;
+
   /// Share of the transporter freight released as this LR's advance. Copied
   /// from the transporter's default when the LR is created and overridable on
   /// this one LR; frozen thereafter, so later edits to the transporter's
@@ -209,10 +210,12 @@ class FreightDetails {
     this.tripLeadBy = '',
     this.tripLeadUserId = '',
     this.tripLeadUserName = '',
-    double? total,
-    double? balance,
-  }) : _total = total,
-       _balance = balance;
+    // Private initializing formals: the external names stay `total:` / `balance:`
+    // (the underscore is dropped), while the private fields let the getters below
+    // fall back to a computed value when the backend omits the column.
+    this._total,
+    this._balance,
+  });
 
   // GST is no longer charged; it is excluded from the total. The backend still
   // returns a `total` generated column (authoritative) — this fallback is only
@@ -278,8 +281,9 @@ class FreightDetails {
       expressCharges: asDouble(json['express_charges']),
       expressChargesDriverShare: asDouble(json['express_charges_driver_share']),
       extraPointDelivery: asDouble(json['extra_point_delivery']),
-      extraPointDeliveryDriverShare:
-          asDouble(json['extra_point_delivery_driver_share']),
+      extraPointDeliveryDriverShare: asDouble(
+        json['extra_point_delivery_driver_share'],
+      ),
       haltingCharge: asDouble(json['halting_charge']),
       gst: asDouble(json['gst']),
       advance: asDouble(json['advance']),
@@ -539,7 +543,8 @@ class LorryReceipt {
           DateTime.tryParse(json['lr_date']?.toString() ?? '') ??
           DateTime.now(),
       enteredBy: (json['entered_by'] as String?) ?? '',
-      enteredByName: (nested('enteredBy')?['name'] as String?) ??
+      enteredByName:
+          (nested('enteredBy')?['name'] as String?) ??
           (json['entered_by_name'] as String?) ??
           '',
       version: asInt(json['version']),
@@ -584,7 +589,8 @@ class LorryReceipt {
       driverId: json['driver_id'] as String? ?? driverJson?['id'] as String?,
       routeId: json['route_id'] as String?,
       regionId: json['region_id'] as String?,
-      regionName: (json['region_name'] as String?) ??
+      regionName:
+          (json['region_name'] as String?) ??
           ((json['region'] as Map?)?['name'] as String?),
       route: (fromCity.isNotEmpty || toCity.isNotEmpty)
           ? '$fromCity → $toCity'
@@ -613,17 +619,23 @@ class LorryReceipt {
           .map(Attachment.fromJson)
           .toList(),
       vistarBillNo: (json['vistar_bill_no'] as String?) ?? '',
-      vistarBillDate: DateTime.tryParse(json['vistar_bill_date']?.toString() ?? ''),
-      podSoftCopyDate:
-          DateTime.tryParse(json['pod_soft_copy_date']?.toString() ?? ''),
-      advancePaidAt:
-          DateTime.tryParse(json['advance_paid_at']?.toString() ?? ''),
-      balancePaidAt:
-          DateTime.tryParse(json['balance_paid_at']?.toString() ?? ''),
+      vistarBillDate: DateTime.tryParse(
+        json['vistar_bill_date']?.toString() ?? '',
+      ),
+      podSoftCopyDate: DateTime.tryParse(
+        json['pod_soft_copy_date']?.toString() ?? '',
+      ),
+      advancePaidAt: DateTime.tryParse(
+        json['advance_paid_at']?.toString() ?? '',
+      ),
+      balancePaidAt: DateTime.tryParse(
+        json['balance_paid_at']?.toString() ?? '',
+      ),
       // Absent → true (older backend): keep legacy LRs visible in Accounts.
       sentForPayment: (json['sent_for_payment'] as bool?) ?? true,
-      sentForPaymentAt:
-          DateTime.tryParse(json['sent_for_payment_at']?.toString() ?? ''),
+      sentForPaymentAt: DateTime.tryParse(
+        json['sent_for_payment_at']?.toString() ?? '',
+      ),
       driverIncentivePaid: (json['driver_incentive_paid'] as bool?) ?? false,
       driverIncentivePaidAt: DateTime.tryParse(
         json['driver_incentive_paid_at']?.toString() ?? '',

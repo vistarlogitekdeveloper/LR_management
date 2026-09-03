@@ -22,9 +22,7 @@ class _FakeTokenStorage extends TokenStorage {
 Future<void> _pump(WidgetTester tester) async {
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [
-        tokenStorageProvider.overrideWithValue(_FakeTokenStorage()),
-      ],
+      overrides: [tokenStorageProvider.overrideWithValue(_FakeTokenStorage())],
       child: const MaterialApp(home: ChangePasswordScreen()),
     ),
   );
@@ -59,8 +57,9 @@ void main() {
       expect(find.text('Passwords do not match'), findsOneWidget);
     });
 
-    testWidgets('new password shorter than 6 chars is rejected',
-        (tester) async {
+    testWidgets('new password shorter than 6 chars is rejected', (
+      tester,
+    ) async {
       await _pump(tester);
       await tester.enterText(find.byType(TextFormField).at(0), 'oldpass99');
       await tester.enterText(find.byType(TextFormField).at(1), 'ab1');
@@ -73,8 +72,9 @@ void main() {
     // Pins the boundary itself, not just "something short fails" — the minimum
     // has already moved once (10 → 6) and the length-only test above kept
     // passing its old assertion right up until the message text changed.
-    testWidgets('6 characters clears the length rule, 5 does not',
-        (tester) async {
+    testWidgets('6 characters clears the length rule, 5 does not', (
+      tester,
+    ) async {
       await _pump(tester);
       await tester.enterText(find.byType(TextFormField).at(0), 'oldpass99');
       await tester.enterText(find.byType(TextFormField).at(1), 'abcd1');

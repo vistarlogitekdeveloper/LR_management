@@ -386,7 +386,7 @@ class UsersAdminScreen extends ConsumerWidget {
           Expanded(
             child: SingleChildScrollView(
               padding: EdgeInsets.all(
-                MediaQuery.of(context).size.width < 600 ? 14 : 28,
+                MediaQuery.sizeOf(context).width < 600 ? 14 : 28,
               ),
               child: AppCard(
                 padding: const EdgeInsets.all(16),

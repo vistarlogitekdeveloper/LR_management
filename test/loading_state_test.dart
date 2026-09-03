@@ -17,16 +17,21 @@ Widget _wrap(Widget child) => MaterialApp(home: child);
 
 void main() {
   group('MasterPage loading', () {
-    testWidgets('shows a shimmer, not "No records", while loading and empty',
-        (tester) async {
-      await tester.pumpWidget(_wrap(const MasterPage(
-        title: 'Consignors',
-        subtitle: 'x',
-        icon: Icons.person,
-        columns: ['Name'],
-        rows: [],
-        loading: true,
-      )));
+    testWidgets('shows a shimmer, not "No records", while loading and empty', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(
+          const MasterPage(
+            title: 'Consignors',
+            subtitle: 'x',
+            icon: Icons.person,
+            columns: ['Name'],
+            rows: [],
+            loading: true,
+          ),
+        ),
+      );
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byType(ShimmerRows), findsOneWidget);
@@ -34,16 +39,21 @@ void main() {
       expect(find.text('Loading…'), findsOneWidget);
     });
 
-    testWidgets('shows "No records" once loading finishes with no rows',
-        (tester) async {
-      await tester.pumpWidget(_wrap(const MasterPage(
-        title: 'Consignors',
-        subtitle: 'x',
-        icon: Icons.person,
-        columns: ['Name'],
-        rows: [],
-        loading: false,
-      )));
+    testWidgets('shows "No records" once loading finishes with no rows', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(
+          const MasterPage(
+            title: 'Consignors',
+            subtitle: 'x',
+            icon: Icons.person,
+            columns: ['Name'],
+            rows: [],
+            loading: false,
+          ),
+        ),
+      );
       await tester.pump();
 
       expect(find.byType(ShimmerRows), findsNothing);
@@ -52,14 +62,20 @@ void main() {
 
     testWidgets('shows the data (no shimmer) once rows arrive, even if a later '
         'refresh flag were still set', (tester) async {
-      await tester.pumpWidget(_wrap(const MasterPage(
-        title: 'Consignors',
-        subtitle: 'x',
-        icon: Icons.person,
-        columns: ['Name'],
-        rows: [MasterRow(id: '1', cells: ['Acme Ltd'])],
-        loading: true, // rows present → shimmer must NOT show
-      )));
+      await tester.pumpWidget(
+        _wrap(
+          const MasterPage(
+            title: 'Consignors',
+            subtitle: 'x',
+            icon: Icons.person,
+            columns: ['Name'],
+            rows: [
+              MasterRow(id: '1', cells: ['Acme Ltd']),
+            ],
+            loading: true, // rows present → shimmer must NOT show
+          ),
+        ),
+      );
       await tester.pump();
 
       expect(find.byType(ShimmerRows), findsNothing);
@@ -92,8 +108,9 @@ void main() {
       expect(find.text('flag=false'), findsOneWidget);
     });
 
-    testWidgets('does not throw if unmounted before onEnter resolves',
-        (tester) async {
+    testWidgets('does not throw if unmounted before onEnter resolves', (
+      tester,
+    ) async {
       final flag = StateProvider<bool>((ref) => true);
       await tester.pumpWidget(
         ProviderScope(
@@ -119,9 +136,12 @@ void main() {
   });
 
   group('Shimmer widget', () {
-    testWidgets('animates without throwing and disposes cleanly',
-        (tester) async {
-      await tester.pumpWidget(_wrap(const Scaffold(body: ShimmerRows(rows: 3))));
+    testWidgets('animates without throwing and disposes cleanly', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(const Scaffold(body: ShimmerRows(rows: 3))),
+      );
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump(const Duration(milliseconds: 600));
       expect(find.byType(ShimmerBox), findsWidgets);

@@ -63,11 +63,13 @@ class RouteMaster {
     distanceKm: asDouble(json['distance_km']),
     baseRate: asDouble(json['base_rate']),
     customerRate: asDouble(json['customer_rate']),
-    vehicleTypeId: (json['vehicle_type_id'] as String?) ??
+    vehicleTypeId:
+        (json['vehicle_type_id'] as String?) ??
         ((json['vehicleType'] as Map?)?['id'] as String?),
     vehicleTypeCode: (json['vehicleType'] as Map?)?['code'] as String?,
     vehicleTypeLabel: (json['vehicleType'] as Map?)?['label'] as String?,
-    capacityId: (json['capacity_id'] as String?) ??
+    capacityId:
+        (json['capacity_id'] as String?) ??
         ((json['capacity'] as Map?)?['id'] as String?),
     capacityCode: (json['capacity'] as Map?)?['code'] as String?,
     capacityLabel: (json['capacity'] as Map?)?['label'] as String?,

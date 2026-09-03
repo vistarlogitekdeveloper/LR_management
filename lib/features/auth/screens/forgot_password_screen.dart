@@ -78,8 +78,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         ),
                         child: Row(
                           children: const [
-                            Icon(Icons.check_circle_outline,
-                                color: AppColors.ok, size: 18),
+                            Icon(
+                              Icons.check_circle_outline,
+                              color: AppColors.ok,
+                              size: 18,
+                            ),
                             SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -106,8 +109,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     Center(
                       child: TextButton.icon(
                         onPressed: () => context.go('/login'),
-                        icon: const Icon(Icons.arrow_back_rounded,
-                            color: AppColors.plum, size: 18),
+                        icon: const Icon(
+                          Icons.arrow_back_rounded,
+                          color: AppColors.plum,
+                          size: 18,
+                        ),
                         label: const Text('Back to sign in'),
                       ),
                     ),

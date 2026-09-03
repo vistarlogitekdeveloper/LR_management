@@ -14,40 +14,51 @@ class ConsignorsScreen extends ConsumerWidget {
   const ConsignorsScreen({super.key});
 
   static List<FormFieldSpec> _fields(Consignor? c) => [
-        FormFieldSpec(
-            name: 'name',
-            label: 'Consignor Name',
-            required: true,
-            initialValue: c?.name),
-        FormFieldSpec(
-            name: 'gst',
-            label: 'GST Number',
-            required: true,
-            initialValue: c?.gst,
-            maxLength: 15),
-        FormFieldSpec(name: 'city', label: 'City', initialValue: c?.city),
-        FormFieldSpec(
-            name: 'address',
-            label: 'Address',
-            type: FieldType.multiline,
-            initialValue: c?.address),
-        FormFieldSpec(
-            name: 'contact', label: 'Contact Person', initialValue: c?.contact),
-        FormFieldSpec(
-            name: 'mobile',
-            label: 'Mobile',
-            type: FieldType.number,
-            maxLength: 12,
-            initialValue: c?.mobile),
-        FormFieldSpec(
-            name: 'email',
-            label: 'Email',
-            type: FieldType.email,
-            initialValue: c?.email),
-      ];
+    FormFieldSpec(
+      name: 'name',
+      label: 'Consignor Name',
+      required: true,
+      initialValue: c?.name,
+    ),
+    FormFieldSpec(
+      name: 'gst',
+      label: 'GST Number',
+      required: true,
+      initialValue: c?.gst,
+      maxLength: 15,
+    ),
+    FormFieldSpec(name: 'city', label: 'City', initialValue: c?.city),
+    FormFieldSpec(
+      name: 'address',
+      label: 'Address',
+      type: FieldType.multiline,
+      initialValue: c?.address,
+    ),
+    FormFieldSpec(
+      name: 'contact',
+      label: 'Contact Person',
+      initialValue: c?.contact,
+    ),
+    FormFieldSpec(
+      name: 'mobile',
+      label: 'Mobile',
+      type: FieldType.number,
+      maxLength: 12,
+      initialValue: c?.mobile,
+    ),
+    FormFieldSpec(
+      name: 'email',
+      label: 'Email',
+      type: FieldType.email,
+      initialValue: c?.email,
+    ),
+  ];
 
-  Future<void> _openForm(BuildContext context, WidgetRef ref,
-      {Consignor? existing}) async {
+  Future<void> _openForm(
+    BuildContext context,
+    WidgetRef ref, {
+    Consignor? existing,
+  }) async {
     await MasterFormDialog.show(
       context: context,
       title: existing == null ? 'New Consignor' : 'Edit Consignor',
@@ -68,26 +79,30 @@ class ConsignorsScreen extends ConsumerWidget {
         try {
           final n = ref.read(consignorsProvider.notifier);
           if (existing == null) {
-            await n.add(Consignor(
-              id: const Uuid().v4(),
-              name: values['name'] ?? '',
-              gst: values['gst'] ?? '',
-              city: values['city'] ?? '',
-              address: values['address'] ?? '',
-              contact: values['contact'] ?? '',
-              mobile: values['mobile'] ?? '',
-              email: values['email'] ?? '',
-            ));
+            await n.add(
+              Consignor(
+                id: const Uuid().v4(),
+                name: values['name'] ?? '',
+                gst: values['gst'] ?? '',
+                city: values['city'] ?? '',
+                address: values['address'] ?? '',
+                contact: values['contact'] ?? '',
+                mobile: values['mobile'] ?? '',
+                email: values['email'] ?? '',
+              ),
+            );
           } else {
-            await n.update(existing.copyWith(
-              name: values['name'],
-              gst: values['gst'],
-              city: values['city'],
-              address: values['address'],
-              contact: values['contact'],
-              mobile: values['mobile'],
-              email: values['email'],
-            ));
+            await n.update(
+              existing.copyWith(
+                name: values['name'],
+                gst: values['gst'],
+                city: values['city'],
+                address: values['address'],
+                contact: values['contact'],
+                mobile: values['mobile'],
+                email: values['email'],
+              ),
+            );
           }
           return true;
         } catch (e) {
@@ -120,7 +135,9 @@ class ConsignorsScreen extends ConsumerWidget {
       onDelete: canEdit
           ? (id) async {
               final ok = await MasterActions.confirmDelete(
-                  context: context, label: 'this consignor');
+                context: context,
+                label: 'this consignor',
+              );
               if (!ok) return;
               try {
                 await ref.read(consignorsProvider.notifier).remove(id);
@@ -129,14 +146,7 @@ class ConsignorsScreen extends ConsumerWidget {
               }
             }
           : null,
-      columns: const [
-        'Name',
-        'GST',
-        'City',
-        'Contact',
-        'Mobile',
-        'Email',
-      ],
+      columns: const ['Name', 'GST', 'City', 'Contact', 'Mobile', 'Email'],
       rows: [
         for (final c in consignors)
           MasterRow(

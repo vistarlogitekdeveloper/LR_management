@@ -14,36 +14,44 @@ class DriversScreen extends ConsumerWidget {
   const DriversScreen({super.key});
 
   static List<FormFieldSpec> _fields(Driver? d) => [
-        FormFieldSpec(
-            name: 'name',
-            label: 'Driver Name',
-            required: true,
-            initialValue: d?.name),
-        FormFieldSpec(
-            name: 'mobile',
-            label: 'Mobile',
-            required: true,
-            type: FieldType.number,
-            maxLength: 12,
-            initialValue: d?.mobile),
-        FormFieldSpec(
-            name: 'licenseNo',
-            label: 'License Number',
-            required: true,
-            initialValue: d?.licenseNo),
-        FormFieldSpec(
-            name: 'licenseExpiry',
-            label: 'License Expiry (YYYY-MM-DD)',
-            initialValue: d?.licenseExpiry),
-        FormFieldSpec(
-            name: 'address',
-            label: 'Address',
-            type: FieldType.multiline,
-            initialValue: d?.address),
-      ];
+    FormFieldSpec(
+      name: 'name',
+      label: 'Driver Name',
+      required: true,
+      initialValue: d?.name,
+    ),
+    FormFieldSpec(
+      name: 'mobile',
+      label: 'Mobile',
+      required: true,
+      type: FieldType.number,
+      maxLength: 12,
+      initialValue: d?.mobile,
+    ),
+    FormFieldSpec(
+      name: 'licenseNo',
+      label: 'License Number',
+      required: true,
+      initialValue: d?.licenseNo,
+    ),
+    FormFieldSpec(
+      name: 'licenseExpiry',
+      label: 'License Expiry (YYYY-MM-DD)',
+      initialValue: d?.licenseExpiry,
+    ),
+    FormFieldSpec(
+      name: 'address',
+      label: 'Address',
+      type: FieldType.multiline,
+      initialValue: d?.address,
+    ),
+  ];
 
-  Future<void> _openForm(BuildContext context, WidgetRef ref,
-      {Driver? existing}) async {
+  Future<void> _openForm(
+    BuildContext context,
+    WidgetRef ref, {
+    Driver? existing,
+  }) async {
     await MasterFormDialog.show(
       context: context,
       title: existing == null ? 'New Driver' : 'Edit Driver',
@@ -62,24 +70,28 @@ class DriversScreen extends ConsumerWidget {
         try {
           final n = ref.read(driversProvider.notifier);
           if (existing == null) {
-            await n.add(Driver(
-              id: const Uuid().v4(),
-              name: values['name'] ?? '',
-              mobile: values['mobile'] ?? '',
-              licenseNo: values['licenseNo'] ?? '',
-              licenseExpiry: (values['licenseExpiry'] ?? '').isEmpty
-                  ? null
-                  : values['licenseExpiry'],
-              address: values['address'] ?? '',
-            ));
+            await n.add(
+              Driver(
+                id: const Uuid().v4(),
+                name: values['name'] ?? '',
+                mobile: values['mobile'] ?? '',
+                licenseNo: values['licenseNo'] ?? '',
+                licenseExpiry: (values['licenseExpiry'] ?? '').isEmpty
+                    ? null
+                    : values['licenseExpiry'],
+                address: values['address'] ?? '',
+              ),
+            );
           } else {
-            await n.update(existing.copyWith(
-              name: values['name'],
-              mobile: values['mobile'],
-              licenseNo: values['licenseNo'],
-              licenseExpiry: values['licenseExpiry'],
-              address: values['address'],
-            ));
+            await n.update(
+              existing.copyWith(
+                name: values['name'],
+                mobile: values['mobile'],
+                licenseNo: values['licenseNo'],
+                licenseExpiry: values['licenseExpiry'],
+                address: values['address'],
+              ),
+            );
           }
           return true;
         } catch (e) {
@@ -112,7 +124,9 @@ class DriversScreen extends ConsumerWidget {
       onDelete: canEdit
           ? (id) async {
               final ok = await MasterActions.confirmDelete(
-                  context: context, label: 'this driver');
+                context: context,
+                label: 'this driver',
+              );
               if (!ok) return;
               try {
                 await ref.read(driversProvider.notifier).remove(id);

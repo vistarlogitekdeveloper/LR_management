@@ -448,8 +448,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   /// every corrected retry fail with a 409.
   double get _advancePercentValue {
     final parsed = double.tryParse(_advancePctCtrl.text.trim());
-    final v =
-        parsed ?? _transporter?.advancePercent ?? kDefaultAdvancePercent;
+    final v = parsed ?? _transporter?.advancePercent ?? kDefaultAdvancePercent;
     return v.clamp(0, 100).toDouble();
   }
 
@@ -1022,7 +1021,9 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       onSave: (values) async {
         try {
           final expiry = (values['licenseExpiry'] ?? '').trim();
-          saved = await ref.read(driversProvider.notifier).add(
+          saved = await ref
+              .read(driversProvider.notifier)
+              .add(
                 Driver(
                   id: const Uuid().v4(),
                   name: values['name'] ?? '',
@@ -1048,8 +1049,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   Future<Transporter?> _addTransporterInline([String prefillName = '']) =>
       TransporterFormDialog.show(context, initialName: prefillName.trim());
 
-  Future<RouteMaster?> _addRouteInline() =>
-      RouteFormDialog.show(context);
+  Future<RouteMaster?> _addRouteInline() => RouteFormDialog.show(context);
 
   void _applyTemplate(LrTemplate t) {
     final p = t.payload;
@@ -1388,8 +1388,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
           "Driver's share can't exceed the express charges.";
     }
     if (_canViewTransporterRate &&
-        _toDouble(_extraPointDriverCtrl) >
-            _toDouble(_extraPointDeliveryCtrl)) {
+        _toDouble(_extraPointDriverCtrl) > _toDouble(_extraPointDeliveryCtrl)) {
       errors['extraPointDriver'] =
           "Driver's share can't exceed the extra point delivery amount.";
     }
@@ -1754,8 +1753,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     final previewNumber = _isEdit
         ? (_editing?.number ?? '')
         : ((backendPreview?.asData?.value.isNotEmpty ?? false)
-            ? backendPreview!.asData!.value
-            : _previewLrNumber(ref.watch(lrListProvider)));
+              ? backendPreview!.asData!.value
+              : _previewLrNumber(ref.watch(lrListProvider)));
 
     return Scaffold(
       backgroundColor: AppColors.mist,
@@ -1793,7 +1792,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                 child: SingleChildScrollView(
                   // Tighter padding on phones to reclaim horizontal space.
                   padding: EdgeInsets.all(
-                    MediaQuery.of(context).size.width < 600 ? 14 : 28,
+                    MediaQuery.sizeOf(context).width < 600 ? 14 : 28,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2283,7 +2282,9 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                 if (canViewVistarMargin)
                                   LabeledField(
                                     label: 'Express — Vistar Margin',
-                                    child: _readonlyAmount(_expressVistarMargin),
+                                    child: _readonlyAmount(
+                                      _expressVistarMargin,
+                                    ),
                                   ),
                                 LabeledField(
                                   label: 'Extra Point Delivery (Client)',
@@ -2309,8 +2310,9 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                 if (canViewVistarMargin)
                                   LabeledField(
                                     label: 'Extra Point — Vistar Margin',
-                                    child:
-                                        _readonlyAmount(_extraPointVistarMargin),
+                                    child: _readonlyAmount(
+                                      _extraPointVistarMargin,
+                                    ),
                                   ),
                               ]),
                               const SizedBox(height: 12),
@@ -2658,7 +2660,9 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   // The pencil affordance keeps free-text entry for values not in the master,
   // since part_description still ships to the API as plain text.
   Widget _partDescriptionField(
-      _PartLineForm p, List<LookupValue> packageTypes) {
+    _PartLineForm p,
+    List<LookupValue> packageTypes,
+  ) {
     final parts = ref.watch(partDescriptionsProvider);
     final text = p.partDescription.text;
     final selected = parts.where((pd) => pd.name == text).firstOrNull;
@@ -2703,8 +2707,11 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
               onTap: () => _enterCustomPart(p),
               child: const Padding(
                 padding: EdgeInsets.all(4),
-                child: Icon(Icons.edit_outlined,
-                    size: 16, color: AppColors.slate),
+                child: Icon(
+                  Icons.edit_outlined,
+                  size: 16,
+                  color: AppColors.slate,
+                ),
               ),
             ),
           ),
@@ -2722,8 +2729,9 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         content: TextField(
           controller: ctrl,
           autofocus: true,
-          decoration:
-              const InputDecoration(hintText: 'Type a part description'),
+          decoration: const InputDecoration(
+            hintText: 'Type a part description',
+          ),
           onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
         ),
         actions: [

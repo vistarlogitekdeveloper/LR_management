@@ -21,7 +21,7 @@ class AppTopbar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     // Compact on phones so the header doesn't eat vertical space — smaller
     // padding/title and a single-line (ellipsised) subtitle.
-    final width = MediaQuery.of(context).size.width;
+    final width = MediaQuery.sizeOf(context).width;
     final mobile = width < 600;
     // Title + actions can't share one line on narrower viewports (e.g. with
     // devtools open) — stack the actions below the title to avoid overflow.

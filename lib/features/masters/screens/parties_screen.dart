@@ -25,9 +25,7 @@ class PartiesScreen extends ConsumerWidget {
       subtitle: '${parties.length} parties · consignor / consignee / customer',
       icon: Icons.business_outlined,
       canEdit: canEdit,
-      onAdd: canEdit
-          ? () => PartyFormDialog.show(context)
-          : null,
+      onAdd: canEdit ? () => PartyFormDialog.show(context) : null,
       onEdit: canEdit
           ? (id) {
               final p = parties.firstWhere((x) => x.id == id);

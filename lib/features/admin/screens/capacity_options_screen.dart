@@ -12,34 +12,45 @@ import '../providers/capacity_options_provider.dart';
 class CapacityOptionsScreen extends ConsumerWidget {
   const CapacityOptionsScreen({super.key});
 
-  Future<String?> _promptLabel(BuildContext context, {String initial = ''}) {
+  Future<String?> _promptLabel(
+    BuildContext context, {
+    String initial = '',
+  }) async {
+    // Disposed in the finally: showDialog's future completes only after the
+    // route is gone, so the controller is no longer attached to any TextField.
     final ctrl = TextEditingController(text: initial);
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(initial.isEmpty ? 'Add Capacity Option' : 'Rename Option'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(
-            labelText: 'Label',
-            hintText: 'e.g. 25 Ton',
+    try {
+      return await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(
+            initial.isEmpty ? 'Add Capacity Option' : 'Rename Option',
           ),
-          onSubmitted: (_) => Navigator.pop(ctx, ctrl.text.trim()),
+          content: TextField(
+            controller: ctrl,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              labelText: 'Label',
+              hintText: 'e.g. 25 Ton',
+            ),
+            onSubmitted: (_) => Navigator.pop(ctx, ctrl.text.trim()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+              child: const Text('Save'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
+      );
+    } finally {
+      ctrl.dispose();
+    }
   }
 
   @override

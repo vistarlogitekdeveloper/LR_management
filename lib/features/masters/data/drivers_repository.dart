@@ -9,8 +9,11 @@ class DriversRepository {
   final ApiClient _api;
 
   Future<List<Driver>> list({String? query}) async {
-    final rows = await fetchAllPages(_api, '/drivers',
-        query: {if (query != null && query.isNotEmpty) 'q': query});
+    final rows = await fetchAllPages(
+      _api,
+      '/drivers',
+      query: {if (query != null && query.isNotEmpty) 'q': query},
+    );
     return rows.map(Driver.fromJson).toList();
   }
 

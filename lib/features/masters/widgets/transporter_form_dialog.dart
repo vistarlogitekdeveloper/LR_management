@@ -22,11 +22,7 @@ class TransporterFormDialog extends ConsumerStatefulWidget {
   /// "Add new" entry is tapped after typing a name that wasn't in the list.
   final String? initialName;
 
-  const TransporterFormDialog({
-    super.key,
-    this.existing,
-    this.initialName,
-  });
+  const TransporterFormDialog({super.key, this.existing, this.initialName});
 
   /// Returns the saved transporter (created or updated), or null if the form
   /// was dismissed — so a caller can select it straight away.
@@ -235,9 +231,11 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
       // page reload is needed.
       messenger.showSnackBar(
         SnackBar(
-          content: Text(_existing == null
-              ? 'Transporter "${t.name}" added successfully'
-              : 'Transporter "${t.name}" updated successfully'),
+          content: Text(
+            _existing == null
+                ? 'Transporter "${t.name}" added successfully'
+                : 'Transporter "${t.name}" updated successfully',
+          ),
           backgroundColor: AppColors.ok,
         ),
       );
@@ -302,8 +300,11 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
                       ),
                       SizedBox(
                         width: w,
-                        child: _text(_holder, 'Account Holder Name',
-                            required: true),
+                        child: _text(
+                          _holder,
+                          'Account Holder Name',
+                          required: true,
+                        ),
                       ),
                       SizedBox(
                         width: w,
@@ -311,8 +312,12 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
                       ),
                       SizedBox(
                         width: w,
-                        child:
-                            _text(_ifsc, 'IFSC Code', upper: true, required: true),
+                        child: _text(
+                          _ifsc,
+                          'IFSC Code',
+                          upper: true,
+                          required: true,
+                        ),
                       ),
                       SizedBox(width: c.maxWidth, child: _chequeField()),
                       SizedBox(width: c.maxWidth, child: _tdsAttachmentField()),

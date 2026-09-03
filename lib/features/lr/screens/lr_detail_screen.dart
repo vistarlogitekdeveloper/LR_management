@@ -34,7 +34,8 @@ class LrDetailScreen extends ConsumerWidget {
     // lock is bypassed for admins).
     final isSuperAdmin = user?.isSuperAdmin ?? false;
     // The ops user who creates/manages LRs is the one who sends it to Accounts.
-    final canSend = (user?.canCreateLr ?? false) ||
+    final canSend =
+        (user?.canCreateLr ?? false) ||
         (user?.canEditLr ?? false) ||
         (user?.canAdmin ?? false);
     // Visibility perms (migration 072): redact the freight/amount rows and the
@@ -118,8 +119,11 @@ class LrDetailScreen extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.lock_outline_rounded,
-                      size: 48, color: AppColors.slate),
+                  const Icon(
+                    Icons.lock_outline_rounded,
+                    size: 48,
+                    color: AppColors.slate,
+                  ),
                   const SizedBox(height: 12),
                   const Text(
                     "You don't have access to this Lorry Receipt.",
@@ -339,35 +343,41 @@ class LrDetailScreen extends ConsumerWidget {
     }
   }
 
-  Future<String?> _promptReason(BuildContext context) {
+  Future<String?> _promptReason(BuildContext context) async {
+    // Disposed in the finally: showDialog's future completes only after the
+    // route is gone, so the controller is no longer attached to any TextField.
     final ctrl = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Cancellation reason'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Why is this LR cancelled?',
+    try {
+      return await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Cancellation reason'),
+          content: TextField(
+            controller: ctrl,
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: 'Why is this LR cancelled?',
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Back'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final v = ctrl.text.trim();
+                if (v.isEmpty) return;
+                Navigator.pop(ctx, v);
+              },
+              child: const Text('Confirm Cancel'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Back'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final v = ctrl.text.trim();
-              if (v.isEmpty) return;
-              Navigator.pop(ctx, v);
-            },
-            child: const Text('Confirm Cancel'),
-          ),
-        ],
-      ),
-    );
+      );
+    } finally {
+      ctrl.dispose();
+    }
   }
 
   Future<void> _delete(
@@ -520,11 +530,12 @@ class _RightColumn extends StatelessWidget {
     final color = sent ? AppColors.ok : AppColors.slate;
     final label = sent
         ? (lr.sentForPaymentAt != null
-            ? 'Sent for payment · ${formatDate(lr.sentForPaymentAt!)}'
-            : 'Sent for payment')
+              ? 'Sent for payment · ${formatDate(lr.sentForPaymentAt!)}'
+              : 'Sent for payment')
         : 'Not yet sent to Accounts';
-    final icon =
-        sent ? Icons.check_circle_outline : Icons.schedule_send_outlined;
+    final icon = sent
+        ? Icons.check_circle_outline
+        : Icons.schedule_send_outlined;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(

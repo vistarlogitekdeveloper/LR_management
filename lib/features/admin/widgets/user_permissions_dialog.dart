@@ -125,40 +125,40 @@ class _UserPermissionsDialogState extends ConsumerState<UserPermissionsDialog> {
   }
 
   Widget _header() => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: AppColors.line)),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Access — ${widget.user.name}',
-                    style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.ink),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '@${widget.user.username} · ${widget.user.role.label}',
-                    style:
-                        const TextStyle(color: AppColors.slate, fontSize: 12.5),
-                  ),
-                ],
+    padding: const EdgeInsets.all(20),
+    decoration: const BoxDecoration(
+      border: Border(bottom: BorderSide(color: AppColors.line)),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Access — ${widget.user.name}',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.ink,
+                ),
               ),
-            ),
-            IconButton(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.close_rounded, color: AppColors.slate),
-            ),
-          ],
+              const SizedBox(height: 2),
+              Text(
+                '@${widget.user.username} · ${widget.user.role.label}',
+                style: const TextStyle(color: AppColors.slate, fontSize: 12.5),
+              ),
+            ],
+          ),
         ),
-      );
+        IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.close_rounded, color: AppColors.slate),
+        ),
+      ],
+    ),
+  );
 
   static const _umbrellaCodes = {'ADMIN_ACCESS', 'MASTERS_MANAGE'};
   static const _visibilityCodes = {
@@ -210,72 +210,69 @@ class _UserPermissionsDialogState extends ConsumerState<UserPermissionsDialog> {
   }
 
   Widget _sectionHeader(String title) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-        child: Text(
-          title.toUpperCase(),
-          style: const TextStyle(
-            color: AppColors.slate,
-            fontSize: 11.5,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.5,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+    child: Text(
+      title.toUpperCase(),
+      style: const TextStyle(
+        color: AppColors.slate,
+        fontSize: 11.5,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.5,
+      ),
+    ),
+  );
 
   Widget _umbrellaInfo() => Container(
-        margin: const EdgeInsets.fromLTRB(16, 2, 16, 8),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.plum.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.plum.withValues(alpha: 0.15)),
+    margin: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: AppColors.plum.withValues(alpha: 0.05),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: AppColors.plum.withValues(alpha: 0.15)),
+    ),
+    child: const Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.info_outline_rounded, size: 16, color: AppColors.plum),
+        SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            'These override every granular toggle below. If you leave '
+            'ADMIN_ACCESS enabled, the granular restrictions below have no '
+            'effect. Turn ADMIN_ACCESS off first, then use the granular '
+            'toggles to grant back specific access.',
+            style: TextStyle(color: AppColors.slate, fontSize: 12, height: 1.4),
+          ),
         ),
-        child: const Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.info_outline_rounded, size: 16, color: AppColors.plum),
-            SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'These override every granular toggle below. If you leave '
-                'ADMIN_ACCESS enabled, the granular restrictions below have no '
-                'effect. Turn ADMIN_ACCESS off first, then use the granular '
-                'toggles to grant back specific access.',
-                style: TextStyle(
-                    color: AppColors.slate, fontSize: 12, height: 1.4),
-              ),
-            ),
-          ],
-        ),
-      );
+      ],
+    ),
+  );
 
   Widget _visibilityInfo() => Container(
-        margin: const EdgeInsets.fromLTRB(16, 2, 16, 8),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.orange.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.orange.withValues(alpha: 0.18)),
+    margin: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: AppColors.orange.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: AppColors.orange.withValues(alpha: 0.18)),
+    ),
+    child: const Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.visibility_off_outlined, size: 16, color: AppColors.orange),
+        SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            'Turning any of these off hides the corresponding money field '
+            'everywhere — LR list, LR detail, printed LR, MIS Excel export, '
+            'Route master. The backend also blocks the user from silently '
+            'writing a value they can\'t see.',
+            style: TextStyle(color: AppColors.slate, fontSize: 12, height: 1.4),
+          ),
         ),
-        child: const Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.visibility_off_outlined,
-                size: 16, color: AppColors.orange),
-            SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Turning any of these off hides the corresponding money field '
-                'everywhere — LR list, LR detail, printed LR, MIS Excel export, '
-                'Route master. The backend also blocks the user from silently '
-                'writing a value they can\'t see.',
-                style: TextStyle(
-                    color: AppColors.slate, fontSize: 12, height: 1.4),
-              ),
-            ),
-          ],
-        ),
-      );
+      ],
+    ),
+  );
 
   Widget _toggleTile(PermissionToggle t) {
     final value = _values[t.code] ?? t.effective;
@@ -284,8 +281,10 @@ class _UserPermissionsDialogState extends ConsumerState<UserPermissionsDialog> {
       onChanged: _saving ? null : (v) => _onToggle(t, v),
       title: Text(
         t.label,
-        style:
-            const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink),
+        style: const TextStyle(
+          fontWeight: FontWeight.w700,
+          color: AppColors.ink,
+        ),
       ),
       subtitle: value != t.roleDefault
           ? Text(
@@ -312,10 +311,10 @@ class _UserPermissionsDialogState extends ConsumerState<UserPermissionsDialog> {
   Future<bool> _confirmUmbrellaOff(String code) async {
     final message = code == 'ADMIN_ACCESS'
         ? 'Denying ADMIN_ACCESS will demote this admin to only the specific '
-            'granular permissions you leave enabled below. Continue?'
+              'granular permissions you leave enabled below. Continue?'
         : 'Denying MASTERS_MANAGE removes blanket master access — only the '
-            'granular master permissions you leave enabled below will apply. '
-            'Continue?';
+              'granular master permissions you leave enabled below will apply. '
+              'Continue?';
     final res = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -337,25 +336,25 @@ class _UserPermissionsDialogState extends ConsumerState<UserPermissionsDialog> {
   }
 
   Widget _footer() => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: AppColors.line)),
+    padding: const EdgeInsets.all(20),
+    decoration: const BoxDecoration(
+      border: Border(top: BorderSide(color: AppColors.line)),
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        AppButton(
+          label: 'Cancel',
+          kind: BtnKind.ghost,
+          onPressed: () => Navigator.pop(context),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            AppButton(
-              label: 'Cancel',
-              kind: BtnKind.ghost,
-              onPressed: () => Navigator.pop(context),
-            ),
-            const SizedBox(width: 10),
-            AppButton(
-              label: _saving ? 'Saving…' : 'Save access',
-              icon: Icons.save_outlined,
-              onPressed: (_saving || _loading || _error != null) ? null : _save,
-            ),
-          ],
+        const SizedBox(width: 10),
+        AppButton(
+          label: _saving ? 'Saving…' : 'Save access',
+          icon: Icons.save_outlined,
+          onPressed: (_saving || _loading || _error != null) ? null : _save,
         ),
-      );
+      ],
+    ),
+  );
 }

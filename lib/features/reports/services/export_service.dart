@@ -48,15 +48,19 @@ class ExportService {
       // In / Out are split into separate date and (24-hour) time columns.
       'In Date', 'In Time', 'Out Date', 'Out Time', 'Route',
       if (canViewTransporterRate) ...[
-        'Freight', 'Door Delivery', 'Handling', 'Insurance', 'Mathadi',
-        'Advance', 'Total', 'Balance',
+        'Freight',
+        'Door Delivery',
+        'Handling',
+        'Insurance',
+        'Mathadi',
+        'Advance',
+        'Total',
+        'Balance',
       ],
       if (canViewVistarMargin) 'Vistar Margin',
       'Pay Type', 'Status', 'EWB',
     ];
-    sheet.appendRow(
-      headers.map<CellValue?>((h) => TextCellValue(h)).toList(),
-    );
+    sheet.appendRow(headers.map<CellValue?>((h) => TextCellValue(h)).toList());
 
     // The list arrives latest-first (created_at DESC); reverse it so the sheet
     // reads oldest → newest, i.e. the latest LR is the LAST row.
@@ -74,10 +78,14 @@ class ExportService {
         // Date and 24-hour time in their own columns (blank when not recorded).
         TextCellValue(lr.inDateTime != null ? formatDate(lr.inDateTime!) : ''),
         TextCellValue(
-            lr.inDateTime != null ? formatTime24(lr.inDateTime!) : ''),
-        TextCellValue(lr.outDateTime != null ? formatDate(lr.outDateTime!) : ''),
+          lr.inDateTime != null ? formatTime24(lr.inDateTime!) : '',
+        ),
         TextCellValue(
-            lr.outDateTime != null ? formatTime24(lr.outDateTime!) : ''),
+          lr.outDateTime != null ? formatDate(lr.outDateTime!) : '',
+        ),
+        TextCellValue(
+          lr.outDateTime != null ? formatTime24(lr.outDateTime!) : '',
+        ),
         TextCellValue(lr.route),
         if (canViewTransporterRate) ...[
           DoubleCellValue(lr.freight.freight),
@@ -104,7 +112,9 @@ class ExportService {
     buf.writeln('<ENVELOPE>');
     buf.writeln('  <HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER>');
     buf.writeln('  <BODY><IMPORTDATA>');
-    buf.writeln('    <REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME></REQUESTDESC>');
+    buf.writeln(
+      '    <REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME></REQUESTDESC>',
+    );
     buf.writeln('    <REQUESTDATA>');
     for (final lr in lrs) {
       buf.writeln('      <TALLYMESSAGE>');
@@ -112,7 +122,9 @@ class ExportService {
       buf.writeln('          <DATE>${formatDate(lr.date)}</DATE>');
       buf.writeln('          <VOUCHERNUMBER>${lr.number}</VOUCHERNUMBER>');
       buf.writeln('          <PARTYNAME>${lr.consignor.name}</PARTYNAME>');
-      buf.writeln('          <AMOUNT>${lr.freight.total.toStringAsFixed(2)}</AMOUNT>');
+      buf.writeln(
+        '          <AMOUNT>${lr.freight.total.toStringAsFixed(2)}</AMOUNT>',
+      );
       buf.writeln('        </VOUCHER>');
       buf.writeln('      </TALLYMESSAGE>');
     }
@@ -126,26 +138,35 @@ class ExportService {
   static Future<void> exportPendingFreightCsv(List<LorryReceipt> lrs) async {
     final pending = lrs.where((lr) => lr.freight.balance > 0).toList();
     final buf = StringBuffer();
-    buf.writeln(['LR No', 'Customer', 'Total', 'Advance', 'Balance', 'Pay Type']
-        .join(','));
+    buf.writeln(
+      [
+        'LR No',
+        'Customer',
+        'Total',
+        'Advance',
+        'Balance',
+        'Pay Type',
+      ].join(','),
+    );
     for (final lr in pending) {
-      buf.writeln([
-        _csv(lr.number),
-        _csv(lr.consignor.name),
-        lr.freight.total.toStringAsFixed(0),
-        lr.freight.advance.toStringAsFixed(0),
-        lr.freight.balance.toStringAsFixed(0),
-        _csv(lr.payType.label),
-      ].join(','));
+      buf.writeln(
+        [
+          _csv(lr.number),
+          _csv(lr.consignor.name),
+          lr.freight.total.toStringAsFixed(0),
+          lr.freight.advance.toStringAsFixed(0),
+          lr.freight.balance.toStringAsFixed(0),
+          _csv(lr.payType.label),
+        ].join(','),
+      );
     }
     final bytes = Uint8List.fromList(buf.toString().codeUnits);
     await _share(bytes, 'vistar_pending_${_now()}.csv');
   }
 
   static String _csv(String value) {
-    final needsQuotes = value.contains(',') ||
-        value.contains('"') ||
-        value.contains('\n');
+    final needsQuotes =
+        value.contains(',') || value.contains('"') || value.contains('\n');
     if (!needsQuotes) return value;
     final escaped = value.replaceAll('"', '""');
     return '"$escaped"';

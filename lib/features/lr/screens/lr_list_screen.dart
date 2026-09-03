@@ -35,9 +35,9 @@ Future<void> _confirmDeleteLr(
   try {
     await ref.read(lrListProvider.notifier).remove(lr.id);
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('LR ${lr.number} deleted')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('LR ${lr.number} deleted')));
     }
   } catch (e) {
     if (context.mounted) MasterActions.showError(context, e);
@@ -86,10 +86,11 @@ class LrListScreen extends ConsumerWidget {
     // Transporter-side amount (the Freight column) hides without the perm.
     final canViewTransporterRate = user?.canViewTransporterRate ?? false;
     // The ops user who creates/manages LRs is the one who sends it to Accounts.
-    final canSend = (user?.canCreateLr ?? false) ||
+    final canSend =
+        (user?.canCreateLr ?? false) ||
         (user?.canEditLr ?? false) ||
         (user?.canAdmin ?? false);
-    final mobile = MediaQuery.of(context).size.width < 600;
+    final mobile = MediaQuery.sizeOf(context).width < 600;
 
     return Scaffold(
       backgroundColor: AppColors.mist,
@@ -97,7 +98,9 @@ class LrListScreen extends ConsumerWidget {
         children: [
           AppTopbar(
             title: 'Lorry Receipts',
-            subtitle: loading && lrs.isEmpty ? 'Loading…' : '${lrs.length} records',
+            subtitle: loading && lrs.isEmpty
+                ? 'Loading…'
+                : '${lrs.length} records',
             actions: [
               AppButton(
                 label: 'Create LR',
@@ -225,7 +228,9 @@ class _FilterBar extends ConsumerWidget {
           hintText: 'All regions',
           dialogTitle: 'Select region',
           clearable: true,
-          onChanged: (v) => ref.read(lrFilterProvider.notifier).update(
+          onChanged: (v) => ref
+              .read(lrFilterProvider.notifier)
+              .update(
                 (s) => v == null
                     ? s.copyWith(clearRegion: true)
                     : s.copyWith(region: v),
@@ -235,7 +240,9 @@ class _FilterBar extends ConsumerWidget {
         final dateRange = _DateRangeField(
           from: filter.fromDate,
           to: filter.toDate,
-          onChanged: (r) => ref.read(lrFilterProvider.notifier).update(
+          onChanged: (r) => ref
+              .read(lrFilterProvider.notifier)
+              .update(
                 (s) => r == null
                     ? s.copyWith(clearDates: true)
                     : s.copyWith(fromDate: r.start, toDate: r.end),
@@ -308,8 +315,9 @@ class _DateRangeField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasValue = from != null && to != null;
-    final text =
-        hasValue ? '${formatDate(from!)} – ${formatDate(to!)}' : 'All dates';
+    final text = hasValue
+        ? '${formatDate(from!)} – ${formatDate(to!)}'
+        : 'All dates';
     return InkWell(
       borderRadius: BorderRadius.circular(10),
       onTap: () async {
@@ -318,8 +326,9 @@ class _DateRangeField extends StatelessWidget {
           context: context,
           firstDate: DateTime(now.year - 3),
           lastDate: DateTime(now.year + 1, 12, 31),
-          initialDateRange:
-              hasValue ? DateTimeRange(start: from!, end: to!) : null,
+          initialDateRange: hasValue
+              ? DateTimeRange(start: from!, end: to!)
+              : null,
           helpText: 'Filter LRs by date',
           saveText: 'Apply',
         );
@@ -413,7 +422,8 @@ class _LrTableState extends State<_LrTable> {
     // position back to the top.
     final old = oldWidget.lrs;
     final now = widget.lrs;
-    final headChanged = old.isEmpty != now.isEmpty ||
+    final headChanged =
+        old.isEmpty != now.isEmpty ||
         (old.isNotEmpty && now.isNotEmpty && old.first.id != now.first.id);
     if (headChanged || now.length < old.length) {
       _visible = _pageSize;

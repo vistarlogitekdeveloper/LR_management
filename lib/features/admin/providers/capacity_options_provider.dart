@@ -40,7 +40,8 @@ class CapacityOptionsNotifier extends StateNotifier<List<CapacityOption>> {
 
 final capacityOptionsProvider =
     StateNotifierProvider<CapacityOptionsNotifier, List<CapacityOption>>(
-      (ref) => CapacityOptionsNotifier(ref.watch(capacityOptionsRepositoryProvider)),
+      (ref) =>
+          CapacityOptionsNotifier(ref.watch(capacityOptionsRepositoryProvider)),
     );
 
 /// First-load flag — `true` until the initial fetch settles (cleared by the

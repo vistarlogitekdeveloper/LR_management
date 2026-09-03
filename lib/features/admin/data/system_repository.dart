@@ -26,8 +26,8 @@ class SystemRepository {
     final regionCode = region is Map
         ? (region['short_code'] as String?) ?? ''
         : (numbering['region_short_code'] as String?) ??
-            (numbering['short_code'] as String?) ??
-            '';
+              (numbering['short_code'] as String?) ??
+              '';
     final regionName = region is Map
         ? (region['name'] as String?) ?? ''
         : (numbering['region_name'] as String?) ?? '';
@@ -37,7 +37,8 @@ class SystemRepository {
       lrPrefix: numbering['prefix'] as String?,
       lrFormat: numbering['format_template'] as String?,
       nextLrNumber:
-          int.tryParse('${numbering['next_sequence'] ?? ''}') ?? def.nextLrNumber,
+          int.tryParse('${numbering['next_sequence'] ?? ''}') ??
+          def.nextLrNumber,
       lrRegionId: numbering['region_id'] as String?,
       lrRegionCode: regionCode,
       lrRegionName: regionName,
@@ -80,25 +81,31 @@ class SystemRepository {
   }
 
   Future<void> saveNumbering(SystemConfig cfg) async {
-    await _api.dio.patch('/system/numbering', data: {
-      'prefix': cfg.lrPrefix,
-      'format_template': cfg.lrFormat,
-      'reset_period': cfg.lrResetPeriod,
-      // Which row to edit — null targets the tenant-wide fallback row.
-      'region_id': cfg.lrRegionId,
-    });
+    await _api.dio.patch(
+      '/system/numbering',
+      data: {
+        'prefix': cfg.lrPrefix,
+        'format_template': cfg.lrFormat,
+        'reset_period': cfg.lrResetPeriod,
+        // Which row to edit — null targets the tenant-wide fallback row.
+        'region_id': cfg.lrRegionId,
+      },
+    );
   }
 
   Future<void> saveFormat(SystemConfig cfg) async {
-    await _api.dio.patch('/system/lr-format', data: {
-      'company_name': cfg.companyName,
-      'tagline': cfg.companyTagline,
-      'terms_md': cfg.termsText,
-      'footer_md': cfg.footerText,
-      'show_ewb': cfg.showEwb,
-      'show_insurance': cfg.showInsurance,
-      'show_mathadi': cfg.showMathadi,
-      'show_vistar_margin': cfg.showVistarMargin,
-    });
+    await _api.dio.patch(
+      '/system/lr-format',
+      data: {
+        'company_name': cfg.companyName,
+        'tagline': cfg.companyTagline,
+        'terms_md': cfg.termsText,
+        'footer_md': cfg.footerText,
+        'show_ewb': cfg.showEwb,
+        'show_insurance': cfg.showInsurance,
+        'show_mathadi': cfg.showMathadi,
+        'show_vistar_margin': cfg.showVistarMargin,
+      },
+    );
   }
 }
