@@ -17,17 +17,35 @@ import 'master_actions.dart';
 /// instead of the generic MasterFormDialog.
 class TransporterFormDialog extends ConsumerStatefulWidget {
   final Transporter? existing;
-  const TransporterFormDialog({super.key, this.existing});
 
-  static Future<bool?> show(BuildContext context, {Transporter? existing}) {
-    return showDialog<bool>(
+  /// Pre-fills the name on a fresh form — used when the transporter picker's
+  /// "Add new" entry is tapped after typing a name that wasn't in the list.
+  final String? initialName;
+
+  const TransporterFormDialog({
+    super.key,
+    this.existing,
+    this.initialName,
+  });
+
+  /// Returns the saved transporter (created or updated), or null if the form
+  /// was dismissed — so a caller can select it straight away.
+  static Future<Transporter?> show(
+    BuildContext context, {
+    Transporter? existing,
+    String? initialName,
+  }) {
+    return showDialog<Transporter>(
       context: context,
       builder: (_) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         insetPadding: const EdgeInsets.all(24),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720, maxHeight: 760),
-          child: TransporterFormDialog(existing: existing),
+          child: TransporterFormDialog(
+            existing: existing,
+            initialName: initialName,
+          ),
         ),
       ),
     );
@@ -63,7 +81,7 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
   void initState() {
     super.initState();
     final t = _existing;
-    _name = TextEditingController(text: t?.name ?? '');
+    _name = TextEditingController(text: t?.name ?? widget.initialName ?? '');
     _pan = TextEditingController(text: t?.pan ?? '');
     _bank = TextEditingController(text: t?.bankName ?? '');
     _holder = TextEditingController(text: t?.accountHolder ?? '');
@@ -223,7 +241,7 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
           backgroundColor: AppColors.ok,
         ),
       );
-      navigator.pop(true);
+      navigator.pop(t);
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);

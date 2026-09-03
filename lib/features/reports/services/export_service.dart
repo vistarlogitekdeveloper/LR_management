@@ -19,6 +19,7 @@ class ExportService {
     List<LorryReceipt> lrs, {
     bool canViewTransporterRate = true,
     bool canViewVistarMargin = true,
+    String? filenameSuffix,
   }) async {
     final bytes = buildLrsWorkbook(
       lrs,
@@ -26,7 +27,8 @@ class ExportService {
       canViewVistarMargin: canViewVistarMargin,
     );
     if (bytes != null) {
-      await shareBytes(bytes, 'vistar_lrs_${_now()}.xlsx');
+      final suffix = filenameSuffix == null ? '' : '_$filenameSuffix';
+      await shareBytes(bytes, 'vistar_lrs${suffix}_${_now()}.xlsx');
     }
   }
 

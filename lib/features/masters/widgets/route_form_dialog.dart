@@ -21,8 +21,11 @@ class RouteFormDialog extends ConsumerStatefulWidget {
   final RouteMaster? existing;
   const RouteFormDialog({super.key, this.existing});
 
-  static Future<bool?> show(BuildContext context, {RouteMaster? existing}) {
-    return showDialog<bool>(
+  /// Returns the saved route (created or updated), or null if the form was
+  /// dismissed — so a caller can select it straight away.
+  static Future<RouteMaster?> show(BuildContext context,
+      {RouteMaster? existing}) {
+    return showDialog<RouteMaster>(
       context: context,
       builder: (_) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -154,13 +157,17 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
         toAddress: _toLoc?.address ?? '',
         version: _existing?.version ?? 0,
       );
+      final RouteMaster saved;
       if (_existing == null) {
-        await n.add(route);
+        // The create response carries the backend-assigned id, so hand that
+        // copy back (a caller may select it) rather than the local one.
+        saved = await n.add(route);
       } else {
         await n.update(route);
+        saved = route;
       }
       if (!mounted) return;
-      navigator.pop(true);
+      navigator.pop(saved);
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);

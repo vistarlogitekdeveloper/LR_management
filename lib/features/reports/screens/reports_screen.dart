@@ -66,6 +66,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
   // exists (that stays role-gated via canViewAmounts).
   late final bool _showFreight; // transporter-side amounts (freight/total/…)
   late final bool _showMargin; // Vistar margin
+  // Date range chosen in the "Download Excel" dialog; null = all dates. Kept so
+  // the picker reopens on the last range the user exported.
+  DateTimeRange? _exportRange;
 
   @override
   void initState() {
@@ -101,14 +104,47 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
                 kind: BtnKind.soft,
                 onPressed: () async {
                   final messenger = ScaffoldMessenger.of(context);
+                  // Ask for an optional date range first — the sheet then holds
+                  // only the LRs dispatched inside it (null = every LR).
+                  final choice = await showDialog<_ExportRangeChoice>(
+                    context: context,
+                    builder: (_) => _ExportRangeDialog(
+                      lrs: lrs,
+                      initialRange: _exportRange,
+                    ),
+                  );
+                  if (choice == null) return; // cancelled
+                  setState(() => _exportRange = choice.range);
+                  final rows = lrsInExportRange(lrs, choice.range);
+                  if (rows.isEmpty) {
+                    if (!context.mounted) return;
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('No LRs in the selected date range'),
+                      ),
+                    );
+                    return;
+                  }
                   await ExportService.exportLrsExcel(
-                    lrs,
+                    rows,
                     canViewTransporterRate: _showFreight,
                     canViewVistarMargin: _showMargin,
+                    filenameSuffix: choice.range == null
+                        ? null
+                        : '${_fileStamp(choice.range!.start)}-'
+                            '${_fileStamp(choice.range!.end)}',
                   );
                   if (!context.mounted) return;
                   messenger.showSnackBar(
-                    const SnackBar(content: Text('LRs exported as Excel')),
+                    SnackBar(
+                      content: Text(
+                        choice.range == null
+                            ? '${rows.length} LRs exported as Excel'
+                            : '${rows.length} LRs exported for '
+                                '${formatDate(choice.range!.start)} – '
+                                '${formatDate(choice.range!.end)}',
+                      ),
+                    ),
                   );
                 },
               ),
@@ -1186,6 +1222,127 @@ class _BreakdownCard extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// LRs whose dispatch date falls inside [range] (both ends inclusive, whole
+/// days). A null range means "no filter" — every LR is exported.
+List<LorryReceipt> lrsInExportRange(
+  List<LorryReceipt> lrs,
+  DateTimeRange? range,
+) {
+  if (range == null) return lrs;
+  final from = DateTime(range.start.year, range.start.month, range.start.day);
+  final to = DateTime(range.end.year, range.end.month, range.end.day)
+      .add(const Duration(days: 1));
+  return lrs
+      .where((lr) => !lr.date.isBefore(from) && lr.date.isBefore(to))
+      .toList();
+}
+
+String _fileStamp(DateTime d) =>
+    '${d.year}${d.month.toString().padLeft(2, '0')}'
+    '${d.day.toString().padLeft(2, '0')}';
+
+/// Result of [_ExportRangeDialog] — a wrapper so a null [range] ("All dates")
+/// stays distinguishable from a cancelled dialog.
+class _ExportRangeChoice {
+  final DateTimeRange? range;
+  const _ExportRangeChoice(this.range);
+}
+
+/// Date-range chooser shown before the Reports "Download Excel" export.
+class _ExportRangeDialog extends StatefulWidget {
+  final List<LorryReceipt> lrs;
+  final DateTimeRange? initialRange;
+  const _ExportRangeDialog({required this.lrs, this.initialRange});
+
+  @override
+  State<_ExportRangeDialog> createState() => _ExportRangeDialogState();
+}
+
+class _ExportRangeDialogState extends State<_ExportRangeDialog> {
+  DateTimeRange? _range;
+
+  @override
+  void initState() {
+    super.initState();
+    _range = widget.initialRange;
+  }
+
+  Future<void> _pick() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year + 1, 12, 31),
+      initialDateRange: _range,
+      helpText: 'Export date range',
+      saveText: 'Apply',
+    );
+    if (picked != null) setState(() => _range = picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final count = lrsInExportRange(widget.lrs, _range).length;
+    return AlertDialog(
+      title: const Text('Download Excel'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Pick a date range, or export every LR.',
+            style: TextStyle(color: AppColors.slate, fontSize: 13),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _pick,
+                icon: const Icon(Icons.date_range_rounded, size: 16),
+                label: Text(
+                  _range == null
+                      ? 'All dates'
+                      : '${formatDate(_range!.start)} – '
+                          '${formatDate(_range!.end)}',
+                ),
+              ),
+              if (_range != null)
+                TextButton(
+                  onPressed: () => setState(() => _range = null),
+                  child: const Text('Clear'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '$count of ${widget.lrs.length} LRs will be exported.',
+            style: const TextStyle(
+              color: AppColors.slate,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: count == 0
+              ? null
+              : () => Navigator.pop(context, _ExportRangeChoice(_range)),
+          child: const Text('Download'),
+        ),
+      ],
     );
   }
 }

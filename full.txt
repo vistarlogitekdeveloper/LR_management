@@ -1,0 +1,25 @@
+TOP KEYS: [ 'info', 'item', 'auth', 'event', 'variable' ]
+INFO: {"_postman_id":"1caa92ef-b621-4759-8806-86edd4f98c06","name":"SCT External APIs","description":"[Flow Diagram](https://drive.google.com/file/d/1o5aVMBqLyQ9Pe_vlui8BcwEOtLcd7BH8/view)","schema":"https://schema.getpostman.com/json/collection/v2.1.0/collection.json","_exporter_id":"38510115"}
+[FOLDER] Authentication  descLen=450
+  [REQ] Login | POST {{SCT_BASE_URI}}/login | responses=2 | descLen=230
+[FOLDER] Consent  descLen=0
+  [REQ] Check Consent Status | GET {{SCT_BASE_URI}}/consents?tel=xxxxxxxxxx | responses=2 | descLen=551
+[FOLDER] Trips  descLen=0
+  [FOLDER] Others  descLen=0
+    [REQ] Get Milestones | GET {{SCT_BASE_URI}}/status/milestones/:tripId | responses=1 | descLen=220
+    [REQ] End Trip by Custom Paramater | POST {{SCT_BASE_URI}}/trips/end | responses=2 | descLen=503
+    [REQ] Get Public Link By Custom Parameter | POST {{SCT_BASE_URI}}/trips/getpubliclink | responses=1 | descLen=592
+    [REQ] Trip's Current Status | GET {{SCT_BASE_URI}}/trips/tripinfo?custom_parameter=invoice&invoice=27250/27497 | responses=1 | descLen=785
+    [REQ] Trip Status Update | POST {{SCT_BASE_URI}}/trips/app_status_update | responses=0 | descLen=423
+  [REQ] Start Trip | POST {{SCT_BASE_URI}}/trips/start | responses=5 | descLen=2384
+  [REQ] Submit Trip | POST {{SCT_BASE_URI}}/trips/submit | responses=2 | descLen=2098
+  [REQ] Fetch Trips | GET {{SCT_BASE_URI}}/trips?submit=true&addConsents=true&pageno=1&pagesize=200&starttime=1659292200000&endtime=1660069799059 | responses=1 | descLen=344
+  [REQ] Update Trip | PUT {{SCT_BASE_URI}}/trips/ | responses=1 | descLen=612
+  [REQ] End Trip | POST {{SCT_BASE_URI}}/trips/end/:tripid | responses=4 | descLen=521
+  [REQ] Generate Public Link | POST {{SCT_BASE_URI}}/trips/generatepubliclink | responses=1 | descLen=296
+[FOLDER] Locations  descLen=1016
+  [FOLDER] DEPRECATED  descLen=0
+    [REQ] [DEPRECATED] Fetch All Locations for Duration | GET {{SCT_BASE_URI}}/status/allstatus | responses=1 | descLen=2439
+  [REQ] Locations | GET {{SCT_BASE_URI}}/status?tripId=5b2cc94782befa622a3a6126 | responses=1 | descLen=1871
+  [REQ] Locations by Custom Parameter | GET {{SCT_BASE_URI}}/status/by_custom_parameter?custom_parameter=lr_number&lr_number=123456&limit=1 | responses=1 | descLen=911
+[FOLDER] Notes  descLen=1588

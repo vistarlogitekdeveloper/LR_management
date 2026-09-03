@@ -32,6 +32,8 @@ import '../../users/basic_users_provider.dart';
 import '../../masters/providers/part_descriptions_provider.dart';
 import '../../masters/widgets/master_actions.dart';
 import '../../masters/widgets/party_form_dialog.dart';
+import '../../masters/widgets/route_form_dialog.dart';
+import '../../masters/widgets/transporter_form_dialog.dart';
 import '../../shell/widgets/app_topbar.dart';
 import '../data/lr_repository.dart';
 import '../providers/lr_providers.dart';
@@ -518,6 +520,19 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   bool get _canViewVistarMargin =>
       ref.read(currentUserProvider)?.canViewVistarMargin ?? false;
 
+  // Master-manage permissions. They decide whether the Vehicle / Driver /
+  // Transporter / Route pickers offer an "Add new …" entry, so an operator who
+  // may only pick from the masters never sees a create path the backend would
+  // refuse anyway.
+  bool get _canManageVehicles =>
+      ref.read(currentUserProvider)?.canManageVehicles ?? false;
+  bool get _canManageDrivers =>
+      ref.read(currentUserProvider)?.canManageDrivers ?? false;
+  bool get _canManageTransporters =>
+      ref.read(currentUserProvider)?.canManageTransporters ?? false;
+  bool get _canManageRoutes =>
+      ref.read(currentUserProvider)?.canManageRoutes ?? false;
+
   /// Auto-calculated Vistar margin = route customer rate − freight.
   /// (Zero when the selected route has no customer rate set.)
   double get _vistarMargin {
@@ -862,22 +877,28 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     });
   }
 
-  Future<void> _addVehicleInline() async {
+  /// Creates a vehicle without leaving the LR and selects it. Reached from the
+  /// "Add Vehicle" button and from the vehicle picker's "Add new" entry, which
+  /// passes whatever was typed in its search box as [prefillNumber].
+  /// Returns the created vehicle (null if the form was dismissed).
+  Future<Vehicle?> _addVehicleInline([String prefillNumber = '']) async {
     const none = '(None)';
     final vehicleTypes = lookupList(_lookups, 'VEHICLE_TYPE');
     final drivers = ref.read(driversProvider);
     final transporters = ref.read(transportersProvider);
+    Vehicle? saved;
 
     await MasterFormDialog.show(
       context: context,
       title: 'New Vehicle',
       subtitle: 'Adds to your fleet and selects it on this LR',
       fields: [
-        const FormFieldSpec(
+        FormFieldSpec(
           name: 'number',
           label: 'Vehicle Number',
           required: true,
           uppercase: true,
+          initialValue: prefillNumber.trim().toUpperCase(),
         ),
         FormFieldSpec(
           name: 'type',
@@ -949,6 +970,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
           final full =
               _byId(ref.read(vehiclesProvider), created.id, (x) => x.id) ??
               created;
+          saved = full;
           setState(() => _onVehicleSelected(full));
           return true;
         } catch (e) {
@@ -957,7 +979,77 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         }
       },
     );
+    return saved;
   }
+
+  /// Creates a driver from the driver picker's "Add new" entry (same fields as
+  /// the Drivers master screen) and returns it so the picker selects it.
+  Future<Driver?> _addDriverInline([String prefillName = '']) async {
+    Driver? saved;
+    await MasterFormDialog.show(
+      context: context,
+      title: 'New Driver',
+      subtitle: 'Adds to the driver master and selects it on this LR',
+      fields: [
+        FormFieldSpec(
+          name: 'name',
+          label: 'Driver Name',
+          required: true,
+          initialValue: prefillName.trim(),
+        ),
+        const FormFieldSpec(
+          name: 'mobile',
+          label: 'Mobile',
+          required: true,
+          type: FieldType.number,
+          maxLength: 12,
+        ),
+        const FormFieldSpec(
+          name: 'licenseNo',
+          label: 'License Number',
+          required: true,
+        ),
+        const FormFieldSpec(
+          name: 'licenseExpiry',
+          label: 'License Expiry (YYYY-MM-DD)',
+        ),
+        const FormFieldSpec(
+          name: 'address',
+          label: 'Address',
+          type: FieldType.multiline,
+        ),
+      ],
+      onSave: (values) async {
+        try {
+          final expiry = (values['licenseExpiry'] ?? '').trim();
+          saved = await ref.read(driversProvider.notifier).add(
+                Driver(
+                  id: const Uuid().v4(),
+                  name: values['name'] ?? '',
+                  mobile: values['mobile'] ?? '',
+                  licenseNo: values['licenseNo'] ?? '',
+                  licenseExpiry: expiry.isEmpty ? null : expiry,
+                  address: values['address'] ?? '',
+                ),
+              );
+          return true;
+        } catch (e) {
+          if (mounted) MasterActions.showError(context, e);
+          return false;
+        }
+      },
+    );
+    return saved;
+  }
+
+  /// Transporter and route creation reuse the masters' own dialogs — both carry
+  /// more than the generic form can express (bank details + cheque upload; map
+  /// pins for From/To), and both now hand the saved record back for selection.
+  Future<Transporter?> _addTransporterInline([String prefillName = '']) =>
+      TransporterFormDialog.show(context, initialName: prefillName.trim());
+
+  Future<RouteMaster?> _addRouteInline() =>
+      RouteFormDialog.show(context);
 
   void _applyTemplate(LrTemplate t) {
     final p = t.payload;
@@ -1649,6 +1741,10 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
     final canViewTransporterRate = _canViewTransporterRate;
     final canViewVistarMargin = _canViewVistarMargin;
+    final canAddVehicle = _canManageVehicles;
+    final canAddDriver = _canManageDrivers;
+    final canAddTransporter = _canManageTransporters;
+    final canAddRoute = _canManageRoutes;
 
     // Preview LR number: prefer the backend-authoritative value (mirrors the
     // real counter, incl. the auto-heal max-used bump); fall back to the local
@@ -1779,13 +1875,15 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                             SectionTitle(
                               icon: Icons.local_shipping_outlined,
                               title: 'Vehicle & Route',
-                              trailing: AppButton(
-                                label: 'Add Vehicle',
-                                icon: Icons.add_rounded,
-                                kind: BtnKind.soft,
-                                small: true,
-                                onPressed: _addVehicleInline,
-                              ),
+                              trailing: canAddVehicle
+                                  ? AppButton(
+                                      label: 'Add Vehicle',
+                                      icon: Icons.add_rounded,
+                                      kind: BtnKind.soft,
+                                      small: true,
+                                      onPressed: () => _addVehicleInline(),
+                                    )
+                                  : null,
                             ),
                             _grid(2, [
                               LabeledField(
@@ -1802,6 +1900,10 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                       : '${v.number} · ${v.type}',
                                   hintText: 'Select vehicle',
                                   dialogTitle: 'Select Vehicle',
+                                  onAddNew: canAddVehicle
+                                      ? _addVehicleInline
+                                      : null,
+                                  addNewLabel: 'Add new vehicle',
                                   onChanged: (v) =>
                                       setState(() => _onVehicleSelected(v)),
                                 ),
@@ -1816,6 +1918,10 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                   subtitleOf: (d) => d.mobile,
                                   hintText: 'Select driver',
                                   dialogTitle: 'Select Driver',
+                                  onAddNew: canAddDriver
+                                      ? _addDriverInline
+                                      : null,
+                                  addNewLabel: 'Add new driver',
                                   onChanged: (v) => setState(() => _driver = v),
                                 ),
                               ),
@@ -1832,6 +1938,10 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                   subtitleOf: (t) => t.pan,
                                   hintText: 'Select transporter',
                                   dialogTitle: 'Select Transporter',
+                                  onAddNew: canAddTransporter
+                                      ? _addTransporterInline
+                                      : null,
+                                  addNewLabel: 'Add new transporter',
                                   onChanged: (v) =>
                                       setState(() => _selectTransporter(v)),
                                 ),
@@ -1848,6 +1958,13 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                   labelOf: (r) => r.name,
                                   hintText: 'Select route',
                                   dialogTitle: 'Select Route',
+                                  // The route form has no single "name" field
+                                  // (From/To are picked on a map), so the typed
+                                  // text isn't carried over.
+                                  onAddNew: canAddRoute
+                                      ? (_) => _addRouteInline()
+                                      : null,
+                                  addNewLabel: 'Add new route',
                                   onChanged: (v) =>
                                       setState(() => _selectRoute(v)),
                                 ),
