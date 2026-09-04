@@ -1,0 +1,188 @@
+{
+  "success": true,
+  "data": {
+    "scanId": null,
+    "readable": true,
+    "profile": "lr-consignment",
+    "engine": "tesseract",
+    "confidence": 82,
+    "draft": {
+      "lr_date": "2026-06-22",
+      "vehicle_id": "v-1",
+      "transporter_id": "t-9",
+      "to_city": "Be Billed",
+      "pay_type_id": "pt-1",
+      "freight": 75000
+    },
+    "review": {
+      "lrDate": {
+        "value": "2026-06-22",
+        "confidence": 0.745,
+        "needsReview": true,
+        "source": "label:LR Date",
+        "reason": "day-first (day > 12, unambiguous)"
+      },
+      "consignorName": {
+        "value": "ACME AUTO COMPONENTS PVT LTD",
+        "confidence": 0.68,
+        "needsReview": true,
+        "source": "label:Consignor Name",
+        "reason": "free text beside label"
+      },
+      "consigneeName": {
+        "value": "VISTAR LOGITEK PVT LTD",
+        "confidence": 0.67,
+        "needsReview": true,
+        "source": "label:Consignee Name",
+        "reason": "free text beside label"
+      },
+      "toLocation": {
+        "value": "Be Billed",
+        "confidence": 0.672,
+        "needsReview": true,
+        "source": "label:To",
+        "reason": "free text beside label",
+        "alternatives": [
+          {
+            "value": "Chakan",
+            "confidence": 0.379,
+            "source": "label:To"
+          }
+        ]
+      },
+      "vehicleNo": {
+        "value": "MH12AB1234",
+        "confidence": 0.804,
+        "needsReview": false,
+        "source": "label:Vehicle No",
+        "reason": "classic plate"
+      },
+      "freightAmount": {
+        "value": 75000,
+        "confidence": 0.859,
+        "needsReview": false,
+        "source": "label:Freight Amount",
+        "reason": "numeric amount"
+      },
+      "consignor_id": {
+        "value": null,
+        "confidence": 0,
+        "needsReview": true,
+        "source": "master-lookup",
+        "reason": "no consignor GSTIN or name could be read"
+      },
+      "consignee_id": {
+        "value": null,
+        "confidence": 0,
+        "needsReview": true,
+        "source": "master-lookup",
+        "reason": "no consignee GSTIN or name could be read"
+      },
+      "vehicle_id": {
+        "value": "v-1",
+        "confidence": 0.92,
+        "needsReview": false,
+        "source": "master-lookup",
+        "reason": "registration number matched a vehicle in the master"
+      },
+      "transporter_id": {
+        "value": null,
+        "confidence": 0,
+        "needsReview": true,
+        "source": "master-lookup",
+        "reason": "no transporter name could be read"
+      },
+      "route_id": {
+        "value": null,
+        "confidence": 0,
+        "needsReview": true,
+        "source": "master-lookup",
+        "reason": "need both cities to match a route"
+      },
+      "pay_type_id": {
+        "value": "pt-1",
+        "confidence": 0.8,
+        "needsReview": true,
+        "source": "master-lookup",
+        "reason": "\"To Be Billed\" appears on the document"
+      }
+    },
+    "resolved": {
+      "consignor": {
+        "id": null,
+        "name": null,
+        "city": null,
+        "confidence": 0,
+        "matchedOn": "no consignor GSTIN or name could be read",
+        "candidates": []
+      },
+      "consignee": {
+        "id": null,
+        "name": null,
+        "city": null,
+        "confidence": 0,
+        "matchedOn": "no consignee GSTIN or name could be read",
+        "candidates": []
+      },
+      "vehicle": {
+        "id": "v-1",
+        "registrationNo": "MH 12 AB 1234",
+        "transporterId": "t-9",
+        "confidence": 0.92,
+        "matchedOn": "registration number matched a vehicle in the master",
+        "candidates": []
+      },
+      "transporter": {
+        "id": null,
+        "name": null,
+        "confidence": 0,
+        "matchedOn": "no transporter name could be read",
+        "candidates": []
+      },
+      "route": {
+        "id": null,
+        "confidence": 0,
+        "matchedOn": "need both cities to match a route",
+        "candidates": []
+      },
+      "payType": {
+        "id": "pt-1",
+        "code": "TBB",
+        "label": "To Be Billed",
+        "confidence": 0.8,
+        "matchedOn": "\"To Be Billed\" appears on the document"
+      }
+    },
+    "missingRequired": [
+      "consignor_id",
+      "consignee_id",
+      "delivery_type_id"
+    ],
+    "warnings": [
+      {
+        "code": "CONSIGNOR_NOT_RESOLVED",
+        "message": "The consignor on this document is not in the master.",
+        "fields": [
+          "consignor_id"
+        ]
+      },
+      {
+        "code": "CONSIGNEE_NOT_RESOLVED",
+        "message": "The consignee on this document is not in the master.",
+        "fields": [
+          "consignee_id"
+        ]
+      },
+      {
+        "code": "DRAFT_INCOMPLETE",
+        "message": "This draft cannot be submitted as-is — consignor_id, consignee_id, delivery_type_id are required and cannot be read from a document.",
+        "fields": [
+          "consignor_id",
+          "consignee_id",
+          "delivery_type_id"
+        ]
+      }
+    ],
+    "durationMs": 335
+  }
+}

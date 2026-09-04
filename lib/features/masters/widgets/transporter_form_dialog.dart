@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/file_opener.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../shared/models/scan_result.dart';
 import '../../../shared/models/transporter.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/labeled_field.dart';
@@ -50,6 +51,10 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
   late String _tds;
 
   PlatformFile? _picked;
+  bool _scanning = false;
+  /// Result of the last cheque scan, so the form can show which values came
+  /// off the paper and how confident the read was.
+  ScannedCheque? _scan;
   PlatformFile? _pickedTds;
   bool _saving = false;
 
@@ -94,6 +99,8 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
     setState(() {
       _picked = picked.files.first;
       _chequeError = null;
+      // A new file makes the previous reading meaningless.
+      _scan = null;
     });
   }
 
@@ -437,6 +444,28 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
                   ),
                 ),
               ),
+              // Read the bank fields off the cheque the user just picked.
+              // Offered only for a NEWLY picked file: a document already on
+              // file has been through the background OCR, and _ocrCheck()
+              // below already reports that.
+              if (picked != null)
+                _scanning
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : TextButton.icon(
+                        onPressed: _saving ? null : _scanPickedCheque,
+                        icon: const Icon(
+                          Icons.document_scanner_outlined,
+                          size: 18,
+                        ),
+                        label: const Text('Read fields'),
+                      ),
               if (picked == null && hasExisting)
                 TextButton.icon(
                   onPressed: _saving ? null : _viewExisting,
@@ -448,7 +477,10 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
                   tooltip: 'Remove selection',
                   onPressed: _saving
                       ? null
-                      : () => setState(() => _picked = null),
+                      : () => setState(() {
+                          _picked = null;
+                          _scan = null;
+                        }),
                   icon: const Icon(
                     Icons.close_rounded,
                     color: AppColors.slate,
@@ -457,6 +489,7 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
                 ),
             ],
           ),
+          _scanResult(),
           _ocrCheck(),
         ],
       ),
@@ -510,6 +543,221 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
                 size: 18,
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  /// Read the bank fields off the cheque the user just picked.
+  ///
+  /// Fills empty fields and leaves anything already typed alone — the user's
+  /// own input outranks a reading, and silently replacing what someone just
+  /// entered is how a "helpful" feature loses trust. What it never does is
+  /// fill quietly: every value it writes is listed in [_scanResult] with its
+  /// confidence, and the account number is always called out for checking
+  /// because it cannot be validated at all.
+  Future<void> _scanPickedCheque() async {
+    final file = _picked;
+    if (file == null || _scanning) return;
+
+    setState(() => _scanning = true);
+    final messenger = ScaffoldMessenger.of(context);
+    ScannedCheque scan;
+    try {
+      scan = await ref.read(transportersRepositoryProvider).scanCheque(
+            fileName: file.name,
+            bytes: file.bytes,
+            // On web PlatformFile.path is unavailable and throws when read;
+            // files are picked with withData: true, so bytes are normally
+            // present and path is only a native fallback.
+            filePath: file.bytes == null ? file.path : null,
+          );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _scanning = false);
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not read the cheque: ${MasterActions.messageFor(e)}')),
+      );
+      return;
+    }
+    if (!mounted) return;
+
+    final filled = <String>[];
+    setState(() {
+      _scanning = false;
+      _scan = scan;
+
+      void fill(TextEditingController c, String? value, String label) {
+        if (value == null || value.isEmpty) return;
+        if (c.text.trim().isNotEmpty) return; // never overwrite typed input
+        c.text = value;
+        filled.add(label);
+      }
+
+      fill(_ifsc, scan.ifsc, 'IFSC');
+      fill(_accNo, scan.accountNo, 'account no');
+      fill(_bank, scan.bankName, 'bank');
+      fill(_holder, scan.accountHolder, 'account holder');
+    });
+
+    if (!mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          !scan.readable || !scan.hasAnything
+              ? 'Nothing could be read from this image. Enter the bank details manually.'
+              : filled.isEmpty
+                  ? 'Read the cheque — your existing entries were left as they are. Compare them below.'
+                  : 'Filled ${filled.join(', ')} from the cheque. Check the account number digit by digit.',
+        ),
+      ),
+    );
+  }
+
+  /// What the scan read, with confidence — shown for a freshly scanned file,
+  /// as opposed to [_ocrCheck] which reports the background OCR of a document
+  /// already on file.
+  Widget _scanResult() {
+    final scan = _scan;
+    if (scan == null) return const SizedBox.shrink();
+
+    final rows = <List<String>>[
+      ['ifsc', 'IFSC', scan.ifsc ?? ''],
+      ['account_no', 'Account No', scan.accountNo ?? ''],
+      ['bank_name', 'Bank', scan.bankName ?? ''],
+      ['account_holder', 'Account Holder', scan.accountHolder ?? ''],
+      ['branch', 'Branch', scan.branch ?? ''],
+    ].where((r) => r[2].isNotEmpty).toList();
+
+    // Always shown when an account number was read: it has no checksum, no
+    // format rule and no directory to verify against, so OCR cannot be
+    // trusted with it and a wrong one pays a stranger.
+    final important =
+        scan.warnings.where((w) => w.isImportant || w.isPhotoQuality).toList();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.ok.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.ok.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.auto_awesome_outlined, size: 15, color: AppColors.ok),
+              SizedBox(width: 6),
+              Text(
+                'Read from this cheque',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                  color: AppColors.ink,
+                ),
+              ),
+            ],
+          ),
+          if (rows.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text(
+                'Nothing legible was found in this image.',
+                style: TextStyle(color: AppColors.slate, fontSize: 11.5),
+              ),
+            ),
+          for (final r in rows) _scanLine(r[0], r[1], r[2], scan),
+          for (final w in important)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    w.isPhotoQuality
+                        ? Icons.photo_camera_outlined
+                        : Icons.priority_high_rounded,
+                    size: 14,
+                    color: AppColors.orange,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      w.message,
+                      style: const TextStyle(
+                        color: AppColors.ink,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _scanLine(
+    String bankKey,
+    String label,
+    String value,
+    ScannedCheque scan,
+  ) {
+    final review = scan.reviewFor(bankKey);
+    final verified = review?.isVerified ?? false;
+    // A structurally checkable field (an IFSC has fixed letter/digit
+    // positions) is worth distinguishing from one that is merely legible.
+    final flagged = review?.needsReview ?? false;
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            verified
+                ? Icons.verified_outlined
+                : flagged
+                ? Icons.warning_amber_rounded
+                : Icons.check_circle_outline,
+            size: 14,
+            color: flagged ? AppColors.orange : AppColors.ok,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: '$label: ',
+                    style: const TextStyle(
+                      color: AppColors.slate,
+                      fontSize: 11.5,
+                    ),
+                  ),
+                  TextSpan(
+                    text: value,
+                    style: const TextStyle(
+                      color: AppColors.ink,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (review?.note != null)
+                    TextSpan(
+                      text: '  ${review!.note}',
+                      style: const TextStyle(
+                        color: AppColors.orange,
+                        fontSize: 11,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );

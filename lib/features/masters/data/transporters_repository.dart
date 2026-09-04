@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/network/paginate.dart';
+import '../../../shared/models/scan_result.dart';
 import '../../../shared/models/transporter.dart';
 
 class TransportersRepository {
@@ -59,6 +60,47 @@ class TransportersRepository {
 
   Future<void> remove(String id) async {
     await _api.dio.delete('/transporters/$id');
+  }
+
+  /// Reads bank details off a cancelled cheque / passbook WITHOUT saving
+  /// anything.
+  ///
+  /// The foreground counterpart to the background OCR that annotates a saved
+  /// transporter after uploadDocument. That one runs too late to help with
+  /// data entry — by then the account number has already been typed, and it
+  /// is the field most worth not typing. This one fills the form.
+  ///
+  /// Deliberately takes the file the user has ALREADY picked for upload, so
+  /// scanning costs no extra interaction: same bytes, one more call.
+  Future<ScannedCheque> scanCheque({
+    required String fileName,
+    List<int>? bytes,
+    String? filePath,
+  }) async {
+    final contentType = _mediaTypeForName(fileName);
+    final MultipartFile multipart;
+    if (bytes != null) {
+      multipart = MultipartFile.fromBytes(
+        bytes,
+        filename: fileName,
+        contentType: contentType,
+      );
+    } else if (filePath != null) {
+      multipart = await MultipartFile.fromFile(
+        filePath,
+        filename: fileName,
+        contentType: contentType,
+      );
+    } else {
+      throw ArgumentError('Either bytes or filePath is required');
+    }
+    final res = await _api.dio.post(
+      '/transporters/scan-cheque',
+      data: FormData.fromMap({'file': multipart}),
+    );
+    return ScannedCheque.fromJson(
+      (res.data['data'] as Map).cast<String, dynamic>(),
+    );
   }
 
   /// Uploads a transporter document and returns the updated transporter.

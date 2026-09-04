@@ -15,6 +15,7 @@ import '../../../shared/models/lr_template.dart';
 import '../../../shared/models/part_description.dart';
 import '../../../shared/models/party.dart';
 import '../../../shared/models/route_master.dart';
+import '../../../shared/models/scan_result.dart';
 import '../../../shared/models/transporter.dart';
 import '../../../shared/models/vehicle.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -147,6 +148,11 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
   // LR date — null means "use the system date at save time".
   DateTime? _lrDate;
+  bool _scanning = false;
+  /// Document type for the next scan. It changes what the money on the page
+  /// MEANS: only a transporter's consignment note states freight — on an
+  /// invoice the total is the value of the goods.
+  String _scanProfile = 'gst-invoice';
   DateTime? _inDateTime;
   DateTime? _outDateTime;
 
@@ -1706,6 +1712,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                       const SizedBox(height: 16),
                       _templateBar(),
                       const SizedBox(height: 20),
+                      _scanBar(),
+                      const SizedBox(height: 20),
                       _customerCard(),
                       const SizedBox(height: 20),
                       AppCard(
@@ -2363,6 +2371,387 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Pre-fill the form from a photographed or PDF document.
+  ///
+  /// Sits beside the template bar because it is the same kind of affordance —
+  /// another way to avoid typing a form from scratch — and the two are the
+  /// only two on this screen.
+  Widget _scanBar() {
+    const profiles = <String, String>{
+      'gst-invoice': 'Consignor tax invoice',
+      'eway-bill': 'E-way bill',
+      'lr-consignment': "Transporter's consignment note",
+    };
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionTitle(
+            icon: Icons.document_scanner_outlined,
+            title: 'Scan a document',
+          ),
+          LayoutBuilder(
+            builder: (context, c) {
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SizedBox(
+                    width: c.maxWidth >= 620 ? 340 : c.maxWidth,
+                    child: SearchableField<String>(
+                      value: _scanProfile,
+                      options: profiles.keys.toList(),
+                      labelOf: (k) => profiles[k] ?? k,
+                      hintText: 'What kind of document?',
+                      dialogTitle: 'Document type',
+                      onChanged: (k) {
+                        if (k != null) setState(() => _scanProfile = k);
+                      },
+                    ),
+                  ),
+                  AppButton(
+                    label: _scanning ? 'Reading…' : 'Scan & Pre-fill',
+                    icon: Icons.auto_awesome_outlined,
+                    kind: BtnKind.soft,
+                    small: true,
+                    onPressed: _scanning ? null : _scanDocument,
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _scanProfile == 'lr-consignment'
+                ? 'A consignment note states the freight, so it will be filled in.'
+                // Said up front, because it is the one thing that would be
+                // expensive to get wrong: an invoice total is the value of the
+                // goods, and freight is what we negotiate with the transporter.
+                : 'The invoice total is the value of the goods — it fills the goods value, NOT freight. Enter the negotiated freight yourself.',
+            style: const TextStyle(color: AppColors.slate, fontSize: 12.5),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Pick a document, read it, and pre-fill after the user has seen what was
+  /// found.
+  ///
+  /// Uses the file picker rather than a camera plugin: this app ships to web
+  /// (see the Cloudflare deploy config) and every other attachment on this
+  /// screen is picked the same way, so a native camera dependency would be
+  /// added for one screen and unavailable where the app is actually used. The
+  /// Android file chooser still offers the camera.
+  Future<void> _scanDocument() async {
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+      withData: true,
+    );
+    if (picked == null || picked.files.isEmpty || !mounted) return;
+    final file = picked.files.first;
+
+    setState(() => _scanning = true);
+    ScannedLrDraft scan;
+    try {
+      scan = await ref.read(lrRepositoryProvider).scanDocument(
+            fileName: file.name,
+            bytes: file.bytes,
+            // On web PlatformFile.path is unavailable and throws when read.
+            filePath: file.bytes == null ? file.path : null,
+            profile: _scanProfile,
+          );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _scanning = false);
+      MasterActions.showError(context, e);
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _scanning = false);
+
+    if (!scan.readable || !scan.hasDraft) {
+      _showResult(
+        scan.warnings.isEmpty
+            ? 'Nothing could be read from this document.'
+            : scan.warnings.first.message,
+      );
+      return;
+    }
+
+    final confirmed = await _confirmScan(scan);
+    if (confirmed != true || !mounted) return;
+    _applyScan(scan);
+  }
+
+  /// Show what was read and what resolved, and let the user decide.
+  ///
+  /// Never applied without this step. The server reports a confidence per
+  /// field and refuses to guess between two similar master rows; pouring that
+  /// silently into a form would trade typing mistakes for a wrong value
+  /// nobody looked at — and on an LR a wrong consignor bills the wrong
+  /// customer.
+  Future<bool?> _confirmScan(ScannedLrDraft scan) {
+    String? nameOf(String key) {
+      final r = scan.resolved[key];
+      if (r == null) return null;
+      if (r.isResolved) return r.name ?? r.id;
+      return null;
+    }
+
+    final resolvedRows = <List<String>>[
+      ['Consignor', nameOf('consignor') ?? '—'],
+      ['Consignee', nameOf('consignee') ?? '—'],
+      ['Vehicle', nameOf('vehicle') ?? '—'],
+      ['Transporter', nameOf('transporter') ?? '—'],
+      ['Route', scan.resolved['route']?.isResolved == true ? 'matched' : '—'],
+      ['Payment type', scan.resolved['payType']?.isResolved == true
+          ? (scan.resolved['payType']!.name ?? 'matched')
+          : '—'],
+    ];
+
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Pre-fill from this document?'),
+        content: SizedBox(
+          width: 460,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // The money warning first: it is the one that costs real
+                // money if misunderstood.
+                for (final w in scan.warnings.where(
+                    (w) => w.isImportant || w.isPhotoQuality))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.priority_high_rounded,
+                            size: 16, color: AppColors.orange),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            w.message,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                const Text(
+                  'Matched in your masters',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                ),
+                const SizedBox(height: 4),
+                for (final r in resolvedRows)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Row(
+                      children: [
+                        Icon(
+                          r[1] == '—'
+                              ? Icons.remove_circle_outline
+                              : Icons.check_circle_outline,
+                          size: 14,
+                          color: r[1] == '—' ? AppColors.slate : AppColors.ok,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text('${r[0]}: ${r[1]}',
+                              style: const TextStyle(fontSize: 12.5)),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (scan.missingRequired.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    // Honest rather than implying the draft is complete: an LR
+                    // needs lookups no supplier document carries.
+                    'You will still need to set: ${scan.missingRequired.join(', ')}',
+                    style: const TextStyle(
+                      color: AppColors.slate,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+                if (scan.invoiceItems.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Invoice ${scan.invoiceItems.first['invoice_no'] ?? ''} — goods value '
+                    '${scan.invoiceItems.first['gross_value'] ?? '—'}',
+                    style: const TextStyle(fontSize: 12.5),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                const Text(
+                  'Anything already filled in will be left alone.',
+                  style: TextStyle(color: AppColors.slate, fontSize: 11.5),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Pre-fill'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Write the reviewed draft into the form.
+  ///
+  /// Resolved ids are turned back into the master objects the pickers hold, by
+  /// looking them up in the already-loaded lists — the same approach _hydrate
+  /// uses for an edit. An id with no matching row is skipped rather than
+  /// forcing a placeholder into a picker.
+  void _applyScan(ScannedLrDraft scan) {
+    final parties = ref.read(partiesProvider);
+    final vehicles = ref.read(vehiclesProvider);
+    final transporters = ref.read(transportersProvider);
+    final routes = ref.read(routesProvider);
+    final payTypes = _lookups['PAY_TYPE'] ?? const <LookupValue>[];
+
+    T? pick<T>(List<T> list, bool Function(T) test) {
+      for (final e in list) {
+        if (test(e)) return e;
+      }
+      return null;
+    }
+
+    String? id(String key) {
+      final v = scan.draft[key];
+      final s = v?.toString().trim() ?? '';
+      return s.isEmpty ? null : s;
+    }
+
+    final filled = <String>[];
+    setState(() {
+      // Existing selections win — the user's own choices outrank a reading.
+      final consignorId = id('consignor_id');
+      if (_consignor == null && consignorId != null) {
+        final p = pick(parties, (Party p) => p.id == consignorId);
+        if (p != null) {
+          _consignor = p;
+          filled.add('consignor');
+        }
+      }
+      final consigneeId = id('consignee_id');
+      if (_consignee == null && consigneeId != null) {
+        final p = pick(parties, (Party p) => p.id == consigneeId);
+        if (p != null) {
+          _consignee = p;
+          filled.add('consignee');
+        }
+      }
+      final vehicleId = id('vehicle_id');
+      if (_vehicle == null && vehicleId != null) {
+        final v = pick(vehicles, (Vehicle v) => v.id == vehicleId);
+        if (v != null) {
+          _vehicle = v;
+          filled.add('vehicle');
+        }
+      }
+      final transporterId = id('transporter_id');
+      if (_transporter == null && transporterId != null) {
+        final t = pick(transporters, (Transporter t) => t.id == transporterId);
+        if (t != null) {
+          _transporter = t;
+          filled.add('transporter');
+        }
+      }
+      final routeId = id('route_id');
+      if (_route == null && routeId != null) {
+        final r = pick(routes, (RouteMaster r) => r.id == routeId);
+        if (r != null) {
+          _route = r;
+          filled.add('route');
+        }
+      }
+      final payTypeId = id('pay_type_id');
+      if (_payType == null && payTypeId != null) {
+        final pt = pick(payTypes, (LookupValue l) => l.id == payTypeId);
+        if (pt != null) {
+          _payType = pt;
+          filled.add('payment type');
+        }
+      }
+
+      final lrDate = id('lr_date');
+      if (_lrDate == null && lrDate != null) {
+        final parsed = DateTime.tryParse(lrDate);
+        if (parsed != null) {
+          _lrDate = parsed;
+          filled.add('date');
+        }
+      }
+
+      // FREIGHT is only ever present for a consignment note; the server
+      // leaves it empty for an invoice on purpose. Guarded anyway, so a
+      // future server change cannot quietly overwrite a negotiated rate.
+      final freight = scan.draft['freight'];
+      if (freight is num && _scanProfile == 'lr-consignment') {
+        final current = double.tryParse(_freightCtrl.text.trim()) ?? 0;
+        if (current == 0) {
+          _freightCtrl.text = freight.toString();
+          filled.add('freight');
+        }
+      }
+
+      // The invoice and its goods value go onto the first invoice row.
+      final items = scan.invoiceItems;
+      if (items.isNotEmpty && _invoices.isNotEmpty) {
+        final item = items.first;
+        final inv = _invoices.first;
+        final invoiceNo = (item['invoice_no'] ?? '').toString().trim();
+        if (invoiceNo.isNotEmpty && inv.invoiceNo.text.trim().isEmpty) {
+          inv.invoiceNo.text = invoiceNo;
+          filled.add('invoice no');
+        }
+        if (inv.parts.isNotEmpty) {
+          final part = inv.parts.first;
+          final gross = item['gross_value'];
+          if (gross is num &&
+              (double.tryParse(part.value.text.trim()) ?? 0) == 0) {
+            part.value.text = gross.toString();
+            filled.add('goods value');
+          }
+          final qty = item['quantity'];
+          if (qty is num &&
+              (double.tryParse(part.quantity.text.trim()) ?? 0) == 0) {
+            part.quantity.text = qty.toString();
+          }
+          final desc = (item['part_description'] ?? '').toString().trim();
+          if (desc.isNotEmpty && part.partDescription.text.trim().isEmpty) {
+            part.partDescription.text = desc;
+          }
+        }
+      }
+    });
+
+    _showResult(
+      filled.isEmpty
+          ? 'Nothing new to fill — the form already had these values.'
+          : 'Pre-filled ${filled.join(', ')} from the document.',
     );
   }
 
