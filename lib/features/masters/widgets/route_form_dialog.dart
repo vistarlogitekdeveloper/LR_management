@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -10,6 +12,7 @@ import '../../../shared/widgets/searchable_field.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../lookups/data/lookup_value.dart';
 import '../../lookups/providers/lookups_provider.dart';
+import '../../maps/data/maps_repository.dart';
 import '../../maps/widgets/location_picker_field.dart';
 import '../providers/master_providers.dart';
 import 'master_actions.dart';
@@ -56,6 +59,11 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
   String? _vehicleTypeId;
   String? _capacityId;
   bool _saving = false;
+  bool _calculatingDistance = false;
+  // Every road-distance request takes a ticket. Picking From and then quickly
+  // picking To leaves two calls in flight and the slower (older) one can land
+  // last, so only the newest ticket is allowed to write the field.
+  int _distanceRequestSeq = 0;
   // Set once the user tries to save, so the "pick on map" errors only appear
   // after an attempt (not on a fresh form).
   bool _triedSave = false;
@@ -89,6 +97,11 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
         lat: r.fromLat!,
         lng: r.fromLng!,
         address: r.fromAddress,
+        // The saved route carries no separate label, so the From/To city the
+        // user already chose is the label — otherwise re-opening the picker
+        // would show it blank and overwrite it from the address.
+        name: r.fromCity,
+        source: PickedLocationSource.stored,
       );
     }
     if (r != null && r.hasToCoords) {
@@ -97,7 +110,21 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
         lat: r.toLat!,
         lng: r.toLng!,
         address: r.toAddress,
+        name: r.toCity,
+        source: PickedLocationSource.stored,
       );
+    }
+    // A route the backfill script filled in (or one imported with coordinates)
+    // arrives with both pins and no distance. onPicked never fires for it, so
+    // without this the field stays empty until someone re-picks a pin. The
+    // empty-field guard inside _calculateDistance makes it a no-op for every
+    // route that already carries a distance.
+    if (_fromLoc != null && _toLoc != null && _distance.text.trim().isEmpty) {
+      // Deferred: _calculateDistance reaches for ScaffoldMessenger, which is
+      // not resolvable from initState.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_calculateDistance(overwrite: false));
+      });
     }
   }
 
@@ -109,10 +136,78 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
     super.dispose();
   }
 
-  // Pull a short label out of an address (text before the first comma) — used
-  // to pre-fill the From/To label only when the user hasn't typed one.
-  String _shortLabel(String address) =>
-      address.contains(',') ? address.split(',').first.trim() : address.trim();
+  // Asks the backend OSRM proxy for the road distance between the two pins.
+  //
+  // [overwrite] false is the auto-fill that follows a pin being picked: it only
+  // ever fills an EMPTY field. Distance sits next to the negotiated rates and
+  // may be a commercially agreed figure rather than the true road distance, so
+  // a value already there is never replaced behind the user's back.
+  // [overwrite] true is the explicit Recalculate action — that is the way to
+  // replace an existing value — and it reports the outcome in a snackbar.
+  //
+  // A null result means routing is unavailable; the auto path then leaves the
+  // field untouched and says nothing, because this is a convenience, not a
+  // step the user is waiting on.
+  Future<void> _calculateDistance({required bool overwrite}) async {
+    final from = _fromLoc;
+    final to = _toLoc;
+    if (from == null || to == null) return;
+    if (!overwrite && _distance.text.trim().isNotEmpty) return;
+    final seq = ++_distanceRequestSeq;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _calculatingDistance = true);
+    final road = await ref
+        .read(mapsRepositoryProvider)
+        .roadDistance(
+          fromLat: from.lat,
+          fromLng: from.lng,
+          toLat: to.lat,
+          toLng: to.lng,
+        );
+    if (!mounted) return;
+    // A newer request is in flight: it owns the field and the spinner.
+    if (seq != _distanceRequestSeq) return;
+    setState(() => _calculatingDistance = false);
+    if (road == null) {
+      if (overwrite) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Couldn't reach the routing service. Enter the distance manually.",
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    // The user may have typed a distance while the auto-fill was in flight —
+    // same rule as above, theirs wins.
+    if (!overwrite && _distance.text.trim().isNotEmpty) return;
+    final km = road.distanceKm.toStringAsFixed(0);
+    _distance.text = km;
+    if (overwrite) {
+      final eta = _formatDuration(road.durationMin);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            eta.isEmpty
+                ? 'Road distance: $km km'
+                : 'Road distance: $km km (~$eta)',
+          ),
+        ),
+      );
+    }
+  }
+
+  // "3 h 5 min" — a five-hour drive quoted as "305 min" reads as noise. Empty
+  // when the router gave no duration, so the caller can drop the clause.
+  static String _formatDuration(int minutes) {
+    if (minutes <= 0) return '';
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    if (h == 0) return '$m min';
+    return m == 0 ? '$h h' : '$h h $m min';
+  }
 
   Future<void> _save() async {
     final formOk = _formKey.currentState!.validate();
@@ -266,12 +361,17 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
                               LocationPickerField(
                                 value: _fromLoc,
                                 hintText: 'Pick the pickup location on the map',
-                                onPicked: (loc) => setState(() {
-                                  _fromLoc = loc;
-                                  if (_fromCity.text.trim().isEmpty) {
-                                    _fromCity.text = _shortLabel(loc.address);
-                                  }
-                                }),
+                                onPicked: (loc) {
+                                  setState(() {
+                                    _fromLoc = loc;
+                                    if (_fromCity.text.trim().isEmpty) {
+                                      _fromCity.text = loc.displayName;
+                                    }
+                                  });
+                                  unawaited(
+                                    _calculateDistance(overwrite: false),
+                                  );
+                                },
                               ),
                               if (_triedSave && _fromLoc == null)
                                 _pickError(
@@ -293,12 +393,17 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
                                 value: _toLoc,
                                 hintText:
                                     'Pick the delivery location on the map',
-                                onPicked: (loc) => setState(() {
-                                  _toLoc = loc;
-                                  if (_toCity.text.trim().isEmpty) {
-                                    _toCity.text = _shortLabel(loc.address);
-                                  }
-                                }),
+                                onPicked: (loc) {
+                                  setState(() {
+                                    _toLoc = loc;
+                                    if (_toCity.text.trim().isEmpty) {
+                                      _toCity.text = loc.displayName;
+                                    }
+                                  });
+                                  unawaited(
+                                    _calculateDistance(overwrite: false),
+                                  );
+                                },
                               ),
                               if (_triedSave && _toLoc == null)
                                 _pickError(
@@ -308,15 +413,7 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
                           ),
                         ),
                       ),
-                      SizedBox(
-                        width: half,
-                        child: _text(
-                          _distance,
-                          'Distance (km)',
-                          required: true,
-                          number: true,
-                        ),
-                      ),
+                      SizedBox(width: half, child: _distanceField()),
                       if (canViewTransporterRate)
                         SizedBox(
                           width: half,
@@ -424,6 +521,46 @@ class _RouteFormDialogState extends ConsumerState<RouteFormDialog> {
         validator: required
             ? (v) => (v == null || v.trim().isEmpty) ? 'Required' : null
             : null,
+      ),
+    );
+  }
+
+  // Distance, with its own Recalculate action. The action is always offered
+  // (never only on an empty field) because the auto-fill deliberately refuses
+  // to overwrite, so this button is the only way to replace a value that is
+  // already there.
+  Widget _distanceField() {
+    final canCalculate =
+        _fromLoc != null && _toLoc != null && !_calculatingDistance;
+    return LabeledField(
+      label: 'Distance (km)',
+      required: true,
+      child: TextFormField(
+        controller: _distance,
+        keyboardType: TextInputType.number,
+        decoration: InputDecoration(
+          suffixIcon: IconButton(
+            tooltip: 'Recalculate from map pins',
+            onPressed: canCalculate
+                ? () => _calculateDistance(overwrite: true)
+                : null,
+            icon: _calculatingDistance
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(
+                    Icons.route_outlined,
+                    size: 20,
+                    color: AppColors.plum,
+                    // Icon-only control on a web app: a screen reader has
+                    // nothing else to announce it with.
+                    semanticLabel: 'Recalculate distance from map pins',
+                  ),
+          ),
+        ),
+        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
       ),
     );
   }

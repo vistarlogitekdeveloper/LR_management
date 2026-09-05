@@ -53,8 +53,22 @@ class RouteMaster {
   });
 
   String get name => '$fromCity → $toCity';
-  bool get hasFromCoords => fromLat != null && fromLng != null;
-  bool get hasToCoords => toLat != null && toLng != null;
+
+  /// A stored pair is only usable if it is actually a degree pair. Rows written
+  /// by an earlier picker hold projected metres (lat ~25,555,074), and (0, 0) is
+  /// what an uninitialised map widget saves. Treating either as a real pin makes
+  /// the route un-editable — the form would re-send it and the server's
+  /// coordinate guard rejects it — so both count as "no pin" and the user is
+  /// asked to place one.
+  static bool isUsableCoord(double? lat, double? lng) =>
+      lat != null &&
+      lng != null &&
+      lat.abs() <= 90 &&
+      lng.abs() <= 180 &&
+      !(lat == 0 && lng == 0);
+
+  bool get hasFromCoords => isUsableCoord(fromLat, fromLng);
+  bool get hasToCoords => isUsableCoord(toLat, toLng);
 
   factory RouteMaster.fromJson(Map<String, dynamic> json) => RouteMaster(
     id: json['id'] as String,
@@ -153,16 +167,66 @@ class RouteMaster {
   }
 }
 
+/// Where a picked location's coordinates came from. Recorded so the picker can
+/// explain provenance and so a reviewer can tell a precise place pin from a
+/// dragged map centre.
+enum PickedLocationSource { search, pin, googleLink, stored }
+
 /// A location chosen from the map picker.
 class PickedLocation {
   final String placeId;
   final double lat;
   final double lng;
+
+  /// Full formatted address, as returned by the geocoder.
   final String address;
+
+  /// Short, user-editable label — a Nominatim display_name is far too long to
+  /// use as a route's From/To city.
+  final String name;
+  final PickedLocationSource source;
+
   const PickedLocation({
     required this.placeId,
     required this.lat,
     required this.lng,
     required this.address,
+    this.name = '',
+    this.source = PickedLocationSource.stored,
   });
+
+  /// The short label to show and to prefill the route's From/To label with:
+  /// [name] when set, otherwise the address up to the first comma. Defined once
+  /// here so the picker and the route form cannot drift apart.
+  String get displayName {
+    final n = name.trim();
+    return n.isNotEmpty ? n : shortLabel(address);
+  }
+
+  /// The leading component of a formatted address — a Nominatim display_name
+  /// runs to a dozen comma-separated parts and is unusable as a route label.
+  /// Exposed so the picker can derive the same label before a [PickedLocation]
+  /// exists.
+  static String shortLabel(String address) {
+    final a = address.trim();
+    return a.contains(',') ? a.split(',').first.trim() : a;
+  }
+
+  PickedLocation copyWith({
+    String? placeId,
+    double? lat,
+    double? lng,
+    String? address,
+    String? name,
+    PickedLocationSource? source,
+  }) {
+    return PickedLocation(
+      placeId: placeId ?? this.placeId,
+      lat: lat ?? this.lat,
+      lng: lng ?? this.lng,
+      address: address ?? this.address,
+      name: name ?? this.name,
+      source: source ?? this.source,
+    );
+  }
 }
