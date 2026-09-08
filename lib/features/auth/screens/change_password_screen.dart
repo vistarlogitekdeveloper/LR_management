@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/constants/auth_rules.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -182,8 +183,8 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                             onToggle: () =>
                                 setState(() => _obscureNew = !_obscureNew),
                             validator: (v) {
-                              if (v == null || v.length < 6) {
-                                return 'Min 6 characters';
+                              if (v == null || v.length < kMinPasswordLength) {
+                                return 'Min $kMinPasswordLength characters';
                               }
                               if (v.length > 128) {
                                 return 'Max 128 characters';

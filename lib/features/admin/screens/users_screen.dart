@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/constants/auth_rules.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/models/user.dart';
@@ -105,10 +106,16 @@ class UsersAdminScreen extends ConsumerWidget {
         ),
         // Region is assignable only by a super admin. Region admins create
         // users inside their own region automatically (set by the backend).
+        //
+        // Optional on purpose: a blank region is the supported head-office /
+        // back-office configuration — the region hook in the backend skips
+        // filtering entirely when a user's region_id is NULL, so the user reads
+        // and writes across every region. The label has to say that outright,
+        // because "leave blank" is an access decision, not a skipped field.
         if (isSuper)
           FormFieldSpec(
             name: 'region',
-            label: 'Region (leave blank for super admins)',
+            label: 'Region (blank = head office, all regions)',
             type: FieldType.dropdown,
             options: regionNames,
             initialValue: existingRegionName,
@@ -118,6 +125,16 @@ class UsersAdminScreen extends ConsumerWidget {
           label: existing == null ? 'Password' : 'Reset Password (optional)',
           required: existing == null,
           initialValue: '',
+          // Matches the backend minimum. On edit the field means "reset it",
+          // so a blank value is left alone and only a typed one is checked.
+          validator: (v) {
+            final pwd = (v ?? '').trim();
+            if (existing != null && pwd.isEmpty) return null;
+            if (pwd.length < kMinPasswordLength) {
+              return 'Password must be at least $kMinPasswordLength characters';
+            }
+            return null;
+          },
         ),
       ],
       initial: existing == null
@@ -143,8 +160,11 @@ class UsersAdminScreen extends ConsumerWidget {
         final email = (values['email'] ?? '').trim();
         final mobile = (values['mobile'] ?? '').trim();
 
-        // Resolve region (super admin only). Required for any non-super-admin
-        // role so the new user is visible to their region admin.
+        // Resolve region (super admin only). Optional: a blank region is the
+        // head-office configuration, and for an ACCOUNTS user it is ignored
+        // outright — that role is tenant-wide by role, so pinning it to a
+        // region changes nothing. Region admins never see this field; the
+        // backend pins the users they create to their own region.
         String? regionId;
         if (isSuper) {
           final regionName = (values['region'] ?? '').trim();
@@ -152,15 +172,6 @@ class UsersAdminScreen extends ConsumerWidget {
               .where((r) => r.name == regionName)
               .map((r) => r.id)
               .firstOrNull;
-          final makingSuperAdmin = role.code == 'SUPER_ADMIN';
-          if (!makingSuperAdmin && regionId == null) {
-            messenger.showSnackBar(
-              const SnackBar(
-                content: Text('Please pick a region for this user.'),
-              ),
-            );
-            return false;
-          }
         }
 
         try {
