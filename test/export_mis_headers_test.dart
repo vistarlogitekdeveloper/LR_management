@@ -23,6 +23,13 @@ const double _kFreight = 19500;
 const double _kAdvance = 18000;
 const double _kVistarMargin = 3281;
 
+// Every ancillary head is non-zero on purpose. With them all at zero, `total`
+// collapses to freight + margin and the balance assertion below cannot tell
+// `freight - advance` apart from `freight + ancillaries - advance` — it would
+// pass against a still-wrong implementation. Their sum is 3050, so the model's
+// total is 25831 and the OLD wrong balance would be 7831, far from 1500.
+const double _kAncillaries = 3050;
+
 LorryReceipt _lr() => LorryReceipt.fromJson({
   'id': 'lr1',
   'number': 'LR/PUN/26-27/00001',
@@ -33,6 +40,14 @@ LorryReceipt _lr() => LorryReceipt.fromJson({
   'freight': _kFreight,
   'advance': _kAdvance,
   'vistar_margin': _kVistarMargin,
+  'door_delivery': 500,
+  'handling': 300,
+  'insurance': 200,
+  'gst': 100,
+  'mathadi': 400,
+  'collection': 250,
+  'additional_freight': 700,
+  'halting_charge': 600,
 });
 
 Sheet _sheet({
@@ -198,14 +213,26 @@ void main() {
   });
 
   test('TransportBalance Payment is freight - advance, as misRow computes', () {
-    expect(_money('TransportBalance Payment'), _kFreight - _kAdvance);
-    // Regression guard: the column used to print lr.freight.balance, which is
-    // the `balance` generated column (total - advance) and so folded Vistar's
-    // margin into the transporter payable — 4781 instead of 1500.
+    expect(_money('TransportBalance Payment'), _kFreight - _kAdvance); // 1500
+    // Regression guard: the column used to print lr.freight.balance — the
+    // `balance` generated column, total - advance — which folds Vistar's margin
+    // AND every ancillary head into what is owed to the transporter.
+    final wrongBalance =
+        _kFreight + _kAncillaries + _kVistarMargin - _kAdvance; // 7831
+    expect(_money('TransportBalance Payment'), isNot(wrongBalance));
+    // The shape of the original report too, margin folded in but no ancillaries.
     expect(
       _money('TransportBalance Payment'),
-      isNot(_kFreight + _kVistarMargin - _kAdvance),
+      isNot(_kFreight + _kVistarMargin - _kAdvance), // 4781
     );
+    // The fixture must actually exercise the difference, or this test is vacuous.
+    expect(_kAncillaries, greaterThan(0));
+  });
+
+  test('the transporter-side columns carry the raw freight and advance', () {
+    // Pinned so a future edit cannot quietly point these at `total` either.
+    expect(_money('Total Transport Charges'), _kFreight);
+    expect(_money('Transport Advance Paid'), _kAdvance);
   });
 
   test('Vistar Billing Amount is freight + vistar margin', () {

@@ -85,7 +85,12 @@ class AppUser {
   /// no super-admin bypass. Keep the two in step: a looser test here shows a
   /// button that 403s, a stricter one hides an export the user is entitled to.
   bool get canDownloadMisXlsx =>
-      can('LR_PAYMENT') || can('ADMIN_ACCESS') || can('SUPERADMIN_ACCESS');
+      // reportRoutes.js applies router.use(perm.require(['REPORTS_VIEW',
+      // 'ADMIN_ACCESS'])) to every report route BEFORE the per-route gate, so
+      // the effective server gate is the AND of the two. Mirroring only the
+      // second half would offer the download to a caller the router still 403s.
+      (can('REPORTS_VIEW') || can('ADMIN_ACCESS')) &&
+      (can('LR_PAYMENT') || can('ADMIN_ACCESS') || can('SUPERADMIN_ACCESS'));
 
   // ---- Visibility of sensitive money fields (migration 072) ----
   // Three server-side visibility perms gate WHICH money fields a user may see

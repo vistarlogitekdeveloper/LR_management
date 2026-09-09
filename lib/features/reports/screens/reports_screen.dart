@@ -95,7 +95,15 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
     _showFreight = user?.canViewTransporterRate ?? false;
     _showMargin = user?.canViewVistarMargin ?? false;
     _showCustomerRate = user?.canViewCustomerRate ?? false;
-    _canMisXlsx = user?.canDownloadMisXlsx ?? false;
+    // ANDed with canViewAccounts on purpose. The server would also serve a
+    // regional admin (ADMIN_ACCESS is in its gate), but this app deliberately
+    // withholds the MIS from them — see the Accounts tab, which hides its own
+    // "Download MIS (Excel)" behind canViewAccounts for exactly that reason.
+    // Routing the top-bar button on the server gate alone would hand regional
+    // admins the accounts-owned billing and payment columns the FE has always
+    // kept from them. Drop the second half only as a deliberate policy change.
+    _canMisXlsx =
+        (user?.canDownloadMisXlsx ?? false) && (user?.canViewAccounts ?? false);
     _tab = TabController(length: _canAmounts ? 3 : 2, vsync: this);
   }
 
@@ -132,6 +140,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
                     builder: (_) => _ExportRangeDialog(
                       lrs: lrs,
                       initialRange: _exportRange,
+                      serverSide: _canMisXlsx,
                     ),
                   );
                   // null = cancelled; the mount check covers a pop mid-dialog.
@@ -236,10 +245,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
         bytes,
         'Transport_MIS_${ExportService.stamp()}.xlsx',
       );
+      // A large MIS build can outlive the screen; the messenger was captured
+      // before the awaits, but posting to a disposed one still throws.
+      if (!mounted) return;
       messenger.showSnackBar(
         const SnackBar(content: Text('MIS Excel generated')),
       );
     } catch (e) {
+      if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(content: Text('Could not generate MIS: $e')),
       );
@@ -1355,7 +1368,20 @@ class _ExportRangeChoice {
 class _ExportRangeDialog extends StatefulWidget {
   final List<LorryReceipt> lrs;
   final DateTimeRange? initialRange;
-  const _ExportRangeDialog({required this.lrs, this.initialRange});
+
+  /// True when the caller will fetch the sheet from the server rather than
+  /// building it from [lrs]. The loaded list is only a client-side slice — the
+  /// page walk stops at a cap, a failed page is swallowed, and operators are
+  /// filtered to their own LRs — so its count neither predicts nor limits what
+  /// the server will return. Counting rows and disabling Download on zero would
+  /// then refuse an export the server would happily produce.
+  final bool serverSide;
+
+  const _ExportRangeDialog({
+    required this.lrs,
+    this.initialRange,
+    this.serverSide = false,
+  });
 
   @override
   State<_ExportRangeDialog> createState() => _ExportRangeDialogState();
@@ -1421,7 +1447,11 @@ class _ExportRangeDialogState extends State<_ExportRangeDialog> {
           ),
           const SizedBox(height: 12),
           Text(
-            '$count of ${widget.lrs.length} LRs will be exported.',
+            widget.serverSide
+                ? (_range == null
+                      ? 'Every LR in the selected scope will be exported.'
+                      : 'Every LR dispatched in this range will be exported.')
+                : '$count of ${widget.lrs.length} LRs will be exported.',
             style: const TextStyle(
               color: AppColors.slate,
               fontSize: 12.5,
@@ -1436,9 +1466,11 @@ class _ExportRangeDialogState extends State<_ExportRangeDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: count == 0
-              ? null
-              : () => Navigator.pop(context, _ExportRangeChoice(_range)),
+          // The local count only gates the client-side sheet, which really is
+          // built from this list. The server decides its own row set.
+          onPressed: (widget.serverSide || count > 0)
+              ? () => Navigator.pop(context, _ExportRangeChoice(_range))
+              : null,
           child: const Text('Download'),
         ),
       ],
