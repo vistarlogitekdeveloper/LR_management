@@ -25,17 +25,18 @@ class LrFilter {
     this.toDate,
   });
 
-  LrFilter copyWith(
-      {String? query,
-      LrStatus? status,
-      String? route,
-      String? region,
-      DateTime? fromDate,
-      DateTime? toDate,
-      bool clearStatus = false,
-      bool clearRoute = false,
-      bool clearRegion = false,
-      bool clearDates = false}) {
+  LrFilter copyWith({
+    String? query,
+    LrStatus? status,
+    String? route,
+    String? region,
+    DateTime? fromDate,
+    DateTime? toDate,
+    bool clearStatus = false,
+    bool clearRoute = false,
+    bool clearRegion = false,
+    bool clearDates = false,
+  }) {
     return LrFilter(
       query: query ?? this.query,
       status: clearStatus ? null : (status ?? this.status),
@@ -147,10 +148,16 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
     }
   }
 
-  Future<LorryReceipt> create(Map<String, dynamic> payload,
-      {EwbInput? ewb, String? idempotencyKey}) async {
-    final created =
-        await _repo.create(payload, ewb: ewb, idempotencyKey: idempotencyKey);
+  Future<LorryReceipt> create(
+    Map<String, dynamic> payload, {
+    EwbInput? ewb,
+    String? idempotencyKey,
+  }) async {
+    final created = await _repo.create(
+      payload,
+      ewb: ewb,
+      idempotencyKey: idempotencyKey,
+    );
     state = [created, ...state];
     return created;
   }
@@ -200,15 +207,18 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
     EwbInput? ewb,
     String? existingEwbId,
     int existingEwbVersion = 0,
-  }) =>
-      _versionSafeWrite(id, () async {
-        final updated = await _repo.update(id, version, payload,
-            ewb: ewb,
-            existingEwbId: existingEwbId,
-            existingEwbVersion: existingEwbVersion);
-        state = [for (final lr in state) lr.id == updated.id ? updated : lr];
-        return updated;
-      });
+  }) => _versionSafeWrite(id, () async {
+    final updated = await _repo.update(
+      id,
+      version,
+      payload,
+      ewb: ewb,
+      existingEwbId: existingEwbId,
+      existingEwbVersion: existingEwbVersion,
+    );
+    state = [for (final lr in state) lr.id == updated.id ? updated : lr];
+    return updated;
+  });
 
   /// Marks the 90% transporter advance as paid (backend computes the amount and
   /// triggers the notification email), then refreshes the LR in local state.
@@ -256,8 +266,9 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
   }
 }
 
-final lrListProvider =
-    StateNotifierProvider<LrNotifier, List<LorryReceipt>>((ref) {
+final lrListProvider = StateNotifierProvider<LrNotifier, List<LorryReceipt>>((
+  ref,
+) {
   return LrNotifier(
     ref.watch(lrRepositoryProvider),
     ref.watch(currentUserProvider),
@@ -319,15 +330,14 @@ final lrByIdProvider = Provider.family<LorryReceipt?, String>((ref, id) {
 });
 
 /// Full LR detail (invoice items, attachments, freight, EWB) fetched on demand.
-final lrDetailProvider =
-    FutureProvider.autoDispose.family<LorryReceipt, String>((ref, id) async {
-  return ref.watch(lrRepositoryProvider).getById(id);
-});
+final lrDetailProvider = FutureProvider.autoDispose
+    .family<LorryReceipt, String>((ref, id) async {
+      return ref.watch(lrRepositoryProvider).getById(id);
+    });
 
 /// Backend-authoritative preview of the next LR number (used by the Create LR
 /// banner). Fetches from GET /lrs/next-number instead of guessing from the
 /// loaded LR list — the local guess drifts after a DB migration.
-final nextLrNumberProvider =
-    FutureProvider.autoDispose<String>((ref) async {
+final nextLrNumberProvider = FutureProvider.autoDispose<String>((ref) async {
   return ref.watch(lrRepositoryProvider).nextNumber();
 });

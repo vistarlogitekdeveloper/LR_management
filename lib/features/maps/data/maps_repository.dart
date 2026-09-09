@@ -18,6 +18,13 @@ class MapsSuggestion {
   });
 }
 
+/// Road distance/duration between two points, from the backend OSRM proxy.
+class RoadDistance {
+  final double distanceKm;
+  final int durationMin;
+  const RoadDistance({required this.distanceKm, required this.durationMin});
+}
+
 /// Thin client over our backend `/maps` proxy (free OpenStreetMap / Nominatim —
 /// no API key). Never talks to the geocoder directly.
 class MapsRepository {
@@ -52,6 +59,40 @@ class MapsRepository {
     );
     final m = (res.data['data'] as Map).cast<String, dynamic>();
     return (m['address'] as String?) ?? '';
+  }
+
+  /// Road distance/duration for a route's two pins. Returns null when routing
+  /// is unavailable, the request fails, or the response shape is unexpected —
+  /// this only ever prefills a field the user can type themselves, so the
+  /// caller treats null as "leave the field alone" and shows nothing.
+  Future<RoadDistance?> roadDistance({
+    required double fromLat,
+    required double fromLng,
+    required double toLat,
+    required double toLng,
+  }) async {
+    try {
+      final res = await _api.dio.get(
+        '/maps/road-distance',
+        queryParameters: {
+          'from_lat': fromLat,
+          'from_lng': fromLng,
+          'to_lat': toLat,
+          'to_lng': toLng,
+        },
+      );
+      final data = res.data;
+      if (data is! Map) return null;
+      final m = (data['data'] as Map?)?.cast<String, dynamic>();
+      // available:false is a routing outage, not an error — same silent skip.
+      if (m == null || m['available'] != true) return null;
+      final km = (m['distance_km'] as num?)?.toDouble();
+      if (km == null) return null;
+      final mins = (m['duration_min'] as num?)?.round() ?? 0;
+      return RoadDistance(distanceKm: km, durationMin: mins);
+    } catch (_) {
+      return null;
+    }
   }
 }
 

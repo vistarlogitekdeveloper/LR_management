@@ -19,14 +19,17 @@ class LookupsRepository {
     if (data is Map) {
       data.forEach((category, list) {
         if (list is List) {
-          grouped[category.toString()] = list
-              .whereType<Map>()
-              .map((e) => LookupValue.fromJson({
-                    ...e.cast<String, dynamic>(),
-                    'category': category.toString(),
-                  }))
-              .toList()
-            ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+          grouped[category.toString()] =
+              list
+                  .whereType<Map>()
+                  .map(
+                    (e) => LookupValue.fromJson({
+                      ...e.cast<String, dynamic>(),
+                      'category': category.toString(),
+                    }),
+                  )
+                  .toList()
+                ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
         }
       });
     } else if (data is List) {

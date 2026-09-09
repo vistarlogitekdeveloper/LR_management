@@ -77,9 +77,7 @@ class _LrFormatScreenState extends ConsumerState<LrFormatScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text('Could not save: $e')),
-      );
+      messenger.showSnackBar(SnackBar(content: Text('Could not save: $e')));
     }
   }
 
@@ -128,10 +126,11 @@ class _LrFormatScreenState extends ConsumerState<LrFormatScreen> {
       driverMobile: '90110 23344',
     );
     const transporter = Transporter(
-        id: 'preview',
-        name: 'Vistar Own Fleet',
-        pan: 'AABCV1234M',
-        tds: 'Yes');
+      id: 'preview',
+      name: 'Vistar Own Fleet',
+      pan: 'AABCV1234M',
+      tds: 'Yes',
+    );
     return LorryReceipt(
       id: 'preview',
       number: 'VLL/25/05/PREVIEW',
@@ -331,10 +330,7 @@ class _LrFormatScreenState extends ConsumerState<LrFormatScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionTitle(
-          icon: Icons.preview_outlined,
-          title: 'Live preview',
-        ),
+        const SectionTitle(icon: Icons.preview_outlined, title: 'Live preview'),
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -377,11 +373,15 @@ class _LrFormatScreenState extends ConsumerState<LrFormatScreen> {
       contentPadding: EdgeInsets.zero,
       value: value,
       onChanged: onChanged,
-      title: Text(label,
-          style: const TextStyle(
-              fontWeight: FontWeight.w700, color: AppColors.ink, fontSize: 13.5)),
+      title: Text(
+        label,
+        style: const TextStyle(
+          fontWeight: FontWeight.w700,
+          color: AppColors.ink,
+          fontSize: 13.5,
+        ),
+      ),
       activeThumbColor: AppColors.plum,
     );
   }
 }
-

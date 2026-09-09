@@ -34,9 +34,9 @@ class PartDescription {
   }
 
   Map<String, dynamic> toJson() => {
-        'name': name,
-        'nature_of_goods': natureOfGoods,
-        'default_package_type_id': defaultPackageTypeId,
-        'active': active,
-      };
+    'name': name,
+    'nature_of_goods': natureOfGoods,
+    'default_package_type_id': defaultPackageTypeId,
+    'active': active,
+  };
 }

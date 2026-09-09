@@ -9,14 +9,19 @@ class ConsigneesRepository {
   final ApiClient _api;
 
   Future<List<Consignee>> list({String? query}) async {
-    final rows = await fetchAllPages(_api, '/consignees',
-        query: {if (query != null && query.isNotEmpty) 'q': query});
+    final rows = await fetchAllPages(
+      _api,
+      '/consignees',
+      query: {if (query != null && query.isNotEmpty) 'q': query},
+    );
     return rows.map(Consignee.fromJson).toList();
   }
 
   Future<Consignee> create(Consignee c) async {
     final res = await _api.dio.post('/consignees', data: c.toJson());
-    return Consignee.fromJson((res.data['data'] as Map).cast<String, dynamic>());
+    return Consignee.fromJson(
+      (res.data['data'] as Map).cast<String, dynamic>(),
+    );
   }
 
   Future<Consignee> update(Consignee c) async {
@@ -25,7 +30,9 @@ class ConsigneesRepository {
       data: c.toJson(),
       options: Options(headers: {'If-Match': c.version.toString()}),
     );
-    return Consignee.fromJson((res.data['data'] as Map).cast<String, dynamic>());
+    return Consignee.fromJson(
+      (res.data['data'] as Map).cast<String, dynamic>(),
+    );
   }
 
   Future<void> remove(String id) async {

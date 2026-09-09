@@ -8,11 +8,12 @@ import '../data/system_repository.dart';
 export '../data/system_config.dart';
 
 final systemRepositoryProvider = Provider<SystemRepository>(
-    (ref) => SystemRepository(ref.watch(apiClientProvider)));
+  (ref) => SystemRepository(ref.watch(apiClientProvider)),
+);
 
 class SystemConfigNotifier extends StateNotifier<SystemConfig> {
   SystemConfigNotifier(this._repo, {required bool authed, this.regionId})
-      : super(const SystemConfig()) {
+    : super(const SystemConfig()) {
     if (authed) refresh();
   }
   final SystemRepository _repo;
@@ -45,10 +46,10 @@ class SystemConfigNotifier extends StateNotifier<SystemConfig> {
 
 final systemConfigProvider =
     StateNotifierProvider<SystemConfigNotifier, SystemConfig>((ref) {
-  final user = ref.watch(currentUserProvider);
-  return SystemConfigNotifier(
-    ref.watch(systemRepositoryProvider),
-    authed: user != null,
-    regionId: user?.regionId,
-  );
-});
+      final user = ref.watch(currentUserProvider);
+      return SystemConfigNotifier(
+        ref.watch(systemRepositoryProvider),
+        authed: user != null,
+        regionId: user?.regionId,
+      );
+    });

@@ -9,8 +9,11 @@ class ConsignorsRepository {
   final ApiClient _api;
 
   Future<List<Consignor>> list({String? query}) async {
-    final rows = await fetchAllPages(_api, '/consignors',
-        query: {if (query != null && query.isNotEmpty) 'q': query});
+    final rows = await fetchAllPages(
+      _api,
+      '/consignors',
+      query: {if (query != null && query.isNotEmpty) 'q': query},
+    );
     return rows.map(Consignor.fromJson).toList();
   }
 

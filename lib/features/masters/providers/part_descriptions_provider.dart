@@ -10,8 +10,10 @@ final partDescriptionsRepositoryProvider = Provider<PartDescriptionsRepository>(
 
 final partDescriptionsProvider =
     StateNotifierProvider<PartDescriptionsNotifier, List<PartDescription>>(
-  (ref) => PartDescriptionsNotifier(ref.watch(partDescriptionsRepositoryProvider)),
-);
+      (ref) => PartDescriptionsNotifier(
+        ref.watch(partDescriptionsRepositoryProvider),
+      ),
+    );
 
 /// First-load flag — `true` until the initial fetch settles (cleared by the
 /// route's RefreshGate). See [partDescriptionsProvider].

@@ -24,6 +24,17 @@ class SearchableField<T> extends StatelessWidget {
   /// When true the picker offers a "— None —" entry that clears the selection.
   final bool clearable;
 
+  /// Optional "create one from here" hook. When given, the picker shows an
+  /// "Add new …" entry above the options; tapping it closes the picker and
+  /// calls this with whatever was typed in the search box (so the create form
+  /// can pre-fill the name). Return the created option to select it on the
+  /// field, or null if the user backed out. Left null — e.g. when the signed-in
+  /// user lacks that master's manage permission — no add entry is shown.
+  final Future<T?> Function(String query)? onAddNew;
+
+  /// Label for the add entry, e.g. 'Add new vehicle'.
+  final String addNewLabel;
+
   const SearchableField({
     super.key,
     required this.value,
@@ -34,6 +45,8 @@ class SearchableField<T> extends StatelessWidget {
     this.hintText = 'Select',
     this.dialogTitle,
     this.clearable = false,
+    this.onAddNew,
+    this.addNewLabel = 'Add new',
   });
 
   @override
@@ -52,9 +65,16 @@ class SearchableField<T> extends StatelessWidget {
             subtitleOf: subtitleOf,
             clearable: clearable,
             current: value,
+            addNewLabel: onAddNew == null ? null : addNewLabel,
           ),
         );
-        if (result != null) onChanged(result.value);
+        if (result == null) return; // dismissed
+        if (result.addNew) {
+          final created = await onAddNew!(result.query);
+          if (created != null) onChanged(created);
+          return;
+        }
+        onChanged(result.value);
       },
       child: InputDecorator(
         isEmpty: !hasValue,
@@ -82,7 +102,15 @@ class SearchableField<T> extends StatelessWidget {
 /// Distinguishes a real pick / clear (returns a result) from a dismissal (null).
 class _PickResult<T> {
   final T? value;
-  const _PickResult(this.value);
+
+  /// True when the user tapped the "Add new …" entry instead of picking.
+  final bool addNew;
+
+  /// The search text at that moment — a head start for the create form.
+  final String query;
+
+  const _PickResult(this.value) : addNew = false, query = '';
+  const _PickResult.addNew(this.query) : value = null, addNew = true;
 }
 
 class _SearchPicker<T> extends StatefulWidget {
@@ -93,6 +121,9 @@ class _SearchPicker<T> extends StatefulWidget {
   final bool clearable;
   final T? current;
 
+  /// Null when the caller passed no onAddNew (or the user may not create one).
+  final String? addNewLabel;
+
   const _SearchPicker({
     required this.title,
     required this.options,
@@ -100,6 +131,7 @@ class _SearchPicker<T> extends StatefulWidget {
     required this.subtitleOf,
     required this.clearable,
     required this.current,
+    required this.addNewLabel,
   });
 
   @override
@@ -127,6 +159,8 @@ class _SearchPickerState<T> extends State<_SearchPicker<T>> {
             final s = widget.subtitleOf?.call(o).toLowerCase() ?? '';
             return l.contains(q) || s.contains(q);
           }).toList();
+
+    final addLabel = widget.addNewLabel;
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
@@ -163,7 +197,7 @@ class _SearchPickerState<T> extends State<_SearchPicker<T>> {
             ),
             const Divider(height: 1, color: AppColors.line),
             Flexible(
-              child: filtered.isEmpty && !widget.clearable
+              child: filtered.isEmpty && !widget.clearable && addLabel == null
                   ? const Padding(
                       padding: EdgeInsets.all(28),
                       child: Center(
@@ -177,6 +211,46 @@ class _SearchPickerState<T> extends State<_SearchPicker<T>> {
                       padding: EdgeInsets.zero,
                       shrinkWrap: true,
                       children: [
+                        // "Add new" sits above the options (and stays visible
+                        // when nothing matches, which is exactly when it's
+                        // needed) — the typed text rides along to the form.
+                        if (addLabel != null) ...[
+                          ListTile(
+                            dense: true,
+                            leading: const Icon(
+                              Icons.add_circle_outline,
+                              size: 20,
+                              color: AppColors.plum,
+                            ),
+                            title: Text(
+                              _q.trim().isEmpty
+                                  ? addLabel
+                                  : '$addLabel "${_q.trim()}"',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.plum,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            onTap: () => Navigator.pop(
+                              context,
+                              _PickResult<T>.addNew(_q.trim()),
+                            ),
+                          ),
+                          const Divider(height: 1, color: AppColors.line),
+                        ],
+                        if (filtered.isEmpty && addLabel != null)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 18,
+                            ),
+                            child: Text(
+                              'No matches',
+                              style: TextStyle(color: AppColors.slate),
+                            ),
+                          ),
                         if (widget.clearable)
                           ListTile(
                             dense: true,

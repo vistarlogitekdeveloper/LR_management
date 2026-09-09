@@ -11,10 +11,7 @@ import 'package:lr_management/shared/widgets/searchable_field.dart';
 void main() {
   // Mounts the dropdown exactly as configured in reports_screen.dart and
   // returns a harness that records every onChanged value.
-  Future<List<bool?>> pumpFilter(
-    WidgetTester tester, {
-    bool? initial,
-  }) async {
+  Future<List<bool?>> pumpFilter(WidgetTester tester, {bool? initial}) async {
     final changes = <bool?>[];
     bool? value = initial;
     await tester.pumpWidget(
@@ -69,8 +66,9 @@ void main() {
     expect(changes.first, isNotNull); // false must survive as false
   });
 
-  testWidgets('clearing a selection yields null (back to "All LRs")',
-      (tester) async {
+  testWidgets('clearing a selection yields null (back to "All LRs")', (
+    tester,
+  ) async {
     final changes = await pumpFilter(tester, initial: true);
     // Field shows the current selection.
     expect(find.text('Sent for advance'), findsOneWidget);

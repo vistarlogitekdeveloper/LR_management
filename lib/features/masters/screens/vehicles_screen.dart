@@ -33,59 +33,63 @@ class VehiclesScreen extends ConsumerWidget {
     required List<String> driverNames,
     required List<String> transporterNames,
     required List<String> routeNames,
-  }) =>
-      [
-        FormFieldSpec(
-            name: 'number',
-            label: 'Vehicle Number',
-            required: true,
-            uppercase: true,
-            initialValue: v?.number),
-        FormFieldSpec(
-            name: 'type',
-            label: 'Vehicle Type',
-            type: FieldType.dropdown,
-            required: true,
-            options: vehicleTypes,
-            initialValue: v?.type),
-        FormFieldSpec(
-            name: 'capacity',
-            label: 'Capacity (MT)',
-            type: FieldType.number,
-            hint: 'e.g. 12',
-            // Without this a value like "10MT" fails to parse and is silently
-            // saved as no capacity at all — a 200 OK that quietly drops data.
-            validator: (value) {
-              final s = (value ?? '').trim();
-              if (s.isEmpty) return null; // optional
-              final n = double.tryParse(s);
-              if (n == null) return 'Enter tonnes as a plain number, e.g. 12';
-              if (n <= 0) return 'Must be greater than 0';
-              return null;
-            },
-            initialValue: _capacityText(v?.capacityMt)),
-        FormFieldSpec(
-            name: 'driver',
-            label: 'Assigned Driver',
-            type: FieldType.dropdown,
-            options: [_none, ...driverNames],
-            initialValue: (v != null && v.driver.isNotEmpty) ? v.driver : _none),
-        FormFieldSpec(
-            name: 'transporter',
-            label: 'Transporter',
-            type: FieldType.dropdown,
-            options: [_none, ...transporterNames],
-            initialValue: (v != null && v.transporterName.isNotEmpty)
-                ? v.transporterName
-                : _none),
-        FormFieldSpec(
-            name: 'route',
-            label: 'Assigned Route',
-            type: FieldType.dropdown,
-            options: [_none, ...routeNames],
-            initialValue:
-                (v != null && v.routeName.isNotEmpty) ? v.routeName : _none),
-      ];
+  }) => [
+    FormFieldSpec(
+      name: 'number',
+      label: 'Vehicle Number',
+      required: true,
+      uppercase: true,
+      initialValue: v?.number,
+    ),
+    FormFieldSpec(
+      name: 'type',
+      label: 'Vehicle Type',
+      type: FieldType.dropdown,
+      required: true,
+      options: vehicleTypes,
+      initialValue: v?.type,
+    ),
+    FormFieldSpec(
+      name: 'capacity',
+      label: 'Capacity (MT)',
+      type: FieldType.number,
+      hint: 'e.g. 12',
+      // Without this a value like "10MT" fails to parse and is silently
+      // saved as no capacity at all — a 200 OK that quietly drops data.
+      validator: (value) {
+        final s = (value ?? '').trim();
+        if (s.isEmpty) return null; // optional
+        final n = double.tryParse(s);
+        if (n == null) return 'Enter tonnes as a plain number, e.g. 12';
+        if (n <= 0) return 'Must be greater than 0';
+        return null;
+      },
+      initialValue: _capacityText(v?.capacityMt),
+    ),
+    FormFieldSpec(
+      name: 'driver',
+      label: 'Assigned Driver',
+      type: FieldType.dropdown,
+      options: [_none, ...driverNames],
+      initialValue: (v != null && v.driver.isNotEmpty) ? v.driver : _none,
+    ),
+    FormFieldSpec(
+      name: 'transporter',
+      label: 'Transporter',
+      type: FieldType.dropdown,
+      options: [_none, ...transporterNames],
+      initialValue: (v != null && v.transporterName.isNotEmpty)
+          ? v.transporterName
+          : _none,
+    ),
+    FormFieldSpec(
+      name: 'route',
+      label: 'Assigned Route',
+      type: FieldType.dropdown,
+      options: [_none, ...routeNames],
+      initialValue: (v != null && v.routeName.isNotEmpty) ? v.routeName : _none,
+    ),
+  ];
 
   Future<void> _openForm(
     BuildContext context,
@@ -107,11 +111,13 @@ class VehiclesScreen extends ConsumerWidget {
       context: context,
       title: existing == null ? 'New Vehicle' : 'Edit Vehicle',
       subtitle: 'Fleet master',
-      fields: _fields(existing,
-          vehicleTypes: typeLabels,
-          driverNames: driverNames,
-          transporterNames: transporterNames,
-          routeNames: routeNames),
+      fields: _fields(
+        existing,
+        vehicleTypes: typeLabels,
+        driverNames: driverNames,
+        transporterNames: transporterNames,
+        routeNames: routeNames,
+      ),
       initial: existing == null
           ? const {}
           : {
@@ -122,8 +128,7 @@ class VehiclesScreen extends ConsumerWidget {
               'transporter': existing.transporterName.isEmpty
                   ? _none
                   : existing.transporterName,
-              'route':
-                  existing.routeName.isEmpty ? _none : existing.routeName,
+              'route': existing.routeName.isEmpty ? _none : existing.routeName,
             },
       onSave: (values) async {
         try {
@@ -136,58 +141,63 @@ class VehiclesScreen extends ConsumerWidget {
           final driverName = values['driver'];
           final driver = (driverName == null || driverName == _none)
               ? null
-              : drivers.where((d) => d.name == driverName).cast<Driver?>().firstWhere(
-                  (_) => true,
-                  orElse: () => null);
+              : drivers
+                    .where((d) => d.name == driverName)
+                    .cast<Driver?>()
+                    .firstWhere((_) => true, orElse: () => null);
           final trName = values['transporter'];
           final transporter = (trName == null || trName == _none)
               ? null
               : transporters
-                  .where((t) => t.name == trName)
-                  .cast<Transporter?>()
-                  .firstWhere((_) => true, orElse: () => null);
+                    .where((t) => t.name == trName)
+                    .cast<Transporter?>()
+                    .firstWhere((_) => true, orElse: () => null);
           final rName = values['route'];
           final route = (rName == null || rName == _none)
               ? null
               : routes
-                  .where((r) => r.name == rName)
-                  .cast<RouteMaster?>()
-                  .firstWhere((_) => true, orElse: () => null);
+                    .where((r) => r.name == rName)
+                    .cast<RouteMaster?>()
+                    .firstWhere((_) => true, orElse: () => null);
           final capacity = double.tryParse(values['capacity'] ?? '') ?? 0;
 
           final n = ref.read(vehiclesProvider.notifier);
           if (existing == null) {
-            await n.add(Vehicle(
-              id: const Uuid().v4(),
-              number: values['number'] ?? '',
-              typeId: typeId ?? '',
-              type: typeLabel,
-              capacityMt: capacity,
-              transporterId: transporter?.id,
-              transporterName: transporter?.name ?? '',
-              currentDriverId: driver?.id,
-              driver: driver?.name ?? '',
-              driverMobile: driver?.mobile ?? '',
-              routeId: route?.id,
-              routeName: route?.name ?? '',
-            ));
+            await n.add(
+              Vehicle(
+                id: const Uuid().v4(),
+                number: values['number'] ?? '',
+                typeId: typeId ?? '',
+                type: typeLabel,
+                capacityMt: capacity,
+                transporterId: transporter?.id,
+                transporterName: transporter?.name ?? '',
+                currentDriverId: driver?.id,
+                driver: driver?.name ?? '',
+                driverMobile: driver?.mobile ?? '',
+                routeId: route?.id,
+                routeName: route?.name ?? '',
+              ),
+            );
           } else {
             // Build explicitly (not copyWith) so picking "(None)" clears the FK.
-            await n.update(Vehicle(
-              id: existing.id,
-              version: existing.version,
-              number: values['number'] ?? existing.number,
-              typeId: typeId ?? '',
-              type: typeLabel,
-              capacityMt: capacity,
-              transporterId: transporter?.id,
-              transporterName: transporter?.name ?? '',
-              currentDriverId: driver?.id,
-              driver: driver?.name ?? '',
-              driverMobile: driver?.mobile ?? '',
-              routeId: route?.id,
-              routeName: route?.name ?? '',
-            ));
+            await n.update(
+              Vehicle(
+                id: existing.id,
+                version: existing.version,
+                number: values['number'] ?? existing.number,
+                typeId: typeId ?? '',
+                type: typeLabel,
+                capacityMt: capacity,
+                transporterId: transporter?.id,
+                transporterName: transporter?.name ?? '',
+                currentDriverId: driver?.id,
+                driver: driver?.name ?? '',
+                driverMobile: driver?.mobile ?? '',
+                routeId: route?.id,
+                routeName: route?.name ?? '',
+              ),
+            );
           }
           return true;
         } catch (e) {
@@ -204,8 +214,10 @@ class VehiclesScreen extends ConsumerWidget {
     final drivers = ref.watch(driversProvider);
     final transporters = ref.watch(transportersProvider);
     final routes = ref.watch(routesProvider);
-    final vehicleTypes =
-        lookupList(ref.watch(lookupsMapProvider), 'VEHICLE_TYPE');
+    final vehicleTypes = lookupList(
+      ref.watch(lookupsMapProvider),
+      'VEHICLE_TYPE',
+    );
     final user = ref.watch(currentUserProvider);
     final canEdit = user?.canManageVehicles ?? false;
 
@@ -216,27 +228,35 @@ class VehiclesScreen extends ConsumerWidget {
       icon: Icons.local_shipping_outlined,
       canEdit: canEdit,
       onAdd: canEdit
-          ? () => _openForm(context, ref,
+          ? () => _openForm(
+              context,
+              ref,
               vehicleTypes: vehicleTypes,
               drivers: drivers,
               transporters: transporters,
-              routes: routes)
+              routes: routes,
+            )
           : null,
       onEdit: canEdit
           ? (id) {
               final v = vehicles.firstWhere((x) => x.id == id);
-              _openForm(context, ref,
-                  existing: v,
-                  vehicleTypes: vehicleTypes,
-                  drivers: drivers,
-                  transporters: transporters,
-                  routes: routes);
+              _openForm(
+                context,
+                ref,
+                existing: v,
+                vehicleTypes: vehicleTypes,
+                drivers: drivers,
+                transporters: transporters,
+                routes: routes,
+              );
             }
           : null,
       onDelete: canEdit
           ? (id) async {
               final ok = await MasterActions.confirmDelete(
-                  context: context, label: 'this vehicle');
+                context: context,
+                label: 'this vehicle',
+              );
               if (!ok) return;
               try {
                 await ref.read(vehiclesProvider.notifier).remove(id);

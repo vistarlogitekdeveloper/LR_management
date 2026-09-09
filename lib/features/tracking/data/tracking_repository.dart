@@ -29,13 +29,13 @@ class TrackPoint {
   });
 
   factory TrackPoint.fromJson(Map<String, dynamic> j) => TrackPoint(
-        lat: _d(j['lat']),
-        lng: _d(j['lng']),
-        at: _dt(j['recorded_at']),
-        city: j['city'] as String?,
-        address: j['address'] as String?,
-        source: j['source'] as String?,
-      );
+    lat: _d(j['lat']),
+    lng: _d(j['lng']),
+    at: _dt(j['recorded_at']),
+    city: j['city'] as String?,
+    address: j['address'] as String?,
+    source: j['source'] as String?,
+  );
 }
 
 /// One actively-tracked vehicle/LR for the fleet view.
@@ -62,18 +62,18 @@ class FleetVehicle {
   });
 
   factory FleetVehicle.fromJson(Map<String, dynamic> j) => FleetVehicle(
-        lrId: j['lr_id'].toString(),
-        lrNumber: (j['lr_number'] ?? '').toString(),
-        fromCity: j['from_city'] as String?,
-        toCity: j['to_city'] as String?,
-        truckNumber: j['truck_number'] as String?,
-        driverName: j['driver_name'] as String?,
-        consentStatus: j['consent_status'] as String?,
-        trackingState: j['tracking_state'] as String?,
-        location: (j['location'] is Map)
-            ? TrackPoint.fromJson((j['location'] as Map).cast<String, dynamic>())
-            : null,
-      );
+    lrId: j['lr_id'].toString(),
+    lrNumber: (j['lr_number'] ?? '').toString(),
+    fromCity: j['from_city'] as String?,
+    toCity: j['to_city'] as String?,
+    truckNumber: j['truck_number'] as String?,
+    driverName: j['driver_name'] as String?,
+    consentStatus: j['consent_status'] as String?,
+    trackingState: j['tracking_state'] as String?,
+    location: (j['location'] is Map)
+        ? TrackPoint.fromJson((j['location'] as Map).cast<String, dynamic>())
+        : null,
+  );
 }
 
 /// Full tracking detail for one LR (trail + consent).
@@ -129,7 +129,8 @@ class LrTracking {
         .toList();
     final cur = (j['current_location'] is Map)
         ? TrackPoint.fromJson(
-            (j['current_location'] as Map).cast<String, dynamic>())
+            (j['current_location'] as Map).cast<String, dynamic>(),
+          )
         : null;
     return LrTracking(
       lrId: j['lr_id'].toString(),
@@ -154,7 +155,8 @@ class LrTracking {
       remainingRoute: (j['remaining_route'] is Map)
           ? (() {
               final r = RouteOption.fromJson(
-                  (j['remaining_route'] as Map).cast<String, dynamic>());
+                (j['remaining_route'] as Map).cast<String, dynamic>(),
+              );
               return r.points.length > 1 ? r : null;
             })()
           : null,
@@ -171,10 +173,10 @@ class ConsentResult {
   final String? operator;
   const ConsentResult({this.status, this.suggestion, this.operator});
   factory ConsentResult.fromJson(Map<String, dynamic> j) => ConsentResult(
-        status: j['consent_status'] as String?,
-        suggestion: j['consent_suggestion'] as String?,
-        operator: j['operator'] as String?,
-      );
+    status: j['consent_status'] as String?,
+    suggestion: j['consent_suggestion'] as String?,
+    operator: j['operator'] as String?,
+  );
 }
 
 class TrackingRepository {
@@ -191,13 +193,17 @@ class TrackingRepository {
   /// Trail + consent for one LR.
   Future<LrTracking> lrTracking(String lrId) async {
     final res = await _api.dio.get('/tracking/lr/$lrId/route');
-    return LrTracking.fromJson((res.data['data'] as Map).cast<String, dynamic>());
+    return LrTracking.fromJson(
+      (res.data['data'] as Map).cast<String, dynamic>(),
+    );
   }
 
   /// Re-check the driver-SIM consent for an LR (refreshes the stored status).
   Future<ConsentResult> recheckConsent(String lrId) async {
     final res = await _api.dio.post('/tracking/lr/$lrId/consent-recheck');
-    return ConsentResult.fromJson((res.data['data'] as Map).cast<String, dynamic>());
+    return ConsentResult.fromJson(
+      (res.data['data'] as Map).cast<String, dynamic>(),
+    );
   }
 
   /// Start SIM tracking for an LR whose driver was assigned after creation

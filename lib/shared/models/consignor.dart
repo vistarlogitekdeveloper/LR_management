@@ -22,28 +22,29 @@ class Consignor {
   });
 
   factory Consignor.fromJson(Map<String, dynamic> json) => Consignor(
-        id: json['id'] as String,
-        name: (json['name'] as String?) ?? '',
-        gst: (json['gstin'] as String?) ?? (json['gst'] as String?) ?? '',
-        city: (json['city'] as String?) ?? '',
-        address: (json['address'] as String?) ?? '',
-        contact: (json['contact_person'] as String?) ??
-            (json['contact'] as String?) ??
-            '',
-        mobile: (json['mobile'] as String?) ?? '',
-        email: (json['email'] as String?) ?? '',
-        version: (json['version'] as num?)?.toInt() ?? 0,
-      );
+    id: json['id'] as String,
+    name: (json['name'] as String?) ?? '',
+    gst: (json['gstin'] as String?) ?? (json['gst'] as String?) ?? '',
+    city: (json['city'] as String?) ?? '',
+    address: (json['address'] as String?) ?? '',
+    contact:
+        (json['contact_person'] as String?) ??
+        (json['contact'] as String?) ??
+        '',
+    mobile: (json['mobile'] as String?) ?? '',
+    email: (json['email'] as String?) ?? '',
+    version: (json['version'] as num?)?.toInt() ?? 0,
+  );
 
   Map<String, dynamic> toJson() => {
-        'name': name,
-        'gstin': gst,
-        'city': city,
-        'address': address,
-        'contact_person': contact,
-        'mobile': mobile,
-        'email': email,
-      };
+    'name': name,
+    'gstin': gst,
+    'city': city,
+    'address': address,
+    'contact_person': contact,
+    'mobile': mobile,
+    'email': email,
+  };
 
   Consignor copyWith({
     String? name,

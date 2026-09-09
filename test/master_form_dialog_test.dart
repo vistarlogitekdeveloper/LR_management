@@ -41,20 +41,21 @@ Future<Map<String, String>?> _pump(
 }
 
 List<FormFieldSpec> _vehicleFields({String? type}) => [
-      FormFieldSpec(name: 'number', label: 'Vehicle Number', required: true),
-      FormFieldSpec(
-        name: 'type',
-        label: 'Vehicle Type',
-        type: FieldType.dropdown,
-        required: true,
-        options: const ['Open Body', '10 MT', '20 MT'],
-        initialValue: type,
-      ),
-    ];
+  FormFieldSpec(name: 'number', label: 'Vehicle Number', required: true),
+  FormFieldSpec(
+    name: 'type',
+    label: 'Vehicle Type',
+    type: FieldType.dropdown,
+    required: true,
+    options: const ['Open Body', '10 MT', '20 MT'],
+    initialValue: type,
+  ),
+];
 
 void main() {
-  testWidgets('an empty required dropdown does not preselect the first option',
-      (tester) async {
+  testWidgets('an empty required dropdown does not preselect the first option', (
+    tester,
+  ) async {
     await _pump(tester, _vehicleFields(type: ''));
 
     // "Open Body" is merely first in the list — it must not be presented as the

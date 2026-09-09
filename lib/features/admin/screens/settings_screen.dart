@@ -14,7 +14,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cfg = ref.watch(systemConfigProvider);
     final notifier = ref.read(systemConfigProvider.notifier);
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
     final cardPad = EdgeInsets.all(isMobile ? 12 : 20);
     final gap = isMobile ? 10.0 : 20.0;
 

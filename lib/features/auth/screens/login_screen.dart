@@ -74,11 +74,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     // banner already tells them what went wrong.
   }
 
-
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
-    final isWide = MediaQuery.of(context).size.width >= 900;
+    final isWide = MediaQuery.sizeOf(context).width >= 900;
 
     final form = _Form(
       formKey: _formKey,
@@ -129,10 +128,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           )
                         : Column(
                             mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const _Hero(compact: true),
-                              form,
-                            ],
+                            children: [const _Hero(compact: true), form],
                           ),
                   ),
                 ),
@@ -177,13 +173,8 @@ class _Hero extends StatelessWidget {
       );
     }
     return Container(
-      decoration: const BoxDecoration(
-        gradient: AppColors.loginHeroGradient,
-      ),
-      padding: const EdgeInsets.symmetric(
-        horizontal: 54,
-        vertical: 56,
-      ),
+      decoration: const BoxDecoration(gradient: AppColors.loginHeroGradient),
+      padding: const EdgeInsets.symmetric(horizontal: 54, vertical: 56),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -235,7 +226,11 @@ class _TrustPoints extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 12),
             child: Row(
               children: [
-                Icon(icon, color: Colors.white.withValues(alpha: 0.9), size: 18),
+                Icon(
+                  icon,
+                  color: Colors.white.withValues(alpha: 0.9),
+                  size: 18,
+                ),
                 const SizedBox(width: 10),
                 Text(
                   text,
@@ -345,8 +340,9 @@ class _FormState extends State<_Form> {
                       // displayed value, making it look like the field cleared.
                       readOnly: widget.loading,
                       validator: _validateUsername,
-                      decoration:
-                          const InputDecoration(hintText: 'Enter your username'),
+                      decoration: const InputDecoration(
+                        hintText: 'Enter your username',
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -381,7 +377,8 @@ class _FormState extends State<_Form> {
                           onPressed: widget.loading
                               ? null
                               : () => setState(
-                                  () => _obscurePassword = !_obscurePassword),
+                                  () => _obscurePassword = !_obscurePassword,
+                                ),
                         ),
                       ),
                     ),
@@ -392,16 +389,21 @@ class _FormState extends State<_Form> {
             if (widget.error != null) ...[
               const SizedBox(height: 14),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.danger.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.error_outline_rounded,
-                        color: AppColors.danger, size: 18),
+                    const Icon(
+                      Icons.error_outline_rounded,
+                      color: AppColors.danger,
+                      size: 18,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -472,8 +474,7 @@ class _RememberRow extends StatelessWidget {
                     visualDensity: VisualDensity.compact,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     activeColor: AppColors.plum,
-                    onChanged:
-                        enabled ? (v) => onChanged!(v ?? false) : null,
+                    onChanged: enabled ? (v) => onChanged!(v ?? false) : null,
                   ),
                 ),
                 const SizedBox(width: 8),

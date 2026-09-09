@@ -8,12 +8,18 @@ class PartDescriptionsRepository {
   PartDescriptionsRepository(this._api);
   final ApiClient _api;
 
-  Future<List<PartDescription>> list(
-      {String? query, bool activeOnly = false}) async {
-    final rows = await fetchAllPages(_api, '/part-descriptions', query: {
-      if (query != null && query.isNotEmpty) 'q': query,
-      if (activeOnly) 'active': 'true',
-    });
+  Future<List<PartDescription>> list({
+    String? query,
+    bool activeOnly = false,
+  }) async {
+    final rows = await fetchAllPages(
+      _api,
+      '/part-descriptions',
+      query: {
+        if (query != null && query.isNotEmpty) 'q': query,
+        if (activeOnly) 'active': 'true',
+      },
+    );
     return rows.map(PartDescription.fromJson).toList();
   }
 

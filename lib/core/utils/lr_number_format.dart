@@ -37,8 +37,9 @@ String formatLrNumber(
   // {seq} or {seq:0Nd}
   return withText.replaceAllMapped(
     RegExp(r'\{seq(?::0(\d+)d)?\}'),
-    (m) => seq
-        .toString()
-        .padLeft(m.group(1) == null ? 0 : int.parse(m.group(1)!), '0'),
+    (m) => seq.toString().padLeft(
+      m.group(1) == null ? 0 : int.parse(m.group(1)!),
+      '0',
+    ),
   );
 }

@@ -279,7 +279,9 @@ pw.Widget _copyBody(
 
   final goodsRows = <pw.TableRow>[_goodsHeaderRow(7.6 * s)];
   if (lr.items.isEmpty) {
-    goodsRows.add(_goodsRow(remarks: lr.remarks ?? '', size: goodsFont, padV: goodsPadV));
+    goodsRows.add(
+      _goodsRow(remarks: lr.remarks ?? '', size: goodsFont, padV: goodsPadV),
+    );
   } else {
     for (var i = 0; i < lr.items.length; i++) {
       final it = lr.items[i];
@@ -305,7 +307,10 @@ pw.Widget _copyBody(
     children: [
       // 1. Company header
       _section(
-        widths: {0: pw.FixedColumnWidth(135 * s), 1: const pw.FlexColumnWidth()},
+        widths: {
+          0: pw.FixedColumnWidth(135 * s),
+          1: const pw.FlexColumnWidth(),
+        },
         rows: [
           pw.TableRow(
             children: [
@@ -362,24 +367,50 @@ pw.Widget _copyBody(
         rows: [
           pw.TableRow(
             children: [
-              _kv('Vehicle Capacity', lr.capacityLabel,
-                  size: 11 * s, valueBold: true, vertical: padV),
-              _kv('LR Date.', df.format(lr.date),
-                  size: 11 * s, valueBold: true, vertical: padV),
-              _kv('Vehicle Number', lr.vehicle.number,
-                  size: 11 * s, valueBold: true, vertical: padV),
-              _kv('L.R. No', lr.number,
-                  size: 11 * s, valueBold: true, vertical: padV),
+              _kv(
+                'Vehicle Capacity',
+                lr.capacityLabel,
+                size: 11 * s,
+                valueBold: true,
+                vertical: padV,
+              ),
+              _kv(
+                'LR Date.',
+                df.format(lr.date),
+                size: 11 * s,
+                valueBold: true,
+                vertical: padV,
+              ),
+              _kv(
+                'Vehicle Number',
+                lr.vehicle.number,
+                size: 11 * s,
+                valueBold: true,
+                vertical: padV,
+              ),
+              _kv(
+                'L.R. No',
+                lr.number,
+                size: 11 * s,
+                valueBold: true,
+                vertical: padV,
+              ),
             ],
           ),
           pw.TableRow(
             children: [
-              _kv('ID Date',
-                  lr.inDateTime != null ? dtf.format(lr.inDateTime!) : '',
-                  size: 9 * s, vertical: padV),
-              _kv('Out Date',
-                  lr.outDateTime != null ? dtf.format(lr.outDateTime!) : '',
-                  size: 9 * s, vertical: padV),
+              _kv(
+                'ID Date',
+                lr.inDateTime != null ? dtf.format(lr.inDateTime!) : '',
+                size: 9 * s,
+                vertical: padV,
+              ),
+              _kv(
+                'Out Date',
+                lr.outDateTime != null ? dtf.format(lr.outDateTime!) : '',
+                size: 9 * s,
+                vertical: padV,
+              ),
               _kv('Order No', lr.orderNo, size: 9 * s, vertical: padV),
               _pad(_txt(''), vertical: padV),
             ],
@@ -392,32 +423,66 @@ pw.Widget _copyBody(
         rows: [
           pw.TableRow(
             children: [
-              _kv('Consignor', lr.consignor.name, size: 9.5 * s, vertical: padV),
-              _kv('Consignee', lr.consignee.name, size: 9.5 * s, vertical: padV),
+              _kv(
+                'Consignor',
+                lr.consignor.name,
+                size: 9.5 * s,
+                vertical: padV,
+              ),
+              _kv(
+                'Consignee',
+                lr.consignee.name,
+                size: 9.5 * s,
+                vertical: padV,
+              ),
             ],
           ),
           pw.TableRow(
             children: [
-              _kv('Consignor Address', lr.consignor.address,
-                  size: 9.5 * s, vertical: padV),
-              _kv('Consignee Address', lr.consignee.address,
-                  size: 9.5 * s, vertical: padV),
+              _kv(
+                'Consignor Address',
+                lr.consignor.address,
+                size: 9.5 * s,
+                vertical: padV,
+              ),
+              _kv(
+                'Consignee Address',
+                lr.consignee.address,
+                size: 9.5 * s,
+                vertical: padV,
+              ),
             ],
           ),
           pw.TableRow(
             children: [
-              _kv('Consignor Contact No', consignorContact,
-                  size: 9.5 * s, vertical: padV),
-              _kv('Consignee Contact No', consigneeContact,
-                  size: 9.5 * s, vertical: padV),
+              _kv(
+                'Consignor Contact No',
+                consignorContact,
+                size: 9.5 * s,
+                vertical: padV,
+              ),
+              _kv(
+                'Consignee Contact No',
+                consigneeContact,
+                size: 9.5 * s,
+                vertical: padV,
+              ),
             ],
           ),
           pw.TableRow(
             children: [
-              _kv('Consignor GSTIN', lr.consignor.gst,
-                  size: 9.5 * s, vertical: padV),
-              _kv('Consignee GSTIN', lr.consignee.gst,
-                  size: 9.5 * s, vertical: padV),
+              _kv(
+                'Consignor GSTIN',
+                lr.consignor.gst,
+                size: 9.5 * s,
+                vertical: padV,
+              ),
+              _kv(
+                'Consignee GSTIN',
+                lr.consignee.gst,
+                size: 9.5 * s,
+                vertical: padV,
+              ),
             ],
           ),
         ],
@@ -426,7 +491,8 @@ pw.Widget _copyBody(
       _section(
         rows: [
           pw.TableRow(
-              children: [_kv('Route', routeStr, size: 9.5 * s, vertical: padV)]),
+            children: [_kv('Route', routeStr, size: 9.5 * s, vertical: padV)],
+          ),
         ],
       ),
       // 6. E-way bill + driver
@@ -435,8 +501,12 @@ pw.Widget _copyBody(
         rows: [
           pw.TableRow(
             children: [
-              _kv('Goods Eway Bill Number', lr.ewb?.number ?? '',
-                  size: 9.5 * s, vertical: padV),
+              _kv(
+                'Goods Eway Bill Number',
+                lr.ewb?.number ?? '',
+                size: 9.5 * s,
+                vertical: padV,
+              ),
               _kv('Driver Name', driverStr, size: 9.5 * s, vertical: padV),
             ],
           ),
@@ -470,8 +540,10 @@ pw.Widget _copyBody(
         rows: [
           pw.TableRow(
             children: [
-              _pad(_txt('Total-${lr.totalPackages}', size: 10 * s, bold: true),
-                  vertical: padV),
+              _pad(
+                _txt('Total-${lr.totalPackages}', size: 10 * s, bold: true),
+                vertical: padV,
+              ),
             ],
           ),
         ],
@@ -482,7 +554,12 @@ pw.Widget _copyBody(
         rows: [
           pw.TableRow(
             children: [
-              _kv('Created By', lr.enteredByName, size: 9.5 * s, vertical: padV),
+              _kv(
+                'Created By',
+                lr.enteredByName,
+                size: 9.5 * s,
+                vertical: padV,
+              ),
               _kv('Received By', '', size: 9.5 * s, vertical: padV),
             ],
           ),
@@ -547,10 +624,10 @@ pw.Widget _copyBody(
 /// widths mirror [_goodsWidths] exactly so the dividers line up with the rows.
 pw.Widget _goodsFiller() {
   pw.Widget divider() => pw.Container(
-        decoration: const pw.BoxDecoration(
-          border: pw.Border(right: pw.BorderSide(width: _bw)),
-        ),
-      );
+    decoration: const pw.BoxDecoration(
+      border: pw.Border(right: pw.BorderSide(width: _bw)),
+    ),
+  );
   pw.Widget flexCol(int flex) => pw.Expanded(flex: flex, child: divider());
   pw.Widget fixedCol(double width) =>
       pw.SizedBox(width: width, child: divider());

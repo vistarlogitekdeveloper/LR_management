@@ -32,13 +32,13 @@ class Driver {
   }
 
   Map<String, dynamic> toJson() => {
-        'name': name,
-        if (mobile.isNotEmpty) 'mobile': mobile,
-        if (licenseNo.isNotEmpty) 'license_no': licenseNo,
-        if (licenseExpiry != null && licenseExpiry!.isNotEmpty)
-          'license_expiry': licenseExpiry,
-        if (address.isNotEmpty) 'address': address,
-      };
+    'name': name,
+    if (mobile.isNotEmpty) 'mobile': mobile,
+    if (licenseNo.isNotEmpty) 'license_no': licenseNo,
+    if (licenseExpiry != null && licenseExpiry!.isNotEmpty)
+      'license_expiry': licenseExpiry,
+    if (address.isNotEmpty) 'address': address,
+  };
 
   Driver copyWith({
     String? name,

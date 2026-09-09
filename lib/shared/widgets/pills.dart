@@ -10,10 +10,22 @@ class StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = switch (status) {
-      LrStatus.delivered => (AppColors.ok, AppColors.ok.withValues(alpha: 0.14)),
-      LrStatus.inTransit => (AppColors.orange, AppColors.orange.withValues(alpha: 0.14)),
-      LrStatus.booked => (AppColors.plumLight, AppColors.plumLight.withValues(alpha: 0.14)),
-      LrStatus.cancelled => (AppColors.danger, AppColors.danger.withValues(alpha: 0.14)),
+      LrStatus.delivered => (
+        AppColors.ok,
+        AppColors.ok.withValues(alpha: 0.14),
+      ),
+      LrStatus.inTransit => (
+        AppColors.orange,
+        AppColors.orange.withValues(alpha: 0.14),
+      ),
+      LrStatus.booked => (
+        AppColors.plumLight,
+        AppColors.plumLight.withValues(alpha: 0.14),
+      ),
+      LrStatus.cancelled => (
+        AppColors.danger,
+        AppColors.danger.withValues(alpha: 0.14),
+      ),
     };
     return _Pill(text: status.label, fg: palette.$1, bg: palette.$2);
   }
@@ -50,11 +62,7 @@ class _Pill extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: TextStyle(
-          color: fg,
-          fontWeight: FontWeight.w700,
-          fontSize: 12,
-        ),
+        style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 12),
       ),
     );
   }

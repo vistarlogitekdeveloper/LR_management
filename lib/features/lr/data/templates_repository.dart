@@ -12,9 +12,13 @@ class TemplatesRepository {
   }
 
   Future<LrTemplate> create(String title, Map<String, dynamic> payload) async {
-    final res = await _api.dio
-        .post('/lr-templates', data: {'title': title, 'payload': payload});
-    return LrTemplate.fromJson((res.data['data'] as Map).cast<String, dynamic>());
+    final res = await _api.dio.post(
+      '/lr-templates',
+      data: {'title': title, 'payload': payload},
+    );
+    return LrTemplate.fromJson(
+      (res.data['data'] as Map).cast<String, dynamic>(),
+    );
   }
 
   Future<LrTemplate> update(
@@ -22,11 +26,13 @@ class TemplatesRepository {
     String? title,
     Map<String, dynamic>? payload,
   }) async {
-    final res = await _api.dio.patch('/lr-templates/$id', data: {
-      'title': ?title,
-      'payload': ?payload,
-    });
-    return LrTemplate.fromJson((res.data['data'] as Map).cast<String, dynamic>());
+    final res = await _api.dio.patch(
+      '/lr-templates/$id',
+      data: {'title': ?title, 'payload': ?payload},
+    );
+    return LrTemplate.fromJson(
+      (res.data['data'] as Map).cast<String, dynamic>(),
+    );
   }
 
   Future<void> remove(String id) async {

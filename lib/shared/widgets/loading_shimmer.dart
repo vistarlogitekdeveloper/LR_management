@@ -67,12 +67,7 @@ class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin {
 /// One grey placeholder block. Only meaningful inside a [Shimmer] ancestor,
 /// which recolours it with the animated sweep.
 class ShimmerBox extends StatelessWidget {
-  const ShimmerBox({
-    super.key,
-    this.width,
-    this.height = 14,
-    this.radius = 6,
-  });
+  const ShimmerBox({super.key, this.width, this.height = 14, this.radius = 6});
 
   final double? width;
   final double height;
@@ -96,11 +91,7 @@ class ShimmerBox extends StatelessWidget {
 /// wherever a list screen would otherwise show its "no records" text during the
 /// initial fetch.
 class ShimmerRows extends StatelessWidget {
-  const ShimmerRows({
-    super.key,
-    this.rows = 8,
-    this.showLeadingIcon = true,
-  });
+  const ShimmerRows({super.key, this.rows = 8, this.showLeadingIcon = true});
 
   final int rows;
 

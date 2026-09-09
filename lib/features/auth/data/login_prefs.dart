@@ -7,7 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 // is pulled in ONLY on web via this conditional import, so non-web targets (the
 // Dart VM used by `flutter test`, plus native builds) still compile.
 import 'login_prefs_storage.dart'
-    if (dart.library.js_interop) 'login_prefs_storage_web.dart' as ls;
+    if (dart.library.js_interop) 'login_prefs_storage_web.dart'
+    as ls;
 
 /// Persists the "Remember me" preference — whether the box was ticked and, if
 /// so, the last username — so returning users don't retype it.

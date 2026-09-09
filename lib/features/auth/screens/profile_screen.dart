@@ -19,7 +19,7 @@ class ProfileScreen extends ConsumerWidget {
     if (user == null) {
       return const Scaffold(body: Center(child: Text('Not signed in')));
     }
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
     final cardPad = EdgeInsets.all(isMobile ? 12 : 20);
     final gap = isMobile ? 10.0 : 20.0;
     return Scaffold(

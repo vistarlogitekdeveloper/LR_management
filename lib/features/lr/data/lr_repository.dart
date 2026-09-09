@@ -39,17 +39,17 @@ class LrFilterParams {
   });
 
   Map<String, dynamic> toQuery() => {
-        if (query != null && query!.isNotEmpty) 'q': query,
-        if (statusId != null && statusId!.isNotEmpty) 'status_id': statusId,
-        if (consignorId != null && consignorId!.isNotEmpty)
-          'consignor_id': consignorId,
-        if (consigneeId != null && consigneeId!.isNotEmpty)
-          'consignee_id': consigneeId,
-        if (vehicleId != null && vehicleId!.isNotEmpty) 'vehicle_id': vehicleId,
-        if (routeId != null && routeId!.isNotEmpty) 'route_id': routeId,
-        if (fromDate != null && fromDate!.isNotEmpty) 'from_date': fromDate,
-        if (toDate != null && toDate!.isNotEmpty) 'to_date': toDate,
-      };
+    if (query != null && query!.isNotEmpty) 'q': query,
+    if (statusId != null && statusId!.isNotEmpty) 'status_id': statusId,
+    if (consignorId != null && consignorId!.isNotEmpty)
+      'consignor_id': consignorId,
+    if (consigneeId != null && consigneeId!.isNotEmpty)
+      'consignee_id': consigneeId,
+    if (vehicleId != null && vehicleId!.isNotEmpty) 'vehicle_id': vehicleId,
+    if (routeId != null && routeId!.isNotEmpty) 'route_id': routeId,
+    if (fromDate != null && fromDate!.isNotEmpty) 'from_date': fromDate,
+    if (toDate != null && toDate!.isNotEmpty) 'to_date': toDate,
+  };
 }
 
 class LrRepository {
@@ -120,7 +120,9 @@ class LrRepository {
     final res = await _api.dio.post(
       '/lrs',
       data: payload,
-      options: Options(headers: {'Idempotency-Key': idempotencyKey ?? _uuid.v4()}),
+      options: Options(
+        headers: {'Idempotency-Key': idempotencyKey ?? _uuid.v4()},
+      ),
     );
     final created = (res.data['data'] as Map).cast<String, dynamic>();
     final id = created['id'] as String;
@@ -188,10 +190,13 @@ class LrRepository {
   }
 
   Future<void> changeStatus(String id, String toCode, {String? reason}) async {
-    await _api.dio.post('/lrs/$id/status', data: {
-      'to': toCode,
-      if (reason != null && reason.isNotEmpty) 'reason': reason,
-    });
+    await _api.dio.post(
+      '/lrs/$id/status',
+      data: {
+        'to': toCode,
+        if (reason != null && reason.isNotEmpty) 'reason': reason,
+      },
+    );
   }
 
   Future<void> remove(String id) async {
@@ -199,14 +204,17 @@ class LrRepository {
   }
 
   Future<void> _createEwb(String lrId, EwbInput ewb) async {
-    await _api.dio.post('/ewb', data: {
-      'number': ewb.number.trim(),
-      'lr_id': lrId,
-      if (ewb.expiryAt != null)
-        'expiry_at': ewb.expiryAt!.toIso8601String().substring(0, 10),
-      if (ewb.loadTypeId != null && ewb.loadTypeId!.isNotEmpty)
-        'load_type_id': ewb.loadTypeId,
-    });
+    await _api.dio.post(
+      '/ewb',
+      data: {
+        'number': ewb.number.trim(),
+        'lr_id': lrId,
+        if (ewb.expiryAt != null)
+          'expiry_at': ewb.expiryAt!.toIso8601String().substring(0, 10),
+        if (ewb.loadTypeId != null && ewb.loadTypeId!.isNotEmpty)
+          'load_type_id': ewb.loadTypeId,
+      },
+    );
   }
 
   Future<void> _updateEwb(String ewbId, int version, EwbInput ewb) async {
@@ -231,11 +239,17 @@ class LrRepository {
     final contentType = _mediaTypeForName(fileName);
     final MultipartFile multipart;
     if (bytes != null) {
-      multipart =
-          MultipartFile.fromBytes(bytes, filename: fileName, contentType: contentType);
+      multipart = MultipartFile.fromBytes(
+        bytes,
+        filename: fileName,
+        contentType: contentType,
+      );
     } else if (filePath != null) {
-      multipart = await MultipartFile.fromFile(filePath,
-          filename: fileName, contentType: contentType);
+      multipart = await MultipartFile.fromFile(
+        filePath,
+        filename: fileName,
+        contentType: contentType,
+      );
     } else {
       throw ArgumentError('Either bytes or filePath is required');
     }
@@ -245,7 +259,9 @@ class LrRepository {
 
   /// Downloads an attachment's raw bytes (auth header applied by the client).
   Future<List<int>> downloadAttachmentBytes(
-      String lrId, String attachmentId) async {
+    String lrId,
+    String attachmentId,
+  ) async {
     final res = await _api.dio.get(
       '/lrs/$lrId/attachments/$attachmentId/file',
       options: Options(responseType: ResponseType.bytes),
@@ -261,8 +277,9 @@ class LrRepository {
 /// Maps a filename extension to a content type so the server's MIME allowlist
 /// accepts the upload (Dio otherwise defaults to application/octet-stream).
 DioMediaType _mediaTypeForName(String fileName) {
-  final ext =
-      fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+  final ext = fileName.contains('.')
+      ? fileName.split('.').last.toLowerCase()
+      : '';
   switch (ext) {
     case 'pdf':
       return DioMediaType('application', 'pdf');
@@ -278,13 +295,17 @@ DioMediaType _mediaTypeForName(String fileName) {
     case 'xls':
       return DioMediaType('application', 'vnd.ms-excel');
     case 'xlsx':
-      return DioMediaType('application',
-          'vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      return DioMediaType(
+        'application',
+        'vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
     case 'doc':
       return DioMediaType('application', 'msword');
     case 'docx':
-      return DioMediaType('application',
-          'vnd.openxmlformats-officedocument.wordprocessingml.document');
+      return DioMediaType(
+        'application',
+        'vnd.openxmlformats-officedocument.wordprocessingml.document',
+      );
     case 'csv':
       return DioMediaType('text', 'csv');
     default:

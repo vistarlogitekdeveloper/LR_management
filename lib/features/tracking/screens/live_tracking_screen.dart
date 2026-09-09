@@ -171,8 +171,10 @@ class _FleetMap extends StatelessWidget {
             color: Color(0xCCFFFFFF),
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-              child: Text('© OpenStreetMap',
-                  style: TextStyle(fontSize: 9, color: AppColors.slate)),
+              child: Text(
+                '© OpenStreetMap',
+                style: TextStyle(fontSize: 9, color: AppColors.slate),
+              ),
             ),
           ),
         ),
@@ -206,10 +208,18 @@ class _TruckPin extends StatelessWidget {
         shape: BoxShape.circle,
         border: Border.all(color: ring, width: 3),
         boxShadow: const [
-          BoxShadow(color: Color(0x40000000), blurRadius: 5, offset: Offset(0, 2)),
+          BoxShadow(
+            color: Color(0x40000000),
+            blurRadius: 5,
+            offset: Offset(0, 2),
+          ),
         ],
       ),
-      child: const Icon(Icons.local_shipping_rounded, color: Colors.white, size: 22),
+      child: const Icon(
+        Icons.local_shipping_rounded,
+        color: Colors.white,
+        size: 22,
+      ),
     );
   }
 }
@@ -233,7 +243,8 @@ class _FleetList extends StatelessWidget {
       );
     }
     // Located vehicles first, then the rest (awaiting first fix / consent).
-    final sorted = [...vehicles]..sort((a, b) {
+    final sorted = [...vehicles]
+      ..sort((a, b) {
         final al = a.location != null ? 0 : 1;
         final bl = b.location != null ? 0 : 1;
         return al.compareTo(bl);
@@ -296,7 +307,10 @@ class _VehicleTile extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 2),
                   child: Text(
                     '${v.fromCity ?? '?'} → ${v.toCity ?? '?'}',
-                    style: const TextStyle(fontSize: 11.5, color: AppColors.slate),
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: AppColors.slate,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -304,7 +318,9 @@ class _VehicleTile extends StatelessWidget {
               Row(
                 children: [
                   Icon(
-                    loc != null ? Icons.place_rounded : Icons.location_disabled_rounded,
+                    loc != null
+                        ? Icons.place_rounded
+                        : Icons.location_disabled_rounded,
                     size: 13,
                     color: loc != null ? AppColors.plum : AppColors.slate,
                   ),
@@ -314,7 +330,10 @@ class _VehicleTile extends StatelessWidget {
                       loc != null
                           ? '${loc.city ?? 'Located'} · ${relTime(loc.at)}'
                           : 'Awaiting first fix',
-                      style: const TextStyle(fontSize: 11.5, color: AppColors.slate),
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: AppColors.slate,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -358,10 +377,17 @@ class ConsentBadge extends StatelessWidget {
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: Text(
         label,
-        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: fg),
+        style: TextStyle(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w800,
+          color: fg,
+        ),
       ),
     );
   }
@@ -387,11 +413,17 @@ class _Pill extends StatelessWidget {
         color: AppColors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: const [
-          BoxShadow(color: Color(0x22000000), blurRadius: 6, offset: Offset(0, 2)),
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
         ],
       ),
-      child: Text(text,
-          style: const TextStyle(fontSize: 12, color: AppColors.slate)),
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 12, color: AppColors.slate),
+      ),
     );
   }
 }
@@ -406,11 +438,17 @@ class _ErrorBox extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.slate)),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.slate),
+          ),
           const SizedBox(height: 12),
-          AppButton(label: 'Retry', icon: Icons.refresh_rounded, onPressed: onRetry),
+          AppButton(
+            label: 'Retry',
+            icon: Icons.refresh_rounded,
+            onPressed: onRetry,
+          ),
         ],
       ),
     );

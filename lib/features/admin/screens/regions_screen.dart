@@ -22,8 +22,11 @@ class RegionsScreen extends ConsumerWidget {
     return e.toString();
   }
 
-  Future<void> _openForm(BuildContext context, WidgetRef ref,
-      {RegionInfo? existing}) async {
+  Future<void> _openForm(
+    BuildContext context,
+    WidgetRef ref, {
+    RegionInfo? existing,
+  }) async {
     final messenger = ScaffoldMessenger.of(context);
     await MasterFormDialog.show(
       context: context,
@@ -31,14 +34,16 @@ class RegionsScreen extends ConsumerWidget {
       subtitle: 'Operating area (e.g. Pune, Mumbai)',
       fields: [
         FormFieldSpec(
-            name: 'name',
-            label: 'Region Name',
-            required: true,
-            initialValue: existing?.name),
+          name: 'name',
+          label: 'Region Name',
+          required: true,
+          initialValue: existing?.name,
+        ),
         FormFieldSpec(
-            name: 'code',
-            label: 'Short Code (optional)',
-            initialValue: existing?.code),
+          name: 'code',
+          label: 'Short Code (optional)',
+          initialValue: existing?.code,
+        ),
       ],
       initial: existing == null
           ? const {}
@@ -94,7 +99,9 @@ class RegionsScreen extends ConsumerWidget {
               try {
                 await ref.read(regionsProvider.notifier).remove(id);
               } catch (e) {
-                messenger.showSnackBar(SnackBar(content: Text(_errorMessage(e))));
+                messenger.showSnackBar(
+                  SnackBar(content: Text(_errorMessage(e))),
+                );
               }
             }
           : null,

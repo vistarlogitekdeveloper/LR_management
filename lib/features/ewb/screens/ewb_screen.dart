@@ -63,7 +63,7 @@ class _EwbScreenState extends ConsumerState<EwbScreen> {
   Widget build(BuildContext context) {
     final ewbAsync = ref.watch(ewbListProvider);
     final now = DateTime.now();
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
     final cardPad = isMobile
         ? const EdgeInsets.all(12)
         : const EdgeInsets.all(20);

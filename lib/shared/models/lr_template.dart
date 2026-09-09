@@ -16,10 +16,9 @@ class LrTemplate {
   });
 
   factory LrTemplate.fromJson(Map<String, dynamic> json) => LrTemplate(
-        id: json['id'] as String,
-        title: (json['title'] as String?) ?? '',
-        payload:
-            ((json['payload'] as Map?) ?? const {}).cast<String, dynamic>(),
-        version: asInt(json['version']),
-      );
+    id: json['id'] as String,
+    title: (json['title'] as String?) ?? '',
+    payload: ((json['payload'] as Map?) ?? const {}).cast<String, dynamic>(),
+    version: asInt(json['version']),
+  );
 }

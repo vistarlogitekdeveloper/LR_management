@@ -6,7 +6,8 @@ import '../../auth/providers/auth_provider.dart';
 import '../data/admin_repository.dart';
 
 final adminRepositoryProvider = Provider<AdminRepository>(
-    (ref) => AdminRepository(ref.watch(apiClientProvider)));
+  (ref) => AdminRepository(ref.watch(apiClientProvider)),
+);
 
 final rolesProvider = FutureProvider.autoDispose<List<RoleInfo>>((ref) async {
   final user = ref.watch(currentUserProvider);
@@ -77,8 +78,9 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
   }
 }
 
-final usersProvider =
-    StateNotifierProvider<UsersNotifier, List<AppUser>>((ref) {
+final usersProvider = StateNotifierProvider<UsersNotifier, List<AppUser>>((
+  ref,
+) {
   final authed = ref.watch(currentUserProvider) != null;
   return UsersNotifier(ref.watch(adminRepositoryProvider), authed: authed);
 });
@@ -102,8 +104,12 @@ class RegionsNotifier extends StateNotifier<List<RegionInfo>> {
     state = [...state, created];
   }
 
-  Future<void> update(RegionInfo existing,
-      {String? name, String? code, bool? active}) async {
+  Future<void> update(
+    RegionInfo existing, {
+    String? name,
+    String? code,
+    bool? active,
+  }) async {
     final updated = await _repo.updateRegion(
       existing.id,
       existing.version,
@@ -124,9 +130,12 @@ class RegionsNotifier extends StateNotifier<List<RegionInfo>> {
 /// admins can mutate it (enforced by the backend).
 final regionsProvider =
     StateNotifierProvider<RegionsNotifier, List<RegionInfo>>((ref) {
-  final authed = ref.watch(currentUserProvider) != null;
-  return RegionsNotifier(ref.watch(adminRepositoryProvider), authed: authed);
-});
+      final authed = ref.watch(currentUserProvider) != null;
+      return RegionsNotifier(
+        ref.watch(adminRepositoryProvider),
+        authed: authed,
+      );
+    });
 
 /// First-load flag — `true` until the initial fetch settles (cleared by the
 /// route's RefreshGate). See [regionsProvider].

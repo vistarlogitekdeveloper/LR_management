@@ -26,18 +26,20 @@ class AuditEntry {
     final changedBy = nested('changedBy') ?? nested('user');
     return AuditEntry(
       id: (json['id'] as String?) ?? '',
-      user: (changedBy?['username'] as String?) ??
+      user:
+          (changedBy?['username'] as String?) ??
           (changedBy?['name'] as String?) ??
           (json['changed_by'] as String?) ??
           'system',
       action: (json['action'] as String?) ?? '',
-      entity: (json['entity_type'] as String?) ??
-          (json['entity'] as String?) ??
-          '',
+      entity:
+          (json['entity_type'] as String?) ?? (json['entity'] as String?) ?? '',
       entityRef:
           (json['entity_ref'] as String?) ?? (json['entity_id'] as String?),
-      timestamp: DateTime.tryParse(
-              (json['changed_at'] ?? json['created_at'])?.toString() ?? '') ??
+      timestamp:
+          DateTime.tryParse(
+            (json['changed_at'] ?? json['created_at'])?.toString() ?? '',
+          ) ??
           DateTime.now(),
       details: json['details'] as String?,
     );

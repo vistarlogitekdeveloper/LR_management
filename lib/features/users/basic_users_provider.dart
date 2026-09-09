@@ -12,10 +12,9 @@ class UserRef {
   const UserRef({required this.id, required this.name});
 
   factory UserRef.fromJson(Map<String, dynamic> json) => UserRef(
-        id: (json['id'] as String?) ?? '',
-        name:
-            (json['name'] as String?) ?? (json['username'] as String?) ?? '',
-      );
+    id: (json['id'] as String?) ?? '',
+    name: (json['name'] as String?) ?? (json['username'] as String?) ?? '',
+  );
 
   @override
   bool operator ==(Object other) => other is UserRef && other.id == id;
@@ -39,12 +38,15 @@ final basicUsersProvider = FutureProvider<List<UserRef>>((ref) async {
     final res = await ref.watch(apiClientProvider).dio.get('/users/basic');
     final raw = res.data is Map ? (res.data['data'] ?? res.data) : res.data;
     final list = (raw as List?) ?? const [];
-    final users = list
-        .whereType<Map>()
-        .map((e) => UserRef.fromJson(e.cast<String, dynamic>()))
-        .where((u) => u.id.isNotEmpty && u.name.isNotEmpty)
-        .toList()
-      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    final users =
+        list
+            .whereType<Map>()
+            .map((e) => UserRef.fromJson(e.cast<String, dynamic>()))
+            .where((u) => u.id.isNotEmpty && u.name.isNotEmpty)
+            .toList()
+          ..sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
     return users;
   } catch (_) {
     // Endpoint not deployed yet / not permitted for this role — degrade to an

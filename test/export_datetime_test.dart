@@ -9,12 +9,12 @@ import 'package:lr_management/features/reports/services/export_service.dart';
 import 'package:lr_management/shared/models/lr_models.dart';
 
 LorryReceipt _lr({String? inDt, String? outDt}) => LorryReceipt.fromJson({
-      'id': 'lr1',
-      'number': 'LR/PUN/26-27/00001',
-      'lr_date': '2026-07-01',
-      'in_datetime': ?inDt,
-      'out_datetime': ?outDt,
-    });
+  'id': 'lr1',
+  'number': 'LR/PUN/26-27/00001',
+  'lr_date': '2026-07-01',
+  'in_datetime': ?inDt,
+  'out_datetime': ?outDt,
+});
 
 /// Row-major cell text from the first sheet.
 List<List<String>> _grid(List<int> bytes) {
@@ -73,7 +73,9 @@ void main() {
   });
 
   test('header and data-row cell counts stay aligned after the split', () {
-    final bytes = ExportService.buildLrsWorkbook([_lr(inDt: '2026-07-01T08:00:00')]);
+    final bytes = ExportService.buildLrsWorkbook([
+      _lr(inDt: '2026-07-01T08:00:00'),
+    ]);
     final grid = _grid(bytes!);
     expect(grid[1].length, grid.first.length);
   });

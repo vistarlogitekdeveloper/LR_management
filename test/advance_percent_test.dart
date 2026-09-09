@@ -199,8 +199,9 @@ void main() {
     });
   });
 
-  testWidgets('LR form seeds the advance % from the picked transporter',
-      (tester) async {
+  testWidgets('LR form seeds the advance % from the picked transporter', (
+    tester,
+  ) async {
     // Reproduces _selectTransporter's contract without booting the whole screen:
     // switching to a different transporter re-seeds the field; re-picking the
     // SAME one must not (an edited per-LR value has to survive).
@@ -237,7 +238,11 @@ void main() {
     // Operator overrides it for this one LR.
     ctrl.text = '72';
     selectTransporter(acme);
-    expect(ctrl.text, '72', reason: 're-picking the same transporter must not clobber the override');
+    expect(
+      ctrl.text,
+      '72',
+      reason: 're-picking the same transporter must not clobber the override',
+    );
 
     selectTransporter(other);
     expect(ctrl.text, '65', reason: 'a genuine change re-seeds');

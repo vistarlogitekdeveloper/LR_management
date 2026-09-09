@@ -157,9 +157,10 @@ class TransportersNotifier extends StateNotifier<List<Transporter>> {
     }
   }
 
-  Future<void> add(Transporter t) async {
+  Future<Transporter> add(Transporter t) async {
     final created = await _repo.create(t);
     state = [...state, created];
+    return created;
   }
 
   Future<void> update(Transporter t) async {
@@ -187,9 +188,10 @@ class DriversNotifier extends StateNotifier<List<Driver>> {
     }
   }
 
-  Future<void> add(Driver d) async {
+  Future<Driver> add(Driver d) async {
     final created = await _repo.create(d);
     state = [...state, created];
+    return created;
   }
 
   Future<void> update(Driver d) async {
@@ -217,9 +219,10 @@ class RoutesNotifier extends StateNotifier<List<RouteMaster>> {
     }
   }
 
-  Future<void> add(RouteMaster r) async {
+  Future<RouteMaster> add(RouteMaster r) async {
     final created = await _repo.create(r);
     state = [...state, created];
+    return created;
   }
 
   Future<void> update(RouteMaster r) async {

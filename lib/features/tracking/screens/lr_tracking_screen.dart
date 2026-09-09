@@ -53,7 +53,9 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
     setState(() => _rechecking = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final r = await ref.read(trackingRepositoryProvider).recheckConsent(widget.id);
+      final r = await ref
+          .read(trackingRepositoryProvider)
+          .recheckConsent(widget.id);
       ref.invalidate(lrTrackingProvider(widget.id));
       messenger.showSnackBar(
         SnackBar(content: Text('Consent: ${r.status ?? 'unknown'}')),
@@ -73,11 +75,15 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
       ref.invalidate(lrTrackingProvider(widget.id));
       messenger.showSnackBar(
         const SnackBar(
-          content: Text('Tracking started — location appears as the driver pings in.'),
+          content: Text(
+            'Tracking started — location appears as the driver pings in.',
+          ),
         ),
       );
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Could not start tracking: $e')));
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not start tracking: $e')),
+      );
     } finally {
       if (mounted) setState(() => _starting = false);
     }
@@ -89,8 +95,11 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
     try {
       // Reuse the link the backend already cached (returned on /route) when we
       // have it; otherwise ask the backend to generate one now.
-      final cached =
-          ref.read(lrTrackingProvider(widget.id)).asData?.value.publicLink;
+      final cached = ref
+          .read(lrTrackingProvider(widget.id))
+          .asData
+          ?.value
+          .publicLink;
       final link = (cached != null && cached.isNotEmpty)
           ? cached
           : await ref.read(trackingRepositoryProvider).publicLink(widget.id);
@@ -98,7 +107,9 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
       if (!mounted) return;
       await _showShareDialog(link);
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Could not create link: $e')));
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not create link: $e')),
+      );
     } finally {
       if (mounted) setState(() => _sharing = false);
     }
@@ -143,9 +154,9 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
             onPressed: () {
               Clipboard.setData(ClipboardData(text: link));
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Link copied')),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('Link copied')));
             },
             icon: const Icon(Icons.copy_rounded, size: 16),
             label: const Text('Copy link'),
@@ -180,8 +191,10 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                       SizedBox(width: 6),
-                      Text('Updating…',
-                          style: TextStyle(fontSize: 12, color: AppColors.slate)),
+                      Text(
+                        'Updating…',
+                        style: TextStyle(fontSize: 12, color: AppColors.slate),
+                      ),
                     ],
                   ),
                 ),
@@ -209,9 +222,11 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
               skipLoadingOnRefresh: true,
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(
-                child: Text('Could not load tracking.\n$e',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: AppColors.slate)),
+                child: Text(
+                  'Could not load tracking.\n$e',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.slate),
+                ),
               ),
               data: (t) => _Body(
                 t: t,
@@ -314,8 +329,8 @@ class _TrailMap extends StatelessWidget {
     final where = (p.city != null && p.city!.isNotEmpty)
         ? p.city!
         : ((p.address != null && p.address!.isNotEmpty)
-            ? p.address!
-            : '${p.lat.toStringAsFixed(4)}, ${p.lng.toStringAsFixed(4)}');
+              ? p.address!
+              : '${p.lat.toStringAsFixed(4)}, ${p.lng.toStringAsFixed(4)}');
     return '$truck\n$where\n${relTime(p.at)}';
   }
 
@@ -350,7 +365,8 @@ class _TrailMap extends StatelessWidget {
     if (options.isEmpty && src != null && dest != null) planned = [src, dest];
 
     // The latest fix (for both the truck marker position and its hover label).
-    final curFix = (t.current != null && _inRange(t.current!.lat, t.current!.lng))
+    final curFix =
+        (t.current != null && _inRange(t.current!.lat, t.current!.lng))
         ? t.current
         : (t.history.isNotEmpty ? t.history.last : null);
     final cur = (curFix != null && _inRange(curFix.lat, curFix.lng))
@@ -477,12 +493,18 @@ class _TrailMap extends StatelessWidget {
                       message: _truckLabel(curFix, t),
                       preferBelow: false,
                       textAlign: TextAlign.center,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.ink,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      textStyle: const TextStyle(color: Colors.white, fontSize: 12),
+                      textStyle: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                      ),
                       child: const _PulsingTruck(),
                     ),
                   ),
@@ -497,8 +519,10 @@ class _TrailMap extends StatelessWidget {
             color: Color(0xCCFFFFFF),
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-              child: Text('© OpenStreetMap',
-                  style: TextStyle(fontSize: 9, color: AppColors.slate)),
+              child: Text(
+                '© OpenStreetMap',
+                style: TextStyle(fontSize: 9, color: AppColors.slate),
+              ),
             ),
           ),
         ),
@@ -508,8 +532,9 @@ class _TrailMap extends StatelessWidget {
             left: 8,
             child: _RouteLegend(
               fastest: fastest,
-              shortest:
-                  (shortest != null && !identical(shortest, fastest)) ? shortest : null,
+              shortest: (shortest != null && !identical(shortest, fastest))
+                  ? shortest
+                  : null,
               remaining: remaining,
               hasTrail: history.length > 1,
             ),
@@ -536,8 +561,12 @@ class _RouteLegend extends StatelessWidget {
   final RouteOption? shortest;
   final RouteOption? remaining;
   final bool hasTrail;
-  const _RouteLegend(
-      {this.fastest, this.shortest, this.remaining, this.hasTrail = false});
+  const _RouteLegend({
+    this.fastest,
+    this.shortest,
+    this.remaining,
+    this.hasTrail = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -546,16 +575,31 @@ class _RouteLegend extends StatelessWidget {
     final s = shortest;
     final r = remaining;
     if (f != null) {
-      rows.add(_row(_TrailMap.routeBlue, 'Fastest',
-          '${f.distanceKm.toStringAsFixed(0)} km · ${f.durationMin} min'));
+      rows.add(
+        _row(
+          _TrailMap.routeBlue,
+          'Fastest',
+          '${f.distanceKm.toStringAsFixed(0)} km · ${f.durationMin} min',
+        ),
+      );
     }
     if (s != null) {
-      rows.add(_row(AppColors.orange, 'Shortest',
-          '${s.distanceKm.toStringAsFixed(0)} km · ${s.durationMin} min'));
+      rows.add(
+        _row(
+          AppColors.orange,
+          'Shortest',
+          '${s.distanceKm.toStringAsFixed(0)} km · ${s.durationMin} min',
+        ),
+      );
     }
     if (r != null) {
-      rows.add(_row(AppColors.ok, 'To destination',
-          '${r.distanceKm.toStringAsFixed(0)} km · ${r.durationMin} min left'));
+      rows.add(
+        _row(
+          AppColors.ok,
+          'To destination',
+          '${r.distanceKm.toStringAsFixed(0)} km · ${r.durationMin} min left',
+        ),
+      );
     }
     if (hasTrail) rows.add(_row(AppColors.plum, 'Traveled', 'so far'));
     if (rows.isEmpty) return const SizedBox.shrink();
@@ -576,26 +620,35 @@ class _RouteLegend extends StatelessWidget {
   }
 
   Widget _row(Color c, String label, String detail) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 14,
-              height: 4,
-              decoration:
-                  BoxDecoration(color: c, borderRadius: BorderRadius.circular(2)),
-            ),
-            const SizedBox(width: 6),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.ink)),
-            const SizedBox(width: 6),
-            Text(detail,
-                style: const TextStyle(fontSize: 11, color: AppColors.slate)),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 14,
+          height: 4,
+          decoration: BoxDecoration(
+            color: c,
+            borderRadius: BorderRadius.circular(2),
+          ),
         ),
-      );
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: AppColors.ink,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          detail,
+          style: const TextStyle(fontSize: 11, color: AppColors.slate),
+        ),
+      ],
+    ),
+  );
 }
 
 /// The live vehicle marker: a truck badge with a soft pulsing halo so it reads
@@ -650,8 +703,11 @@ class _PulsingTruckState extends State<_PulsingTruck>
           shape: BoxShape.circle,
           border: Border.all(color: Colors.white, width: 2),
         ),
-        child: const Icon(Icons.local_shipping_rounded,
-            color: Colors.white, size: 18),
+        child: const Icon(
+          Icons.local_shipping_rounded,
+          color: Colors.white,
+          size: 18,
+        ),
       ),
     );
   }
@@ -718,7 +774,9 @@ class _Panel extends StatelessWidget {
                 children: [
                   const Expanded(
                     child: SectionTitle(
-                        icon: Icons.sim_card_outlined, title: 'SIM consent'),
+                      icon: Icons.sim_card_outlined,
+                      title: 'SIM consent',
+                    ),
                   ),
                   ConsentBadge(status: t.consentStatus),
                 ],
@@ -744,9 +802,10 @@ class _Panel extends StatelessWidget {
                         child: Text(
                           t.consentSuggestion!,
                           style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.ink),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.ink,
+                          ),
                         ),
                       ),
                       IconButton(
@@ -754,7 +813,8 @@ class _Panel extends StatelessWidget {
                         icon: const Icon(Icons.copy_rounded, size: 16),
                         onPressed: () {
                           Clipboard.setData(
-                              ClipboardData(text: t.consentSuggestion!));
+                            ClipboardData(text: t.consentSuggestion!),
+                          );
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Copied')),
                           );
@@ -816,19 +876,29 @@ class _Panel extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SectionTitle(icon: Icons.info_outline_rounded, title: 'Details'),
+              const SectionTitle(
+                icon: Icons.info_outline_rounded,
+                title: 'Details',
+              ),
               const SizedBox(height: 8),
               _kv('LR', t.lrNumber ?? '—'),
               _kv('Route', '${t.fromCity ?? '?'} → ${t.toCity ?? '?'}'),
-              if ((t.truckNumber ?? '').isNotEmpty) _kv('Vehicle', t.truckNumber!),
+              if ((t.truckNumber ?? '').isNotEmpty)
+                _kv('Vehicle', t.truckNumber!),
               if ((t.driverName ?? '').isNotEmpty) _kv('Driver', t.driverName!),
               _kv('Tracking', t.trackingState ?? '—'),
-              _kv('Last fix', cur != null ? (cur.city ?? cur.address ?? 'Located') : '—'),
+              _kv(
+                'Last fix',
+                cur != null ? (cur.city ?? cur.address ?? 'Located') : '—',
+              ),
               if (cur != null) _freshness(cur.at),
               if (t.remainingRoute != null)
-                _kv('To destination',
-                    '${t.remainingRoute!.distanceKm.toStringAsFixed(0)} km · ~${t.remainingRoute!.durationMin} min'),
-              if (cur?.source != null) _kv('Source', cur!.source!.toUpperCase()),
+                _kv(
+                  'To destination',
+                  '${t.remainingRoute!.distanceKm.toStringAsFixed(0)} km · ~${t.remainingRoute!.durationMin} min',
+                ),
+              if (cur?.source != null)
+                _kv('Source', cur!.source!.toUpperCase()),
               _kv('Fixes', '${t.history.length}'),
               const SizedBox(height: 10),
               // Set expectations: SIM fixes are periodic, not real-time GPS — so a
@@ -836,13 +906,20 @@ class _Panel extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.schedule_rounded, size: 13, color: AppColors.slate),
+                  const Icon(
+                    Icons.schedule_rounded,
+                    size: 13,
+                    color: AppColors.slate,
+                  ),
                   const SizedBox(width: 6),
                   const Expanded(
                     child: Text(
                       'SIM location updates about every 15–20 min. This map refreshes on its own.',
-                      style:
-                          TextStyle(fontSize: 11, color: AppColors.slate, height: 1.3),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.slate,
+                        height: 1.3,
+                      ),
                     ),
                   ),
                 ],
@@ -860,7 +937,9 @@ class _Panel extends StatelessWidget {
     String label = 'time unknown';
     if (at != null) {
       final mins = DateTime.now().difference(at).inMinutes;
-      c = mins < 25 ? AppColors.ok : (mins < 60 ? AppColors.warn : AppColors.slate);
+      c = mins < 25
+          ? AppColors.ok
+          : (mins < 60 ? AppColors.warn : AppColors.slate);
       label = 'Updated ${relTime(at)}';
     }
     return Padding(
@@ -874,32 +953,42 @@ class _Panel extends StatelessWidget {
             decoration: BoxDecoration(color: c, shape: BoxShape.circle),
           ),
           const SizedBox(width: 6),
-          Text(label,
-              style:
-                  TextStyle(fontSize: 12, color: c, fontWeight: FontWeight.w700)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: c,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _kv(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 74,
-              child: Text(k,
-                  style: const TextStyle(fontSize: 12, color: AppColors.slate)),
-            ),
-            Expanded(
-              child: Text(v,
-                  style: const TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink)),
-            ),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 74,
+          child: Text(
+            k,
+            style: const TextStyle(fontSize: 12, color: AppColors.slate),
+          ),
         ),
-      );
+        Expanded(
+          child: Text(
+            v,
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: AppColors.ink,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }

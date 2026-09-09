@@ -41,7 +41,9 @@ class TransportersScreen extends ConsumerWidget {
       onDelete: canDelete
           ? (id) async {
               final ok = await MasterActions.confirmDelete(
-                  context: context, label: 'this transporter');
+                context: context,
+                label: 'this transporter',
+              );
               if (!ok) return;
               try {
                 await ref.read(transportersProvider.notifier).remove(id);
@@ -62,14 +64,17 @@ class TransportersScreen extends ConsumerWidget {
       ],
       rows: [
         for (final t in transporters)
-          MasterRow(id: t.id, cells: [
-            t.name,
-            t.pan,
-            t.tds,
-            '${pctText(t.advancePercent)}%',
-            t.bankName.isEmpty ? '—' : t.bankName,
-            t.hasDocument ? 'On file' : '—',
-          ]),
+          MasterRow(
+            id: t.id,
+            cells: [
+              t.name,
+              t.pan,
+              t.tds,
+              '${pctText(t.advancePercent)}%',
+              t.bankName.isEmpty ? '—' : t.bankName,
+              t.hasDocument ? 'On file' : '—',
+            ],
+          ),
       ],
     );
   }

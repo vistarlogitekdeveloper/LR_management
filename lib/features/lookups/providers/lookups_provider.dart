@@ -23,8 +23,9 @@ final lookupsRepositoryProvider = Provider<LookupsRepository>(
 
 /// Fetched on login, cached until logout. Returns an empty map when
 /// unauthenticated so screens can render without a null check.
-final lookupsProvider =
-    FutureProvider<Map<String, List<LookupValue>>>((ref) async {
+final lookupsProvider = FutureProvider<Map<String, List<LookupValue>>>((
+  ref,
+) async {
   final user = ref.watch(currentUserProvider);
   if (user == null) return const {};
   return ref.watch(lookupsRepositoryProvider).fetch(lookupCategories);
@@ -40,8 +41,7 @@ final lookupsMapProvider = Provider<Map<String, List<LookupValue>>>((ref) {
 List<LookupValue> lookupList(
   Map<String, List<LookupValue>> all,
   String category,
-) =>
-    all[category] ?? const [];
+) => all[category] ?? const [];
 
 LookupValue? lookupById(
   Map<String, List<LookupValue>> all,

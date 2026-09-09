@@ -56,12 +56,16 @@ final _accountsRegionProvider = StateProvider<String?>((ref) => null);
 /// LRs an ops user explicitly "sent for payment" — the base set Accounts sees.
 final accountsSourceLrsProvider = Provider<List<LorryReceipt>>((ref) {
   final sw = kAccPerfLog ? (Stopwatch()..start()) : null;
-  final lrs =
-      ref.watch(lrListProvider).where((lr) => lr.sentForPayment).toList();
+  final lrs = ref
+      .watch(lrListProvider)
+      .where((lr) => lr.sentForPayment)
+      .toList();
   if (kAccPerfLog) {
     sw!.stop();
-    accLog('[ACC-BUILD] sentForPayment ${sw.elapsedMicroseconds / 1000}ms '
-        'n=${lrs.length}');
+    accLog(
+      '[ACC-BUILD] sentForPayment ${sw.elapsedMicroseconds / 1000}ms '
+      'n=${lrs.length}',
+    );
   }
   return lrs;
 });
@@ -73,8 +77,10 @@ final accountsSortedProvider = Provider<List<LorryReceipt>>((ref) {
     ..sort((a, b) => b.date.compareTo(a.date));
   if (kAccPerfLog) {
     sw!.stop();
-    accLog('[ACC-BUILD] sort ${sw.elapsedMicroseconds / 1000}ms '
-        'n=${sorted.length}');
+    accLog(
+      '[ACC-BUILD] sort ${sw.elapsedMicroseconds / 1000}ms '
+      'n=${sorted.length}',
+    );
   }
   return sorted;
 });
@@ -98,8 +104,10 @@ final accountsRegionCodesProvider = Provider<Map<String, String>>((ref) {
   }
   if (kAccPerfLog) {
     sw!.stop();
-    accLog('[ACC-BUILD] regionCodes ${sw.elapsedMicroseconds / 1000}ms '
-        'n=${regionCodes.length}');
+    accLog(
+      '[ACC-BUILD] regionCodes ${sw.elapsedMicroseconds / 1000}ms '
+      'n=${regionCodes.length}',
+    );
   }
   return regionCodes;
 });
@@ -200,8 +208,10 @@ final accountsFilteredProvider = Provider<List<LorryReceipt>>((ref) {
   }).toList();
   if (kAccPerfLog) {
     sw!.stop();
-    accLog('[ACC-BUILD] filter+search ${sw.elapsedMicroseconds / 1000}ms '
-        'n=${filtered.length}');
+    accLog(
+      '[ACC-BUILD] filter+search ${sw.elapsedMicroseconds / 1000}ms '
+      'n=${filtered.length}',
+    );
   }
   return filtered;
 });
@@ -269,7 +279,7 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
     final countAdvancePaid = kpis.countAdvancePaid;
     final countFullyPaid = kpis.countFullyPaid;
 
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
 
     if (kAccPerfLog) {
       swTotal!.stop();
@@ -350,7 +360,8 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
                         children: [
                           for (final t in tiles)
                             SizedBox(
-                              width: (c.maxWidth - gap * (effCols - 1)) / effCols,
+                              width:
+                                  (c.maxWidth - gap * (effCols - 1)) / effCols,
                               child: t,
                             ),
                         ],
@@ -395,16 +406,19 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
                             child: TextField(
                               decoration: const InputDecoration(
                                 isDense: true,
-                                hintText:
-                                    'Search LR, party, vehicle, route…',
+                                hintText: 'Search LR, party, vehicle, route…',
                                 prefixIcon: Icon(
                                   Icons.search,
                                   color: AppColors.slate,
                                 ),
                               ),
-                              onChanged: (v) => ref
-                                  .read(_accountsSearchProvider.notifier)
-                                  .state = v,
+                              onChanged: (v) =>
+                                  ref
+                                          .read(
+                                            _accountsSearchProvider.notifier,
+                                          )
+                                          .state =
+                                      v,
                             ),
                           ),
                         ),
@@ -427,11 +441,14 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
                               ),
                             _DateRangeChip(
                               range: range,
-                              onTap: () =>
-                                  _pickDateRange(context, ref, range),
-                              onClear: () => ref
-                                  .read(_accountsDateRangeProvider.notifier)
-                                  .state = null,
+                              onTap: () => _pickDateRange(context, ref, range),
+                              onClear: () =>
+                                  ref
+                                          .read(
+                                            _accountsDateRangeProvider.notifier,
+                                          )
+                                          .state =
+                                      null,
                             ),
                             if (hasRegions)
                               SizedBox(
@@ -443,9 +460,14 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
                                   hintText: 'All regions',
                                   dialogTitle: 'Region',
                                   clearable: true,
-                                  onChanged: (v) => ref
-                                      .read(_accountsRegionProvider.notifier)
-                                      .state = v,
+                                  onChanged: (v) =>
+                                      ref
+                                              .read(
+                                                _accountsRegionProvider
+                                                    .notifier,
+                                              )
+                                              .state =
+                                          v,
                                 ),
                               ),
                           ],
@@ -521,7 +543,7 @@ class _AccountsSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
     return Scaffold(
       backgroundColor: AppColors.mist,
       body: Column(
@@ -558,8 +580,9 @@ class _DateRangeChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final r = range;
     final active = r != null;
-    final label =
-        active ? '${formatDate(r.start)} – ${formatDate(r.end)}' : 'Date range';
+    final label = active
+        ? '${formatDate(r.start)} – ${formatDate(r.end)}'
+        : 'Date range';
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -570,8 +593,7 @@ class _DateRangeChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: active ? AppColors.plum : AppColors.white,
             borderRadius: BorderRadius.circular(999),
-            border:
-                Border.all(color: active ? AppColors.plum : AppColors.line),
+            border: Border.all(color: active ? AppColors.plum : AppColors.line),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -689,7 +711,8 @@ class _LrPaymentsListState extends ConsumerState<_LrPaymentsList> {
     // the user's position back to the top.
     final old = oldWidget.items;
     final now = widget.items;
-    final headChanged = old.isEmpty != now.isEmpty ||
+    final headChanged =
+        old.isEmpty != now.isEmpty ||
         (old.isNotEmpty && now.isNotEmpty && old.first.id != now.first.id);
     if (headChanged || now.length < old.length) {
       _visible = _pageSize;
@@ -703,9 +726,11 @@ class _LrPaymentsListState extends ConsumerState<_LrPaymentsList> {
 
     final pixels = pos.pixels;
     if (kAccPerfLog) {
-      accLog('[ACC-LIST] fire pixels=${pixels.toStringAsFixed(0)},'
-          'maxSE=${pos.maxScrollExtent.toStringAsFixed(0)},'
-          'hasDims=${pos.hasContentDimensions}');
+      accLog(
+        '[ACC-LIST] fire pixels=${pixels.toStringAsFixed(0)},'
+        'maxSE=${pos.maxScrollExtent.toStringAsFixed(0)},'
+        'hasDims=${pos.hasContentDimensions}',
+      );
     }
 
     // Growth is allowed ONLY for a real forward user scroll. A layout-triggered
@@ -763,7 +788,7 @@ class _LrPaymentsListState extends ConsumerState<_LrPaymentsList> {
     final showLoadMore = !full && _visible >= _maxVisible;
     // Screen-width flag drives each card's padding; measured once here instead
     // of by a MediaQuery lookup inside every card.
-    final mobile = MediaQuery.of(context).size.width < 600;
+    final mobile = MediaQuery.sizeOf(context).width < 600;
     return LayoutBuilder(
       builder: (context, constraints) {
         // Every card stretches to the full list width, so the wide/narrow
@@ -868,15 +893,9 @@ class _LrPaymentCard extends ConsumerWidget {
             if (fullyPaid)
               const _BadgePill(text: 'Paid', fg: AppColors.ok)
             else if (!hasAdvance)
-              const _BadgePill(
-                text: 'Awaiting Advance',
-                fg: AppColors.orange,
-              )
+              const _BadgePill(text: 'Awaiting Advance', fg: AppColors.orange)
             else
-              const _BadgePill(
-                text: 'Awaiting Balance',
-                fg: AppColors.red,
-              ),
+              const _BadgePill(text: 'Awaiting Balance', fg: AppColors.red),
           ],
         ),
         const SizedBox(height: 4),
@@ -903,11 +922,7 @@ class _LrPaymentCard extends ConsumerWidget {
       spacing: 18,
       runSpacing: 8,
       children: [
-        _Amount(
-          label: 'Transporter Freight',
-          value: freight,
-          hidden: !canT,
-        ),
+        _Amount(label: 'Transporter Freight', value: freight, hidden: !canT),
         _Amount(
           label: 'Advance',
           value: advance,
@@ -953,8 +968,7 @@ class _LrPaymentCard extends ConsumerWidget {
             small: true,
             onPressed: () => _completePayment(context, ref),
           ),
-        if (fullyPaid)
-          const _BadgePill(text: 'Settled', fg: AppColors.ok),
+        if (fullyPaid) const _BadgePill(text: 'Settled', fg: AppColors.ok),
         AppButton(
           label: 'Billing / MIS',
           kind: BtnKind.ghost,
@@ -1385,11 +1399,7 @@ class _LrPaymentCard extends ConsumerWidget {
           .read(transportersRepositoryProvider)
           .downloadDocument(t.id, type: 'tds');
       final name = t.tdsFileName;
-      openFileInBrowser(
-        bytes,
-        _mimeForName(name),
-        name.isEmpty ? 'tds' : name,
-      );
+      openFileInBrowser(bytes, _mimeForName(name), name.isEmpty ? 'tds' : name);
     } catch (_) {
       messenger.showSnackBar(
         const SnackBar(content: Text('Could not open the document')),
@@ -1459,9 +1469,7 @@ class _LrPaymentCard extends ConsumerWidget {
           .read(lrListProvider.notifier)
           .markAdvancePaid(lr.id, lr.version);
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(friendlyErrorMessage(e))),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
       return;
     }
     messenger.showSnackBar(
@@ -1553,16 +1561,12 @@ class _LrPaymentCard extends ConsumerWidget {
           .read(lrListProvider.notifier)
           .completePayment(lr.id, lr.version);
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(friendlyErrorMessage(e))),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
       return;
     }
     messenger.showSnackBar(
       SnackBar(
-        content: Text(
-          '${lr.number} settled in full — notification email sent',
-        ),
+        content: Text('${lr.number} settled in full — notification email sent'),
       ),
     );
   }
@@ -1712,9 +1716,7 @@ class _LrPaymentCard extends ConsumerWidget {
           .read(lrListProvider.notifier)
           .updateLr(lr.id, lr.version, payload);
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(friendlyErrorMessage(e))),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
       return;
     }
     messenger.showSnackBar(
@@ -1733,68 +1735,76 @@ Future<double?> _showAmountDialog({
   required double max,
   required String confirmLabel,
 }) async {
+  // Disposed in the finally: showDialog's future completes only after the route
+  // is gone, so the controller is no longer attached to any TextFormField. This
+  // dialog is the input for "Mark advance paid" / "Mark balance paid", so it
+  // opens many times a day.
   final controller = TextEditingController();
   final formKey = GlobalKey<FormState>();
-  return showDialog<double>(
-    context: context,
-    builder: (ctx) {
-      return AlertDialog(
-        title: Text(title),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                message,
-                style: const TextStyle(color: AppColors.slate, fontSize: 13),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: controller,
-                autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
+  try {
+    return await showDialog<double>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text(title),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  message,
+                  style: const TextStyle(color: AppColors.slate, fontSize: 13),
                 ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(_amountInputMask),
-                ],
-                decoration: const InputDecoration(
-                  labelText: 'Amount (₹)',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: controller,
+                  autofocus: true,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(_amountInputMask),
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'Amount (₹)',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (v) {
+                    final value = double.tryParse(v ?? '');
+                    if (value == null || value <= 0) {
+                      return 'Enter a valid amount';
+                    }
+                    if (value > max + 0.01) {
+                      return 'Cannot exceed ${inr(max)}';
+                    }
+                    return null;
+                  },
                 ),
-                validator: (v) {
-                  final value = double.tryParse(v ?? '');
-                  if (value == null || value <= 0) {
-                    return 'Enter a valid amount';
-                  }
-                  if (value > max + 0.01) {
-                    return 'Cannot exceed ${inr(max)}';
-                  }
-                  return null;
-                },
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState?.validate() ?? false) {
-                Navigator.pop(ctx, double.parse(controller.text));
-              }
-            },
-            child: Text(confirmLabel),
-          ),
-        ],
-      );
-    },
-  );
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (formKey.currentState?.validate() ?? false) {
+                  Navigator.pop(ctx, double.parse(controller.text));
+                }
+              },
+              child: Text(confirmLabel),
+            ),
+          ],
+        );
+      },
+    );
+  } finally {
+    controller.dispose();
+  }
 }
 
 class _Amount extends StatelessWidget {

@@ -57,7 +57,8 @@ class DashboardSummary {
   factory DashboardSummary.fromJson(Map<String, dynamic> json) {
     double num2(dynamic v) =>
         v == null ? 0 : (v is num ? v.toDouble() : double.tryParse('$v') ?? 0);
-    final totals = (json['totals'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final totals =
+        (json['totals'] as Map?)?.cast<String, dynamic>() ?? const {};
     final byStatus = <String, int>{};
     for (final row in (json['by_status'] as List?) ?? const []) {
       if (row is Map) {
@@ -109,10 +110,10 @@ class MisImportChange {
   const MisImportChange({required this.field, this.from, required this.to});
 
   factory MisImportChange.fromJson(Map<String, dynamic> j) => MisImportChange(
-        field: '${j['field'] ?? ''}',
-        from: j['from'] == null ? null : '${j['from']}',
-        to: '${j['to'] ?? ''}',
-      );
+    field: '${j['field'] ?? ''}',
+    from: j['from'] == null ? null : '${j['from']}',
+    to: '${j['to'] ?? ''}',
+  );
 
   String get summary =>
       '$field: ${from == null || from!.isEmpty ? '—' : from} → $to';
@@ -136,14 +137,14 @@ class MisImportRow {
   });
 
   factory MisImportRow.fromJson(Map<String, dynamic> j) => MisImportRow(
-        row: (j['row'] as num?)?.toInt() ?? 0,
-        lrNo: '${j['lr_no'] ?? ''}',
-        changes: ((j['changes'] as List?) ?? const [])
-            .whereType<Map>()
-            .map((e) => MisImportChange.fromJson(e.cast<String, dynamic>()))
-            .toList(),
-        message: j['message'] == null ? null : '${j['message']}',
-      );
+    row: (j['row'] as num?)?.toInt() ?? 0,
+    lrNo: '${j['lr_no'] ?? ''}',
+    changes: ((j['changes'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((e) => MisImportChange.fromJson(e.cast<String, dynamic>()))
+        .toList(),
+    message: j['message'] == null ? null : '${j['message']}',
+  );
 }
 
 /// Outcome of uploading a filled-in MIS workbook. The same shape comes back
@@ -219,7 +220,8 @@ class ReportsRepository {
   Future<DashboardSummary> dashboard() async {
     final res = await _api.dio.get('/reports/dashboard');
     return DashboardSummary.fromJson(
-        (res.data['data'] as Map).cast<String, dynamic>());
+      (res.data['data'] as Map).cast<String, dynamic>(),
+    );
   }
 
   /// Fetches the server-generated MIS workbook (`.xlsx`) as raw bytes. Optional
@@ -284,7 +286,8 @@ class ReportsRepository {
         queryParameters: {if (dryRun) 'dry_run': 'true'},
       );
       return MisImportResult.fromJson(
-          (res.data['data'] as Map).cast<String, dynamic>());
+        (res.data['data'] as Map).cast<String, dynamic>(),
+      );
     } on DioException catch (e) {
       // The server explains exactly what's wrong with a rejected sheet ("no LR
       // No column", "larger than 20 MB", …) and that text is what the user

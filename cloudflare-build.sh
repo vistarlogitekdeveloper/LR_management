@@ -14,7 +14,14 @@
 set -euo pipefail
 
 # Match the team's local Flutter (run `flutter --version`). Bump when you upgrade.
-FLUTTER_VERSION="3.41.9"
+#
+# This is the SDK production is actually compiled with. It had drifted to 3.41.9
+# while every developer ran 3.44.4, which meant any dependency requiring Dart
+# ^3.12.0 or Flutter >=3.44.0 resolved locally and failed here — and CI could not
+# catch it because CI pinned the same wrong version. Keep this, the
+# `flutter-version` in .github/workflows/deploy-cloudflare.yml, and pubspec.yaml's
+# `environment.flutter` floor in lockstep; CI fails if the first two disagree.
+FLUTTER_VERSION="3.44.4"
 FLUTTER_DIR="$HOME/flutter"
 
 if [ ! -x "$FLUTTER_DIR/bin/flutter" ]; then

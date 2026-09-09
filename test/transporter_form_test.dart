@@ -24,20 +24,17 @@ Future<void> _pump(WidgetTester tester) async {
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [
-        tokenStorageProvider.overrideWithValue(_FakeTokenStorage()),
-      ],
-      child: const MaterialApp(
-        home: Scaffold(body: TransporterFormDialog()),
-      ),
+      overrides: [tokenStorageProvider.overrideWithValue(_FakeTokenStorage())],
+      child: const MaterialApp(home: Scaffold(body: TransporterFormDialog())),
     ),
   );
   await tester.pump();
 }
 
 void main() {
-  testWidgets('empty New Transporter form flags every field on Save',
-      (tester) async {
+  testWidgets('empty New Transporter form flags every field on Save', (
+    tester,
+  ) async {
     await _pump(tester);
 
     await tester.tap(find.text('Save'));

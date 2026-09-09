@@ -59,8 +59,13 @@ void main() {
 
     test('bare {seq} is not zero-padded', () {
       expect(
-        formatLrNumber('{prefix}-{seq}',
-            prefix: 'X', region: '', seq: 42, at: DateTime(2026, 8, 1)),
+        formatLrNumber(
+          '{prefix}-{seq}',
+          prefix: 'X',
+          region: '',
+          seq: 42,
+          at: DateTime(2026, 8, 1),
+        ),
         'X-42',
       );
     });
