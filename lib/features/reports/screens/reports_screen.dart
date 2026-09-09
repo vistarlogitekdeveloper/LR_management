@@ -76,6 +76,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
   // exists (that stays role-gated via canViewAmounts).
   late final bool _showFreight; // transporter-side amounts (freight/total/…)
   late final bool _showMargin; // Vistar margin
+  late final bool _showCustomerRate; // customer-side rate / billing
+  // Whether the top-bar "Download Excel" serves the server-built MIS workbook
+  // instead of the client-side sheet. Only the server computes the transporter
+  // payable correctly (balance = freight − advance); the client sheet prints
+  // lr.freight.balance, which folds Vistar's margin into what is owed to the
+  // transporter. Users the server would 403 keep the client sheet.
+  late final bool _canMisXlsx;
   // Date range chosen in the "Download Excel" dialog; null = all dates. Kept so
   // the picker reopens on the last range the user exported.
   DateTimeRange? _exportRange;
@@ -87,6 +94,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
     _canAmounts = user?.canViewAmounts ?? false;
     _showFreight = user?.canViewTransporterRate ?? false;
     _showMargin = user?.canViewVistarMargin ?? false;
+    _showCustomerRate = user?.canViewCustomerRate ?? false;
+    _canMisXlsx = user?.canDownloadMisXlsx ?? false;
     _tab = TabController(length: _canAmounts ? 3 : 2, vsync: this);
   }
 
@@ -125,8 +134,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
                       initialRange: _exportRange,
                     ),
                   );
-                  if (choice == null) return; // cancelled
+                  // null = cancelled; the mount check covers a pop mid-dialog.
+                  if (choice == null || !mounted) return;
                   setState(() => _exportRange = choice.range);
+                  if (_canMisXlsx) {
+                    await _downloadServerMis(messenger, choice.range);
+                    return;
+                  }
                   final rows = lrsInExportRange(lrs, choice.range);
                   if (rows.isEmpty) {
                     if (!context.mounted) return;
@@ -141,6 +155,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
                     rows,
                     canViewTransporterRate: _showFreight,
                     canViewVistarMargin: _showMargin,
+                    canViewCustomerRate: _showCustomerRate,
                     filenameSuffix: choice.range == null
                         ? null
                         : '${_fileStamp(choice.range!.start)}-'
@@ -193,6 +208,42 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
         ],
       ),
     );
+  }
+
+  /// Pulls the server-built MIS workbook for [range] — byte-identical to the
+  /// Accounts tab's "Download MIS (Excel)". Only from/to are sent: the region /
+  /// creator / payment-stage filters belong to that tab's filter row, and this
+  /// button offers no UI for them, so forwarding their provider values would
+  /// silently narrow the export.
+  Future<void> _downloadServerMis(
+    ScaffoldMessengerState messenger,
+    DateTimeRange? range,
+  ) async {
+    // No lrsInExportRange pre-check on this path: lrListProvider is only a
+    // client-side slice of what the server would export (paging stops at
+    // maxPages, a failed page walk silently keeps a partial list, and operators
+    // are filtered to their own LRs), so an empty local slice is no proof the
+    // server has nothing to send.
+    String ymd(DateTime d) => d.toIso8601String().substring(0, 10);
+    try {
+      final bytes = await ref
+          .read(reportsRepositoryProvider)
+          .misXlsx(
+            from: range == null ? null : ymd(range.start),
+            to: range == null ? null : ymd(range.end),
+          );
+      await ExportService.shareBytes(
+        bytes,
+        'Transport_MIS_${ExportService.stamp()}.xlsx',
+      );
+      messenger.showSnackBar(
+        const SnackBar(content: Text('MIS Excel generated')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not generate MIS: $e')),
+      );
+    }
   }
 }
 

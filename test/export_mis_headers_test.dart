@@ -7,31 +7,77 @@
 // Payment" — which are copied verbatim on purpose. These tests pin them so a
 // well-meaning cleanup on this side cannot silently break the match; if a
 // heading really should change, change MIS first and then this test.
+//
+// The money cells are pinned here too: this sheet is the fallback for users who
+// cannot reach GET /reports/mis.xlsx, so its arithmetic must agree with misRow.
 import 'package:excel/excel.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lr_management/features/reports/services/export_service.dart';
 import 'package:lr_management/shared/models/lr_models.dart';
 
+// The real row that exposed the bug: freight 19500, advance 18000, margin 3281.
+// freight - advance = 1500 (correct); total - advance = 4781 (the old, wrong
+// answer) — the two cannot be confused.
+const double _kFreight = 19500;
+const double _kAdvance = 18000;
+const double _kVistarMargin = 3281;
+
 LorryReceipt _lr() => LorryReceipt.fromJson({
   'id': 'lr1',
   'number': 'LR/PUN/26-27/00001',
   'lr_date': '2026-07-01',
+  // Freight fields are read off the same map by FreightDetails.fromJson. `total`
+  // and `balance` are left out so the model computes them exactly as the
+  // backend generated columns do.
+  'freight': _kFreight,
+  'advance': _kAdvance,
+  'vistar_margin': _kVistarMargin,
 });
 
-List<String> _headers({
+Sheet _sheet({
   bool canViewTransporterRate = true,
   bool canViewVistarMargin = true,
+  bool canViewCustomerRate = true,
 }) {
   final bytes = ExportService.buildLrsWorkbook(
     [_lr()],
     canViewTransporterRate: canViewTransporterRate,
     canViewVistarMargin: canViewVistarMargin,
+    canViewCustomerRate: canViewCustomerRate,
   );
-  expect(bytes, isNotNull);
-  final excel = Excel.decodeBytes(bytes!);
-  final sheet = excel.tables[excel.tables.keys.first]!;
-  return sheet.rows.first.map((c) => c?.value?.toString() ?? '').toList();
+  if (bytes == null) fail('buildLrsWorkbook produced no bytes');
+  final excel = Excel.decodeBytes(bytes);
+  return excel.tables[excel.tables.keys.first]!;
+}
+
+List<String> _headers({
+  bool canViewTransporterRate = true,
+  bool canViewVistarMargin = true,
+  bool canViewCustomerRate = true,
+}) => _sheet(
+  canViewTransporterRate: canViewTransporterRate,
+  canViewVistarMargin: canViewVistarMargin,
+  canViewCustomerRate: canViewCustomerRate,
+).rows.first.map((c) => c?.value?.toString() ?? '').toList();
+
+/// Value of the single data row under [heading].
+double _money(String heading) {
+  final sheet = _sheet();
+  final headers = sheet.rows.first
+      .map((c) => c?.value?.toString() ?? '')
+      .toList();
+  final index = headers.indexOf(heading);
+  expect(index, greaterThanOrEqualTo(0), reason: '"$heading" is missing');
+  // A whole amount round-trips through the .xlsx as an IntCellValue even though
+  // the sheet writes DoubleCellValue, so accept either numeric form.
+  final value = switch (sheet.rows[1][index]?.value) {
+    IntCellValue(:final value) => value.toDouble(),
+    DoubleCellValue(:final value) => value,
+    _ => null,
+  };
+  if (value == null) fail('"$heading" does not hold a number');
+  return value;
 }
 
 void main() {
@@ -50,6 +96,7 @@ void main() {
       'Mathadi Charges',
       'Transport Advance Paid',
       'TransportBalance Payment',
+      'Vistar Billing Amount',
       'Vistar Margin',
     ]) {
       expect(headers, contains(name), reason: 'MIS heading "$name" is missing');
@@ -69,6 +116,9 @@ void main() {
       'Mathadi',
       'Advance',
       'Balance',
+      // The grand-total column was replaced by MIS's Vistar Billing Amount;
+      // `total` includes vistar_margin and has no MIS counterpart.
+      'Total',
     ]) {
       expect(
         headers,
@@ -90,9 +140,6 @@ void main() {
       'Door Delivery',
       'Handling',
       'Insurance',
-      // MIS "Total Transport Charges" is the base freight, so the grand total
-      // keeps a distinct name rather than colliding with it.
-      'Total',
       'Pay Type',
       'Status',
       'EWB',
@@ -111,22 +158,23 @@ void main() {
     () {
       for (final transporter in [true, false]) {
         for (final margin in [true, false]) {
-          final bytes = ExportService.buildLrsWorkbook(
-            [_lr()],
-            canViewTransporterRate: transporter,
-            canViewVistarMargin: margin,
-          );
-          final excel = Excel.decodeBytes(bytes!);
-          final sheet = excel.tables[excel.tables.keys.first]!;
-          final headerCount = sheet.rows.first.length;
-          final rowCount = sheet.rows[1].length;
-          expect(
-            rowCount,
-            headerCount,
-            reason:
-                'transporter=$transporter margin=$margin left the header and '
-                'data rows different widths',
-          );
+          for (final customer in [true, false]) {
+            final sheet = _sheet(
+              canViewTransporterRate: transporter,
+              canViewVistarMargin: margin,
+              canViewCustomerRate: customer,
+            );
+            final headerCount = sheet.rows.first.length;
+            final rowCount = sheet.rows[1].length;
+            expect(
+              rowCount,
+              headerCount,
+              reason:
+                  'transporter=$transporter margin=$margin '
+                  'customer=$customer left the header and data rows different '
+                  'widths',
+            );
+          }
         }
       }
     },
@@ -136,14 +184,49 @@ void main() {
     final hidden = _headers(
       canViewTransporterRate: false,
       canViewVistarMargin: false,
+      canViewCustomerRate: false,
     );
     expect(hidden, isNot(contains('Total Transport Charges')));
     expect(hidden, isNot(contains('Transport Advance Paid')));
     expect(hidden, isNot(contains('TransportBalance Payment')));
     expect(hidden, isNot(contains('Mathadi Charges')));
+    expect(hidden, isNot(contains('Vistar Billing Amount')));
     expect(hidden, isNot(contains('Vistar Margin')));
     // Non-money columns are unaffected.
     expect(hidden, contains('LR No'));
     expect(hidden, contains('Origin to Destination'));
+  });
+
+  test('TransportBalance Payment is freight - advance, as misRow computes', () {
+    expect(_money('TransportBalance Payment'), _kFreight - _kAdvance);
+    // Regression guard: the column used to print lr.freight.balance, which is
+    // the `balance` generated column (total - advance) and so folded Vistar's
+    // margin into the transporter payable — 4781 instead of 1500.
+    expect(
+      _money('TransportBalance Payment'),
+      isNot(_kFreight + _kVistarMargin - _kAdvance),
+    );
+  });
+
+  test('Vistar Billing Amount is freight + vistar margin', () {
+    expect(_money('Vistar Billing Amount'), _kFreight + _kVistarMargin);
+  });
+
+  test('Vistar Billing Amount needs all three rate permissions', () {
+    expect(_headers(), contains('Vistar Billing Amount'));
+    for (final missing in const ['transporter', 'margin', 'customer']) {
+      final headers = _headers(
+        canViewTransporterRate: missing != 'transporter',
+        canViewVistarMargin: missing != 'margin',
+        canViewCustomerRate: missing != 'customer',
+      );
+      expect(
+        headers,
+        isNot(contains('Vistar Billing Amount')),
+        reason:
+            'billing amount leaked without $missing rate permission; any two '
+            'of billing amount, freight and margin give the third',
+      );
+    }
   });
 }

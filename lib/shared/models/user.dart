@@ -79,6 +79,14 @@ class AppUser {
   bool get canDeleteLr => can('LR_DELETE') || _lrAdminAccess;
   bool get canViewReports => can('REPORTS_VIEW');
 
+  /// Whether GET /reports/mis.xlsx will answer for this user. Mirrors the
+  /// server gate exactly — perm.require(['LR_PAYMENT','ADMIN_ACCESS',
+  /// 'SUPERADMIN_ACCESS']) — which is a plain "any of these codes" test with
+  /// no super-admin bypass. Keep the two in step: a looser test here shows a
+  /// button that 403s, a stricter one hides an export the user is entitled to.
+  bool get canDownloadMisXlsx =>
+      can('LR_PAYMENT') || can('ADMIN_ACCESS') || can('SUPERADMIN_ACCESS');
+
   // ---- Visibility of sensitive money fields (migration 072) ----
   // Three server-side visibility perms gate WHICH money fields a user may see
   // on LRs and Routes. The backend redacts (null) the matching fields in every

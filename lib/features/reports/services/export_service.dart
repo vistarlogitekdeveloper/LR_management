@@ -12,19 +12,24 @@ class ExportService {
   /// Exports the LR list as a real Excel workbook (.xlsx). The transporter-side
   /// columns (freight … balance) are emitted only when [canViewTransporterRate]
   /// is true, and the Vistar Margin column only when [canViewVistarMargin] is
-  /// true (migration 072 visibility perms). Callers pass the current user's
-  /// flags; both default true so unrestricted callers are unaffected. Header
-  /// and row cells share the same guards so columns stay aligned.
+  /// true (migration 072 visibility perms). [canViewCustomerRate] joins the
+  /// other two to gate Vistar Billing Amount, which MIS releases only to a
+  /// holder of all three — any two of billing amount, freight and margin yield
+  /// the third by arithmetic. Callers pass the current user's flags; all three
+  /// default true so unrestricted callers are unaffected. Header and row cells
+  /// share the same guards so columns stay aligned.
   static Future<void> exportLrsExcel(
     List<LorryReceipt> lrs, {
     bool canViewTransporterRate = true,
     bool canViewVistarMargin = true,
+    bool canViewCustomerRate = true,
     String? filenameSuffix,
   }) async {
     final bytes = buildLrsWorkbook(
       lrs,
       canViewTransporterRate: canViewTransporterRate,
       canViewVistarMargin: canViewVistarMargin,
+      canViewCustomerRate: canViewCustomerRate,
     );
     if (bytes != null) {
       final suffix = filenameSuffix == null ? '' : '_$filenameSuffix';
@@ -38,7 +43,11 @@ class ExportService {
     List<LorryReceipt> lrs, {
     bool canViewTransporterRate = true,
     bool canViewVistarMargin = true,
+    bool canViewCustomerRate = true,
   }) {
+    // MIS emits billing_amount only to a caller holding all three rate perms.
+    final canViewBillingAmount =
+        canViewTransporterRate && canViewVistarMargin && canViewCustomerRate;
     final excel = Excel.createExcel();
     final sheet = excel[excel.getDefaultSheet() ?? 'Sheet1'];
 
@@ -50,8 +59,8 @@ class ExportService {
     // the whole point; fix them in MIS first if they should change.
     //
     // Columns with no MIS counterpart (Consignor, Consignee, the In/Out
-    // date-time split, Door Delivery, Handling, Insurance, Total, Pay Type,
-    // Status, EWB) keep their own names.
+    // date-time split, Door Delivery, Handling, Insurance, Pay Type, Status,
+    // EWB) keep their own names.
     final headers = <String>[
       'LR No', 'LR Date', 'Customer Name (Billing From Vistar)',
       'Consignor', 'Consignee',
@@ -61,14 +70,14 @@ class ExportService {
       if (canViewTransporterRate) ...[
         // MIS calls the base freight "Total Transport Charges" (its
         // total_charges cell is lr.freight, not the grand total), so this
-        // column takes that name and the grand total below stays "Total".
+        // column takes that name.
         'Total Transport Charges',
         'Door Delivery',
         'Handling',
         'Insurance',
         'Mathadi Charges',
         'Transport Advance Paid',
-        'Total',
+        if (canViewBillingAmount) 'Vistar Billing Amount',
         'TransportBalance Payment',
       ],
       if (canViewVistarMargin) 'Vistar Margin',
@@ -108,8 +117,14 @@ class ExportService {
           DoubleCellValue(lr.freight.insurance),
           DoubleCellValue(lr.freight.mathadi),
           DoubleCellValue(lr.freight.advance),
-          DoubleCellValue(lr.freight.total),
-          DoubleCellValue(lr.freight.balance),
+          // misRow's billing_amount: what Vistar bills the customer.
+          if (canViewBillingAmount)
+            DoubleCellValue(lr.freight.freight + lr.freight.vistarMargin),
+          // misRow's balance is freight - advance, not lr.freight.balance: the
+          // `balance` generated column (migration 078) is total - advance, and
+          // `total` there sums vistar_margin in with the freight heads, so
+          // using it would bill Vistar's own margin to the transporter.
+          DoubleCellValue(lr.freight.freight - lr.freight.advance),
         ],
         if (canViewVistarMargin) DoubleCellValue(lr.freight.vistarMargin),
         TextCellValue(lr.payType.label),
