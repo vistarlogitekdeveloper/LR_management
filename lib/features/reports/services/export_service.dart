@@ -42,20 +42,34 @@ class ExportService {
     final excel = Excel.createExcel();
     final sheet = excel[excel.getDefaultSheet() ?? 'Sheet1'];
 
+    // Header names deliberately mirror the MIS workbook
+    // (lr-management/services/misWorkbook.service.js, MIS_COLUMNS) so the two
+    // sheets can be read, compared and pasted side by side. Where MIS spells a
+    // heading oddly — "Transportor name", "TransportBalance Payment" — the
+    // spelling is copied verbatim rather than corrected, because matching is
+    // the whole point; fix them in MIS first if they should change.
+    //
+    // Columns with no MIS counterpart (Consignor, Consignee, the In/Out
+    // date-time split, Door Delivery, Handling, Insurance, Total, Pay Type,
+    // Status, EWB) keep their own names.
     final headers = <String>[
-      'LR No', 'Date', 'Customer Name', 'Consignor', 'Consignee',
-      'Transporter Name', 'Vehicle', 'Vehicle Type', 'Capacity',
+      'LR No', 'LR Date', 'Customer Name (Billing From Vistar)',
+      'Consignor', 'Consignee',
+      'Transportor name', 'Vehicle No.', 'Vehicle Type', 'Vehicle Capacity',
       // In / Out are split into separate date and (24-hour) time columns.
-      'In Date', 'In Time', 'Out Date', 'Out Time', 'Route',
+      'In Date', 'In Time', 'Out Date', 'Out Time', 'Origin to Destination',
       if (canViewTransporterRate) ...[
-        'Freight',
+        // MIS calls the base freight "Total Transport Charges" (its
+        // total_charges cell is lr.freight, not the grand total), so this
+        // column takes that name and the grand total below stays "Total".
+        'Total Transport Charges',
         'Door Delivery',
         'Handling',
         'Insurance',
-        'Mathadi',
-        'Advance',
+        'Mathadi Charges',
+        'Transport Advance Paid',
         'Total',
-        'Balance',
+        'TransportBalance Payment',
       ],
       if (canViewVistarMargin) 'Vistar Margin',
       'Pay Type', 'Status', 'EWB',
