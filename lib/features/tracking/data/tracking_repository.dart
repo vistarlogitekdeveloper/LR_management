@@ -208,8 +208,17 @@ class TrackingRepository {
 
   /// Start SIM tracking for an LR whose driver was assigned after creation
   /// (idempotent server-side: a no-op if a trip already exists).
-  Future<void> startTracking(String lrId) async {
-    await _api.dio.post('/tracking/lr/$lrId/start');
+  ///
+  /// Pass [takeover] only after the operator has agreed to it: the driver's
+  /// phone can carry one trip at a time, so taking it over ENDS the trip that
+  /// currently owns it and stops tracking for that LR. A plain call refuses with
+  /// 409 `SIM_BUSY` instead, and the response carries `can_takeover` plus
+  /// `blocking_lrs` so the UI can name what would stop.
+  Future<void> startTracking(String lrId, {bool takeover = false}) async {
+    await _api.dio.post(
+      '/tracking/lr/$lrId/start',
+      data: takeover ? {'takeover': true} : null,
+    );
   }
 
   /// Generate (or fetch the cached) public shareable tracking link so a

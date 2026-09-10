@@ -74,54 +74,122 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
     }
   }
 
+  /// Owns the button's in-flight state for the whole interaction, including the
+  /// operator's answer to a SIM clash and the second attempt after it. The
+  /// attempt itself lives in [_attemptStart] deliberately: a `return _attempt…`
+  /// from inside a try/finally would let the `finally` clear the spinner while
+  /// the retry was still running.
   Future<void> _start() async {
     setState(() => _starting = true);
-    final messenger = ScaffoldMessenger.of(context);
     try {
-      await ref.read(trackingRepositoryProvider).startTracking(widget.id);
-      ref.invalidate(lrTrackingProvider(widget.id));
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Tracking started — location appears as the driver pings in.',
-          ),
-        ),
-      );
-    } catch (e) {
-      // A blocked SIM is not a retryable error — the operator has to close the
-      // other LR or assign the right driver — so it gets a dialog it must read,
-      // not a snackbar that slides away after four seconds.
-      final api = asApiException(e);
-      if (api != null && api.isSimBusy && mounted) {
-        await _showBlockedDialog(api.message);
-      } else {
-        messenger.showSnackBar(
-          SnackBar(content: Text(friendlyErrorMessage(e))),
-        );
-      }
+      await _attemptStart(takeover: false);
     } finally {
       if (mounted) setState(() => _starting = false);
     }
   }
 
-  Future<void> _showBlockedDialog(String message) => showDialog<void>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      icon: const Icon(
-        Icons.sim_card_alert_outlined,
-        color: AppColors.warn,
-        size: 28,
-      ),
-      title: const Text("Can't track this LR yet"),
-      content: Text(message, style: const TextStyle(height: 1.45)),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('Close'),
+  Future<void> _attemptStart({required bool takeover}) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref
+          .read(trackingRepositoryProvider)
+          .startTracking(widget.id, takeover: takeover);
+      ref.invalidate(lrTrackingProvider(widget.id));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            takeover
+                ? 'Tracking moved to this LR — location appears as the driver pings in.'
+                : 'Tracking started — location appears as the driver pings in.',
+          ),
         ),
-      ],
-    ),
-  );
+      );
+    } catch (e) {
+      // A blocked SIM is not a retryable error — the operator has to choose
+      // between stopping the other LR and assigning the right driver — so it
+      // gets a dialog it must answer, not a snackbar that slides away.
+      //
+      // `!takeover` bounds the recursion at exactly one retry: if the provider
+      // still reports the SIM busy after we ended the blocking trip, that is a
+      // real failure to show, not something to ask about again.
+      final api = asApiException(e);
+      if (!takeover && api != null && api.isSimBusy && mounted) {
+        final agreed = await _showSimBusyDialog(api);
+        if (agreed == true) return _attemptStart(takeover: true);
+        return;
+      }
+      messenger.showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+    }
+  }
+
+  /// Explains the clash and offers the one action that resolves it in-app:
+  /// stop the trip that currently owns the driver's phone and start fresh here.
+  /// Returns true only if the operator explicitly chose that.
+  Future<bool?> _showSimBusyDialog(ApiException api) {
+    // Sent by the backend alongside the 409 so the prompt can name exactly what
+    // would stop being tracked, rather than asking the operator to take it on
+    // trust. Absent (or false) → offer no takeover, just the explanation.
+    final details = api.details;
+    final canTakeover = details is Map && details['can_takeover'] == true;
+    final blocking = (details is Map && details['blocking_lrs'] is List)
+        ? (details['blocking_lrs'] as List).map((e) => e.toString()).toList()
+        : const <String>[];
+    final blockingLabel = blocking.isEmpty
+        ? 'the other LR'
+        : blocking.join(', ');
+
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(
+          Icons.sim_card_alert_outlined,
+          color: AppColors.warn,
+          size: 28,
+        ),
+        title: const Text("Can't track this LR yet"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(api.message, style: const TextStyle(height: 1.45)),
+            if (canTakeover) ...[
+              const SizedBox(height: 14),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.inputBg,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.line),
+                ),
+                child: Text(
+                  'Stop tracking $blockingLabel and start fresh tracking for '
+                  'this LR?\n\nThat LR will stop receiving new locations. Its '
+                  'existing trail is kept.',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    height: 1.45,
+                    color: AppColors.ink,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(canTakeover ? 'No, leave it' : 'Close'),
+          ),
+          if (canTakeover)
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Yes, track this LR'),
+            ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _share() async {
     setState(() => _sharing = true);
