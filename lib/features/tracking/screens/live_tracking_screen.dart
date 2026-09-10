@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../shell/widgets/app_topbar.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -64,7 +65,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
             child: async.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => _ErrorBox(
-                message: 'Could not load tracking.\n$e',
+                message: 'Could not load tracking.\n${friendlyErrorMessage(e)}',
                 onRetry: () => ref.invalidate(activeVehiclesProvider),
               ),
               data: (vehicles) => _FleetBody(vehicles: vehicles, india: _india),

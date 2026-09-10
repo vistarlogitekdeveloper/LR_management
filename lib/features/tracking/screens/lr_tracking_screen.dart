@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../shell/widgets/app_topbar.dart';
 import '../../../shared/widgets/app_button.dart';
@@ -61,7 +62,13 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
         SnackBar(content: Text('Consent: ${r.status ?? 'unknown'}')),
       );
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Recheck failed: $e')));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not recheck consent: ${friendlyErrorMessage(e)}',
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _rechecking = false);
     }
@@ -81,13 +88,40 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
         ),
       );
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Could not start tracking: $e')),
-      );
+      // A blocked SIM is not a retryable error — the operator has to close the
+      // other LR or assign the right driver — so it gets a dialog it must read,
+      // not a snackbar that slides away after four seconds.
+      final api = asApiException(e);
+      if (api != null && api.isSimBusy && mounted) {
+        await _showBlockedDialog(api.message);
+      } else {
+        messenger.showSnackBar(
+          SnackBar(content: Text(friendlyErrorMessage(e))),
+        );
+      }
     } finally {
       if (mounted) setState(() => _starting = false);
     }
   }
+
+  Future<void> _showBlockedDialog(String message) => showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      icon: const Icon(
+        Icons.sim_card_alert_outlined,
+        color: AppColors.warn,
+        size: 28,
+      ),
+      title: const Text("Can't track this LR yet"),
+      content: Text(message, style: const TextStyle(height: 1.45)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Close'),
+        ),
+      ],
+    ),
+  );
 
   Future<void> _share() async {
     setState(() => _sharing = true);
@@ -108,7 +142,11 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
       await _showShareDialog(link);
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not create link: $e')),
+        SnackBar(
+          content: Text(
+            'Could not create the share link: ${friendlyErrorMessage(e)}',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _sharing = false);
@@ -223,7 +261,7 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(
                 child: Text(
-                  'Could not load tracking.\n$e',
+                  'Could not load tracking.\n${friendlyErrorMessage(e)}',
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: AppColors.slate),
                 ),
