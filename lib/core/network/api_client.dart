@@ -4,6 +4,16 @@ import 'api_config.dart';
 import 'api_exception.dart';
 import 'token_storage.dart';
 
+/// Put `extra: {kNoRetryExtra: true}` on a request to opt it out of the
+/// transient retry in [ApiClient].
+///
+/// The retry treats a connection error as "never reached the server", which is
+/// true for a DNS or connect-timeout failure but NOT for a socket dropped
+/// mid-flight. For a non-idempotent write — issuing an invoice, say — the
+/// request may already have been applied, and the retry then returns the
+/// server's rejection of the duplicate, reporting a success as a failure.
+const String kNoRetryExtra = 'lrm_no_retry';
+
 class ApiClient {
   ApiClient(this._tokens)
     : _dio = Dio(
@@ -125,6 +135,11 @@ class ApiClient {
         e.type == DioExceptionType.connectionTimeout;
     final retryGet5xx = opts.method.toUpperCase() == 'GET' && transient5xx;
     if (!preConnect && !retryGet5xx) return false;
+    // A call site may opt out (see [kNoRetryExtra]). connectionError also covers
+    // a socket dropped MID-request, which may well have reached the server, so
+    // for a non-idempotent write the retry can hit an action that already
+    // succeeded and report it back as a failure.
+    if (opts.extra[kNoRetryExtra] == true) return false;
 
     final bare = Dio(
       BaseOptions(

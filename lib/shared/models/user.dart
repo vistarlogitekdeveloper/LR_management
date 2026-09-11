@@ -92,6 +92,35 @@ class AppUser {
       (can('REPORTS_VIEW') || can('ADMIN_ACCESS')) &&
       (can('LR_PAYMENT') || can('ADMIN_ACCESS') || can('SUPERADMIN_ACCESS'));
 
+  // ---- Invoicing (authority: routes/invoiceRoutes.js) ----
+  // The invoice router declares exactly two tiers and applies them per route,
+  // with admin / super-admin accepted for both so an admin is never locked out
+  // of a module they own:
+  //   READ  = ['INVOICE_VIEW',   'ADMIN_ACCESS', 'SUPERADMIN_ACCESS']
+  //   WRITE = ['INVOICE_MANAGE', 'ADMIN_ACCESS', 'SUPERADMIN_ACCESS']
+  // Mirrored literally, code for code: a looser test here offers a button that
+  // 403s, a stricter one hides a screen the user is entitled to.
+
+  /// May open the invoices module — GET /invoices, /invoices/:id,
+  /// /invoices/:id.pdf, /invoices/billable-lrs and GET /invoices/settings all
+  /// sit on the READ tier in routes/invoiceRoutes.js.
+  bool get canViewInvoices =>
+      can('INVOICE_VIEW') || can('ADMIN_ACCESS') || can('SUPERADMIN_ACCESS');
+
+  /// May issue and cancel invoices — POST /invoices and
+  /// POST /invoices/:id/cancel, the WRITE tier in routes/invoiceRoutes.js.
+  bool get canManageInvoices =>
+      can('INVOICE_MANAGE') || can('ADMIN_ACCESS') || can('SUPERADMIN_ACCESS');
+
+  /// May WRITE the invoice letterhead settings. Deliberately narrower than
+  /// [canManageInvoices]: routes/invoiceRoutes.js gates PUT /invoices/settings
+  /// on ['ADMIN_ACCESS', 'SUPERADMIN_ACCESS'] alone, because that row carries
+  /// the company's bank account number — billing a customer is not the same
+  /// right as re-pointing where that customer pays. Reading the settings needs
+  /// only [canViewInvoices].
+  bool get canManageInvoiceSettings =>
+      can('ADMIN_ACCESS') || can('SUPERADMIN_ACCESS');
+
   // ---- Visibility of sensitive money fields (migration 072) ----
   // Three server-side visibility perms gate WHICH money fields a user may see
   // on LRs and Routes. The backend redacts (null) the matching fields in every

@@ -6,6 +6,7 @@ import '../../features/accounts/screens/accounts_screen.dart';
 import '../../features/admin/screens/admin_screen.dart';
 import '../../features/admin/screens/audit_screen.dart';
 import '../../features/admin/screens/capacity_options_screen.dart';
+import '../../features/admin/screens/invoice_settings_screen.dart';
 import '../../features/admin/screens/lr_format_screen.dart';
 import '../../features/admin/screens/numbering_screen.dart';
 import '../../features/admin/screens/regions_screen.dart';
@@ -18,6 +19,8 @@ import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/profile_screen.dart';
 import '../../features/dashboard/screens/dashboard_screen.dart';
 import '../../features/ewb/screens/ewb_screen.dart';
+import '../../features/invoices/screens/create_invoice_screen.dart';
+import '../../features/invoices/screens/invoices_screen.dart';
 import '../../features/lr/screens/create_lr_screen.dart';
 import '../../features/lr/screens/lr_detail_screen.dart';
 import '../../features/lr/screens/lr_list_screen.dart';
@@ -108,6 +111,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         if (loc.startsWith('/admin/regions') && !role.canManageRegions) {
           return '/dashboard';
         }
+        // The invoice letterhead carries the company's bank account number, so
+        // PUT /invoices/settings is ADMIN_ACCESS / SUPERADMIN_ACCESS only —
+        // narrower than the coarse /admin role gate above, and permission-based
+        // rather than role-based.
+        if (loc.startsWith('/admin/invoice-settings') &&
+            !user.canManageInvoiceSettings) {
+          return '/dashboard';
+        }
         if (loc.startsWith('/masters/') &&
             !(role.canMasters || role.canReports)) {
           return '/dashboard';
@@ -118,6 +129,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         // Accounts/payouts are for the accounts desk + super admins only
         // (matches nav gating) — operators and regional admins are redirected.
         if (loc == '/accounts' && !user.canViewAccounts) {
+          return '/dashboard';
+        }
+        // Invoices mirror the server's two tiers (routes/invoiceRoutes.js):
+        // the module needs the READ tier, issuing one needs the WRITE tier.
+        // Checked in that order so a user with neither is bounced by the first
+        // test rather than landing on a list they cannot read.
+        if (loc.startsWith('/invoices') && !user.canViewInvoices) {
+          return '/dashboard';
+        }
+        if (loc == '/invoices/new' && !user.canManageInvoices) {
           return '/dashboard';
         }
       }
@@ -420,8 +441,28 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          // 13 — Admin (+ users, regions, numbering, lr-format, capacity,
-          // audit, settings sub-routes)
+          // 13 — Invoices (+ create). The list and its filters live in
+          // autoDispose FutureProviders that fetch themselves, so this branch
+          // needs no RefreshGate — re-entering it re-reads whatever the
+          // providers hold and the screens render their own loading state.
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/invoices',
+                pageBuilder: (context, state) =>
+                    _noAnim(state, const InvoicesScreen()),
+                routes: [
+                  GoRoute(
+                    path: 'new',
+                    pageBuilder: (context, state) =>
+                        _noAnim(state, const CreateInvoiceScreen()),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          // 14 — Admin (+ users, regions, numbering, lr-format, capacity,
+          // invoice-settings, audit, settings sub-routes)
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -489,6 +530,11 @@ final routerProvider = Provider<GoRouter>((ref) {
                     ),
                   ),
                   GoRoute(
+                    path: 'invoice-settings',
+                    pageBuilder: (context, state) =>
+                        _noAnim(state, const InvoiceSettingsScreen()),
+                  ),
+                  GoRoute(
                     path: 'audit',
                     pageBuilder: (context, state) =>
                         _noAnim(state, const AuditScreen()),
@@ -502,7 +548,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          // 14 — Profile (+ change-password sub-route)
+          // 15 — Profile (+ change-password sub-route)
           StatefulShellBranch(
             routes: [
               GoRoute(

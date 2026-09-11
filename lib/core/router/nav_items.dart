@@ -141,6 +141,16 @@ class AppNav {
           // Operators handle dispatch; regional admins don't get billing access.
           canAccess: (u) => u.canViewAccounts,
         ),
+        NavItem(
+          id: 'invoices',
+          label: 'Invoices',
+          icon: Icons.receipt_long_outlined,
+          path: '/invoices',
+          // Permission-based, not role-based: the invoice router's READ tier is
+          // INVOICE_VIEW | ADMIN_ACCESS | SUPERADMIN_ACCESS, so an accounts
+          // user granted INVOICE_VIEW sees this and nobody else does.
+          canAccess: (u) => u.canViewInvoices,
+        ),
       ],
     ),
     NavSection(
@@ -159,6 +169,19 @@ class AppNav {
           icon: Icons.public_outlined,
           path: '/admin/regions',
           canAccess: (u) => u.canManageRegions,
+        ),
+        NavItem(
+          id: 'invoice-settings',
+          label: 'Invoice Settings',
+          icon: Icons.receipt_outlined,
+          path: '/admin/invoice-settings',
+          // Needs its own entry point, not just a route: the server refuses to
+          // issue any invoice until this letterhead row exists, and both the
+          // invoice list and the create screen tell the admin to come here.
+          // Gated on the settings tier (ADMIN_ACCESS | SUPERADMIN_ACCESS) —
+          // narrower than issuing invoices, because this row holds the bank
+          // account customers pay into.
+          canAccess: (u) => u.canManageInvoiceSettings,
         ),
       ],
     ),
