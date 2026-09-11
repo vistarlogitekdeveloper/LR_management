@@ -1956,6 +1956,13 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                   options: routes,
                                   clearable: true,
                                   labelOf: (r) => r.name,
+                                  // The same From → To exists several times,
+                                  // separated only by vehicle type and capacity
+                                  // (each a separately negotiated rate), so the
+                                  // name alone is not enough to pick by. The
+                                  // picker searches the subtitle too, which
+                                  // makes "12 MT" or "407" a usable query.
+                                  subtitleOf: (r) => r.specLine,
                                   hintText: 'Select route',
                                   dialogTitle: 'Select Route',
                                   // The route form has no single "name" field

@@ -141,6 +141,23 @@ class _SearchPicker<T> extends StatefulWidget {
 class _SearchPickerState<T> extends State<_SearchPicker<T>> {
   String _q = '';
 
+  /// The secondary line, or null when there is nothing to say.
+  ///
+  /// An empty string is treated as absent rather than rendered: subtitleOf is
+  /// usually built from optional fields (a party with no GST or city, a route
+  /// with no vehicle type), and a blank Text still claims a line, leaving one
+  /// tile taller than its neighbours for no reason.
+  Widget? _subtitle(T option) {
+    final value = widget.subtitleOf?.call(option).trim() ?? '';
+    if (value.isEmpty) return null;
+    return Text(
+      value,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(fontSize: 11.5),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Always present alphabetically (case-insensitive) by the primary label.
@@ -276,14 +293,7 @@ class _SearchPickerState<T> extends State<_SearchPicker<T>> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            subtitle: widget.subtitleOf != null
-                                ? Text(
-                                    widget.subtitleOf!(o),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 11.5),
-                                  )
-                                : null,
+                            subtitle: _subtitle(o),
                             onTap: () =>
                                 Navigator.pop(context, _PickResult<T>(o)),
                           ),

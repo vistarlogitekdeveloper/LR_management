@@ -54,6 +54,23 @@ class RouteMaster {
 
   String get name => '$fromCity → $toCity';
 
+  /// "128 km · 12 MT · Pick Up" — what tells two routes with the same From → To
+  /// apart. The same origin-destination pair legitimately exists several times,
+  /// differentiated only by vehicle type and capacity (each is a separately
+  /// negotiated rate), so picking by name alone is guesswork.
+  ///
+  /// Empty parts are dropped rather than printed blank, and a route carrying
+  /// none of the three yields '' — which the picker reads as "no subtitle".
+  String get specLine {
+    final type = vehicleTypeLabel?.trim() ?? '';
+    final capacity = capacityLabel?.trim() ?? '';
+    return [
+      if (distanceKm > 0) '${distanceKm.toStringAsFixed(0)} km',
+      if (type.isNotEmpty) type,
+      if (capacity.isNotEmpty) capacity,
+    ].join(' · ');
+  }
+
   /// A stored pair is only usable if it is actually a degree pair. Rows written
   /// by an earlier picker hold projected metres (lat ~25,555,074), and (0, 0) is
   /// what an uninitialised map widget saves. Treating either as a real pin makes
