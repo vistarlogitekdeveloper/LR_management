@@ -38,6 +38,7 @@ import '../../shell/widgets/app_topbar.dart';
 import '../data/lr_repository.dart';
 import '../providers/lr_providers.dart';
 import '../providers/templates_provider.dart';
+import '../utils/lr_date_rules.dart';
 
 class CreateLrScreen extends ConsumerStatefulWidget {
   final String? editId;
@@ -2361,10 +2362,19 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         borderRadius: BorderRadius.circular(10),
         onTap: () async {
           final now = DateTime.now();
+          // Back-dating is capped at one calendar day — see lrDateFloor. It
+          // crosses a month or year end normally, so on the 1st the previous
+          // month's last day is still selectable. An LR already dated earlier
+          // (edit mode) lowers the floor to its own date so the picker still
+          // opens on it.
+          final firstDate = lrDateFloor(
+            now,
+            existing: _isEdit ? (_lrDate ?? _editing?.date) : null,
+          );
           final picked = await showDatePicker(
             context: context,
             initialDate: _lrDate ?? now,
-            firstDate: DateTime(now.year - 2),
+            firstDate: firstDate,
             lastDate: DateTime(now.year + 1),
           );
           if (picked != null) setState(() => _lrDate = picked);
