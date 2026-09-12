@@ -32,6 +32,32 @@
 
   <title>Vistar Transport Management System (VTMS)</title>
   <link rel="manifest" href="manifest.json">
+
+  <!--
+    Google Maps JavaScript SDK — draws the map inside the location picker.
+
+    THE KEY IN THE LINE BELOW IS A PLACEHOLDER AND IS NOT VALID AS IT STANDS.
+    cloudflare-build.sh substitutes it from the GOOGLE_MAPS_BROWSER_KEY
+    environment variable at build time, and DELETES this whole script when that
+    variable is unset — so a build without a key ships no script, `google.maps`
+    never appears, and the picker draws OpenStreetMap exactly as it always has.
+    Never commit a real key here.
+
+    (This comment deliberately does not spell the placeholder token out: the
+    substitution is a plain global replace, so a second occurrence here would
+    print the live key into the page source twice over.)
+
+    Loaded synchronously, on purpose: google_maps_flutter_web expects
+    `google.maps` to exist before the first map widget builds, and it has no
+    hook to wait on. `async`/`defer` would race the picker.
+
+    This key is a BROWSER key and is visible to anyone who views source. That is
+    unavoidable for this API and is not the thing protecting it — the HTTP
+    referrer restriction on the key is. Keep that restriction to the Pages
+    domains, and keep this key restricted to Maps JavaScript API alone; place
+    SEARCH goes through our own server, which uses a separate server key.
+  -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=__GOOGLE_MAPS_BROWSER_KEY__"></script>
 </head>
 <body>
   <!--

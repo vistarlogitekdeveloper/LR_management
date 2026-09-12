@@ -71,6 +71,7 @@ dependencies:
   # Browser APIs for the web attachment viewer (Blob + object URLs). Replaces
   # dart:html, which is deprecated and unavailable under dart2wasm.
   web: ^1.1.1
+  google_maps_flutter: ^2.18.0
 
 dev_dependencies:
   flutter_test:

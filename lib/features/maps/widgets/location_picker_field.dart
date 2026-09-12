@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:uuid/uuid.dart';
@@ -11,6 +10,7 @@ import '../../../shared/models/route_master.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../data/maps_repository.dart';
 import '../utils/google_maps_link.dart';
+import 'picker_map.dart';
 
 /// A form-field-styled control that opens a free OpenStreetMap picker (place
 /// search + move-the-map centre pin) and returns a [PickedLocation]
@@ -112,7 +112,7 @@ class _MapPickerDialog extends ConsumerStatefulWidget {
 class _MapPickerDialogState extends ConsumerState<_MapPickerDialog> {
   static const _default = LatLng(18.5204, 73.8567); // Pune
 
-  final _mapCtrl = MapController();
+  final _mapCtrl = PickerMapController();
   final _searchCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
   Timer? _searchDebounce;
@@ -449,34 +449,25 @@ class _MapPickerDialogState extends ConsumerState<_MapPickerDialog> {
             Expanded(
               child: Stack(
                 children: [
-                  FlutterMap(
-                    mapController: _mapCtrl,
-                    options: MapOptions(
-                      initialCenter: _center,
-                      initialZoom: 13,
-                      onPositionChanged: (camera, hasGesture) {
-                        _center = camera.center;
-                        if (!hasGesture) return;
-                        // The place id belongs to where the pin WAS, so it has
-                        // to go with the drag itself. Guarded so one setState
-                        // runs per gesture, not one per frame.
-                        if (_placeId.isNotEmpty ||
-                            _source != PickedLocationSource.pin) {
-                          setState(() {
-                            _placeId = '';
-                            _source = PickedLocationSource.pin;
-                          });
-                        }
-                        _scheduleReverse();
-                      },
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.vistar.lr_management',
-                      ),
-                    ],
+                  PickerMap(
+                    controller: _mapCtrl,
+                    initialCenter: _center,
+                    initialZoom: 13,
+                    onCameraMove: (center, hasGesture) {
+                      _center = center;
+                      if (!hasGesture) return;
+                      // The place id belongs to where the pin WAS, so it has
+                      // to go with the drag itself. Guarded so one setState
+                      // runs per gesture, not one per frame.
+                      if (_placeId.isNotEmpty ||
+                          _source != PickedLocationSource.pin) {
+                        setState(() {
+                          _placeId = '';
+                          _source = PickedLocationSource.pin;
+                        });
+                      }
+                      _scheduleReverse();
+                    },
                   ),
                   // Fixed centre pin — its tip marks the chosen point.
                   const IgnorePointer(
