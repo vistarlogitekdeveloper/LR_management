@@ -107,6 +107,20 @@ class AppNav {
           canAccess: (u) => u.role != UserRole.accounts,
         ),
         NavItem(
+          id: 'vehicle-bank',
+          label: 'Vehicle Bank',
+          icon: Icons.garage_outlined,
+          path: '/vehicle-bank',
+          // Sits with the masters it is a directory of — one row per vehicle,
+          // carrying that vehicle's transporter, driver and route.
+          //
+          // VEHICLE_BANK_VIEW is seeded to SUPER_ADMIN only, so for every other
+          // role this entry is invisible until a super admin grants the
+          // permission per user. That is the intended default, not a bug: the
+          // directory is a cross-master view and is opt-in by design.
+          canAccess: (u) => u.canViewVehicleBank,
+        ),
+        NavItem(
           id: 'routes',
           label: 'Routes',
           icon: Icons.route_outlined,

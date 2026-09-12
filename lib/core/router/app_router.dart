@@ -43,6 +43,7 @@ import '../../features/reports/screens/reports_screen.dart';
 import '../../features/shell/app_shell.dart';
 import '../../features/tracking/screens/live_tracking_screen.dart';
 import '../../features/tracking/screens/lr_tracking_screen.dart';
+import '../../features/vehicle_bank/screens/vehicle_bank_screen.dart';
 import '../../features/warehouse/screens/warehouse_screen.dart';
 import '../../shared/models/user.dart';
 import '../../shared/widgets/refresh_gate.dart';
@@ -139,6 +140,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           return '/dashboard';
         }
         if (loc == '/invoices/new' && !user.canManageInvoices) {
+          return '/dashboard';
+        }
+        // Vehicle Bank is invisible in the sidebar without the permission, but
+        // the URL is still typeable, so guard it here too and send the user to
+        // the same place every other denial does. The server (its router-level
+        // perm.require) is the enforcement point; this only avoids a screen
+        // that would render nothing but 403 errors.
+        if (loc.startsWith('/vehicle-bank') && !user.canViewVehicleBank) {
           return '/dashboard';
         }
       }
@@ -458,6 +467,21 @@ final routerProvider = Provider<GoRouter>((ref) {
                         _noAnim(state, const CreateInvoiceScreen()),
                   ),
                 ],
+              ),
+            ],
+          ),
+          // Vehicle Bank — read-only cross-master directory. Additive branch,
+          // and it needs no RefreshGate: the rows live in an autoDispose
+          // FutureProvider family that fetches on first watch and re-fetches on
+          // re-entry, and the screen renders its own loading / empty / error
+          // states. The filter provider is deliberately NOT autoDispose, so a
+          // user's filters survive leaving the branch and coming back.
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/vehicle-bank',
+                pageBuilder: (context, state) =>
+                    _noAnim(state, const VehicleBankScreen()),
               ),
             ],
           ),

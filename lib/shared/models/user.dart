@@ -121,6 +121,18 @@ class AppUser {
   bool get canManageInvoiceSettings =>
       can('ADMIN_ACCESS') || can('SUPERADMIN_ACCESS');
 
+  /// May open the Vehicle Bank directory — GET /vehicle-bank and
+  /// /vehicle-bank/export.xlsx. Authority is routes/vehicleBankRoutes.js, which
+  /// applies perm.require(['VEHICLE_BANK_VIEW','ADMIN_ACCESS',
+  /// 'SUPERADMIN_ACCESS']) at the router, so both endpoints answer to exactly
+  /// this set. Mirrored code for code: a looser test here shows a sidebar
+  /// entry that 403s on tap, a stricter one hides a directory the user is
+  /// entitled to.
+  bool get canViewVehicleBank =>
+      can('VEHICLE_BANK_VIEW') ||
+      can('ADMIN_ACCESS') ||
+      can('SUPERADMIN_ACCESS');
+
   // ---- Visibility of sensitive money fields (migration 072) ----
   // Three server-side visibility perms gate WHICH money fields a user may see
   // on LRs and Routes. The backend redacts (null) the matching fields in every
