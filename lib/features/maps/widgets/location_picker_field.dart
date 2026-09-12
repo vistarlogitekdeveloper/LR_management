@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/models/route_master.dart';
@@ -130,6 +131,23 @@ class _MapPickerDialogState extends ConsumerState<_MapPickerDialog> {
   // than from_lat/from_lng.
   int _pinSeq = 0;
 
+  // Groups the keystrokes of ONE search with the details call that ends it.
+  // Google bills that pair as a single session; without it every keystroke is
+  // billed on its own. A fresh token is minted after each pick, because the
+  // session is over the moment the user chooses — reusing it would silently
+  // merge the next search into a session Google has already closed.
+  //
+  // Sending it is ALSO how this build tells the server it can handle a
+  // suggestion that carries no coordinates. A client that sends no token is
+  // served from the free provider instead, which is what keeps older deployed
+  // builds working rather than dropping their pins at 0,0.
+  String _sessionToken = const Uuid().v4();
+
+  // A picked suggestion that has no pin yet has to be fetched before the map
+  // can move. Held so the list can show which row is being resolved and refuse
+  // a second tap while it is in flight.
+  String _resolvingPlaceId = '';
+
   late LatLng _center;
   String _address = '';
   String _placeId = '';
@@ -220,7 +238,16 @@ class _MapPickerDialogState extends ConsumerState<_MapPickerDialog> {
     _searchDebounce = Timer(const Duration(milliseconds: 400), () async {
       setState(() => _searching = true);
       try {
-        final s = await ref.read(mapsRepositoryProvider).autocomplete(q);
+        final s = await ref
+            .read(mapsRepositoryProvider)
+            .autocomplete(
+              q,
+              sessionToken: _sessionToken,
+              // Bias towards what the user is looking at, so "gate 2" finds the
+              // one in this city rather than the highest-ranked one in India.
+              lat: _center.latitude,
+              lng: _center.longitude,
+            );
         if (mounted) setState(() => _suggestions = s);
       } catch (_) {
         // surfaced if the user searches again / confirms
@@ -264,25 +291,71 @@ class _MapPickerDialogState extends ConsumerState<_MapPickerDialog> {
     }
   }
 
-  void _selectSuggestion(MapsSuggestion s) {
+  Future<void> _selectSuggestion(MapsSuggestion s) async {
     FocusScope.of(context).unfocus();
     // Panning does not clear the suggestion list, so a pan reverse-geocode can
     // still be pending (or in flight) when a suggestion is tapped. Take a fresh
     // ticket and cancel the pending one so the older answer cannot overwrite
     // this more authoritative pick.
     _reverseDebounce?.cancel();
-    _pinSeq++;
-    final c = LatLng(s.lat, s.lng);
+    _searchDebounce?.cancel();
+    final seq = ++_pinSeq;
+
+    var address = s.text;
+    var placeId = s.placeId;
+    double lat;
+    double lng;
+
+    if (s.hasCoords) {
+      // Already a pin: every saved gate and every Nominatim match. Free, and
+      // instant — no round-trip before the map moves.
+      lat = s.lat!;
+      lng = s.lng!;
+    } else {
+      // Google returns no coordinates with a search result, so the pin has to be
+      // fetched. Nothing moves until it arrives: moving first and correcting
+      // afterwards would show the user a wrong location as if it were right.
+      setState(() => _resolvingPlaceId = s.placeId);
+      final place = await ref
+          .read(mapsRepositoryProvider)
+          .details(s, sessionToken: _sessionToken);
+      if (!mounted) return;
+      setState(() => _resolvingPlaceId = '');
+      // A newer pick or pan happened while this was in flight — that one is
+      // more recent and must win.
+      if (seq != _pinSeq) return;
+      if (place == null) {
+        setState(
+          () => _linkHint =
+              "Couldn't get the exact location for that result. "
+              'Try another one, or drop the pin yourself.',
+        );
+        return;
+      }
+      lat = place.lat;
+      lng = place.lng;
+      // Prefer the resolved address: the suggestion text is a display label
+      // ("Vistar Logitek Pvt Ltd"), while details returns the full postal
+      // address, which is what a driver needs.
+      if (place.address.isNotEmpty) address = place.address;
+      if (place.placeId.isNotEmpty) placeId = place.placeId;
+    }
+
+    // The session ends with the pick, whether or not it cost a details call.
+    // The next search must open a new one.
+    _sessionToken = const Uuid().v4();
+
+    final c = LatLng(lat, lng);
     setState(() {
       _center = c;
-      _address = s.text;
-      _placeId = s.placeId;
+      _address = address;
+      _placeId = placeId;
       _suggestions = [];
       _linkHint = '';
       _source = PickedLocationSource.search;
-      _searchCtrl.text = s.text;
+      _searchCtrl.text = address;
     });
-    _prefillName(s.text);
+    _prefillName(address);
     _mapCtrl.move(c, 15);
   }
 
@@ -452,18 +525,48 @@ class _MapPickerDialogState extends ConsumerState<_MapPickerDialog> {
                               for (final s in _suggestions)
                                 ListTile(
                                   dense: true,
-                                  leading: const Icon(
-                                    Icons.place_outlined,
-                                    size: 18,
-                                    color: AppColors.plum,
-                                  ),
+                                  // A saved gate is marked, because it is the
+                                  // better answer: somebody already sent a
+                                  // vehicle there and placed this pin by hand,
+                                  // where a search engine drops it on the front
+                                  // office or the postal centroid.
+                                  leading: _resolvingPlaceId == s.placeId
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: AppColors.plum,
+                                          ),
+                                        )
+                                      : Icon(
+                                          s.source == 'saved_place'
+                                              ? Icons.bookmark_outline
+                                              : Icons.place_outlined,
+                                          size: 18,
+                                          color: AppColors.plum,
+                                        ),
                                   title: Text(
                                     s.text,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(fontSize: 13),
                                   ),
-                                  onTap: () => _selectSuggestion(s),
+                                  subtitle: s.source == 'saved_place'
+                                      ? const Text(
+                                          'Saved route location',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: AppColors.slate,
+                                          ),
+                                        )
+                                      : null,
+                                  // One resolve at a time: a second tap while a
+                                  // pin is being fetched would open a race whose
+                                  // loser silently discards the user's choice.
+                                  onTap: _resolvingPlaceId.isEmpty
+                                      ? () => unawaited(_selectSuggestion(s))
+                                      : null,
                                 ),
                             ],
                           ),
