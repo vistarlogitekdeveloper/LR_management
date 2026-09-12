@@ -10,6 +10,7 @@ import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/labeled_field.dart';
 import '../../../shared/widgets/searchable_field.dart';
 import '../providers/master_providers.dart';
+import '../utils/transporter_kyc.dart';
 import 'master_actions.dart';
 
 /// Transporter create/edit form. Unlike the other masters this needs bank
@@ -56,6 +57,8 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _pan;
+  late final TextEditingController _aadhaar;
+  late final TextEditingController _mobile;
   late final TextEditingController _bank;
   late final TextEditingController _holder;
   late final TextEditingController _accNo;
@@ -65,11 +68,22 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
 
   PlatformFile? _picked;
   PlatformFile? _pickedTds;
+  PlatformFile? _pickedPan;
+  PlatformFile? _pickedAadhaar;
   bool _saving = false;
 
-  // Inline "Required" message for the mandatory cheque upload — it isn't a form
-  // field, so it can't be covered by _formKey.validate().
+  // Inline "Required" messages for the mandatory uploads — they aren't form
+  // fields, so they can't be covered by _formKey.validate().
   String? _chequeError;
+  String? _panDocError;
+  String? _aadhaarDocError;
+
+  /// KYC (Aadhaar number, contact number, PAN photo, Aadhaar photo) is required
+  /// when ADDING a transporter, and optional when editing one that predates
+  /// those fields. Blocking a legacy edit would mean an urgent bank correction
+  /// waits on someone finding an Aadhaar card — the backend keeps both columns
+  /// nullable for the same reason (migration 127).
+  bool get _kycRequired => _existing == null;
 
   Transporter? get _existing => widget.existing;
 
@@ -79,6 +93,8 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
     final t = _existing;
     _name = TextEditingController(text: t?.name ?? widget.initialName ?? '');
     _pan = TextEditingController(text: t?.pan ?? '');
+    _aadhaar = TextEditingController(text: t?.aadhaar ?? '');
+    _mobile = TextEditingController(text: t?.mobile ?? '');
     _bank = TextEditingController(text: t?.bankName ?? '');
     _holder = TextEditingController(text: t?.accountHolder ?? '');
     _accNo = TextEditingController(text: t?.accountNo ?? '');
@@ -92,7 +108,17 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
 
   @override
   void dispose() {
-    for (final c in [_name, _pan, _bank, _holder, _accNo, _ifsc, _advancePct]) {
+    for (final c in [
+      _name,
+      _pan,
+      _aadhaar,
+      _mobile,
+      _bank,
+      _holder,
+      _accNo,
+      _ifsc,
+      _advancePct,
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -109,6 +135,49 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
       _picked = picked.files.first;
       _chequeError = null;
     });
+  }
+
+  /// One picker for both KYC photos — the accepted types and the "clear the
+  /// inline error on pick" behaviour are identical to the cheque's.
+  Future<void> _pickKyc({required bool pan}) async {
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'heic', 'pdf'],
+      withData: true,
+    );
+    if (picked == null || picked.files.isEmpty) return;
+    setState(() {
+      if (pan) {
+        _pickedPan = picked.files.first;
+        _panDocError = null;
+      } else {
+        _pickedAadhaar = picked.files.first;
+        _aadhaarDocError = null;
+      }
+    });
+  }
+
+  Future<void> _viewKyc({required bool pan}) async {
+    final existing = _existing;
+    if (existing == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final bytes = await ref
+          .read(transportersRepositoryProvider)
+          .downloadDocument(existing.id, type: pan ? 'pan' : 'aadhaar');
+      final name = pan ? existing.panFileName : existing.aadhaarFileName;
+      final fallback = pan ? 'pan' : 'aadhaar';
+      openFileInBrowser(
+        bytes,
+        _mimeForName(name),
+        name.isEmpty ? fallback : name,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(MasterActions.messageFor(e))),
+      );
+    }
   }
 
   Future<void> _viewExisting() async {
@@ -161,14 +230,29 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
     final formValid = _formKey.currentState!.validate();
     // Blank cheque / passbook is mandatory; the TDS attachment is optional.
     final chequeMissing = _picked == null && !(_existing?.hasDocument ?? false);
-    if (!formValid || chequeMissing) {
+    // The two KYC photos are mandatory on a NEW transporter only — see
+    // _kycRequired. On a legacy edit they stay optional so the save is not
+    // blocked, but an already-uploaded one still counts as present.
+    final panMissing =
+        _kycRequired &&
+        _pickedPan == null &&
+        !(_existing?.hasPanDocument ?? false);
+    final aadhaarDocMissing =
+        _kycRequired &&
+        _pickedAadhaar == null &&
+        !(_existing?.hasAadhaarDocument ?? false);
+    if (!formValid || chequeMissing || panMissing || aadhaarDocMissing) {
       setState(() {
         _chequeError = chequeMissing ? 'Required' : null;
+        _panDocError = panMissing ? 'Required' : null;
+        _aadhaarDocError = aadhaarDocMissing ? 'Required' : null;
       });
       return;
     }
     setState(() {
       _chequeError = null;
+      _panDocError = null;
+      _aadhaarDocError = null;
       _saving = true;
     });
     final messenger = ScaffoldMessenger.of(context);
@@ -182,6 +266,10 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
             id: '',
             name: _name.text.trim(),
             pan: _pan.text.trim(),
+            // Digits only, so the server's 12-digit check sees what the user
+            // meant when they typed the spaced "1234 5678 9012" off the card.
+            aadhaar: digitsOnly(_aadhaar.text),
+            mobile: _mobile.text.trim(),
             tds: _tds,
             advancePercent: _advancePercentValue,
             bankName: _bank.text.trim(),
@@ -195,6 +283,10 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
           _existing!.copyWith(
             name: _name.text.trim(),
             pan: _pan.text.trim(),
+            // Digits only, so the server's 12-digit check sees what the user
+            // meant when they typed the spaced "1234 5678 9012" off the card.
+            aadhaar: digitsOnly(_aadhaar.text),
+            mobile: _mobile.text.trim(),
             tds: _tds,
             advancePercent: _advancePercentValue,
             bankName: _bank.text.trim(),
@@ -222,6 +314,26 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
           bytes: _pickedTds!.bytes,
           filePath: _pickedTds!.bytes == null ? _pickedTds!.path : null,
           type: 'tds',
+        );
+      }
+      // Same endpoint as the cheque, different ?type — the backend stores each
+      // under its own keys in the bank_account JSONB (transporterDocKeys).
+      if (_pickedPan != null) {
+        t = await repo.uploadDocument(
+          t.id,
+          fileName: _pickedPan!.name,
+          bytes: _pickedPan!.bytes,
+          filePath: _pickedPan!.bytes == null ? _pickedPan!.path : null,
+          type: 'pan',
+        );
+      }
+      if (_pickedAadhaar != null) {
+        t = await repo.uploadDocument(
+          t.id,
+          fileName: _pickedAadhaar!.name,
+          bytes: _pickedAadhaar!.bytes,
+          filePath: _pickedAadhaar!.bytes == null ? _pickedAadhaar!.path : null,
+          type: 'aadhaar',
         );
       }
       await ref.read(transportersProvider.notifier).refresh();
@@ -283,6 +395,30 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
                           upper: true,
                         ),
                       ),
+                      SizedBox(
+                        width: w,
+                        child: _text(
+                          _aadhaar,
+                          'Aadhaar Number',
+                          required: _kycRequired,
+                          number: true,
+                          maxLength: 14, // 12 digits + two typed spaces
+                          hint: '12 digits',
+                          validator: validateAadhaar,
+                        ),
+                      ),
+                      SizedBox(
+                        width: w,
+                        child: _text(
+                          _mobile,
+                          'Contact Number',
+                          required: _kycRequired,
+                          number: true,
+                          maxLength: 15,
+                          hint: '10-digit mobile',
+                          validator: validateContactNumber,
+                        ),
+                      ),
                       SizedBox(width: w, child: _tdsField()),
                       SizedBox(
                         width: w,
@@ -320,6 +456,14 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
                         ),
                       ),
                       SizedBox(width: c.maxWidth, child: _chequeField()),
+                      SizedBox(
+                        width: c.maxWidth,
+                        child: _kycDocField(pan: true),
+                      ),
+                      SizedBox(
+                        width: c.maxWidth,
+                        child: _kycDocField(pan: false),
+                      ),
                       SizedBox(width: c.maxWidth, child: _tdsAttachmentField()),
                     ],
                   );
@@ -481,6 +625,72 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
             ],
           ),
           _ocrCheck(),
+        ],
+      ),
+    );
+  }
+
+  /// The PAN-card / Aadhaar-card photo row. One widget for both because they
+  /// differ only in label, which slot they read and which ?type they upload to.
+  Widget _kycDocField({required bool pan}) {
+    final picked = pan ? _pickedPan : _pickedAadhaar;
+    final existing = _existing;
+    final hasExisting = pan
+        ? (existing?.hasPanDocument ?? false)
+        : (existing?.hasAadhaarDocument ?? false);
+    final storedName = existing == null
+        ? ''
+        : (pan ? existing.panFileName : existing.aadhaarFileName);
+    return LabeledField(
+      label: pan ? 'PAN Card Photo' : 'Aadhaar Card Photo',
+      required: _kycRequired,
+      errorText: pan ? _panDocError : _aadhaarDocError,
+      child: Row(
+        children: [
+          AppButton(
+            label: picked == null && !hasExisting
+                ? 'Upload file'
+                : 'Replace file',
+            kind: BtnKind.ghost,
+            icon: Icons.upload_file_outlined,
+            onPressed: _saving ? null : () => _pickKyc(pan: pan),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              picked != null
+                  ? picked.name
+                  : hasExisting
+                  ? (storedName.isEmpty ? 'Document on file' : storedName)
+                  : 'JPG, PNG, WEBP or PDF',
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: AppColors.slate, fontSize: 12.5),
+            ),
+          ),
+          if (picked == null && hasExisting)
+            TextButton.icon(
+              onPressed: _saving ? null : () => _viewKyc(pan: pan),
+              icon: const Icon(Icons.visibility_outlined, size: 18),
+              label: const Text('View'),
+            ),
+          if (picked != null)
+            IconButton(
+              tooltip: 'Remove selection',
+              onPressed: _saving
+                  ? null
+                  : () => setState(() {
+                      if (pan) {
+                        _pickedPan = null;
+                      } else {
+                        _pickedAadhaar = null;
+                      }
+                    }),
+              icon: const Icon(
+                Icons.close_rounded,
+                color: AppColors.slate,
+                size: 18,
+              ),
+            ),
         ],
       ),
     );

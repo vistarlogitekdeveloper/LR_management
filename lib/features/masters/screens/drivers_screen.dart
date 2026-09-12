@@ -1,105 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../../shared/models/driver.dart';
-import '../../../shared/widgets/form_field_spec.dart';
-import '../../../shared/widgets/master_form_dialog.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/master_providers.dart';
+import '../widgets/driver_form_dialog.dart';
 import '../widgets/master_actions.dart';
 import '../widgets/master_page.dart';
 
 class DriversScreen extends ConsumerWidget {
   const DriversScreen({super.key});
 
-  static List<FormFieldSpec> _fields(Driver? d) => [
-    FormFieldSpec(
-      name: 'name',
-      label: 'Driver Name',
-      required: true,
-      initialValue: d?.name,
-    ),
-    FormFieldSpec(
-      name: 'mobile',
-      label: 'Mobile',
-      required: true,
-      type: FieldType.number,
-      maxLength: 12,
-      initialValue: d?.mobile,
-    ),
-    FormFieldSpec(
-      name: 'licenseNo',
-      label: 'License Number',
-      required: true,
-      initialValue: d?.licenseNo,
-    ),
-    FormFieldSpec(
-      name: 'licenseExpiry',
-      label: 'License Expiry (YYYY-MM-DD)',
-      initialValue: d?.licenseExpiry,
-    ),
-    FormFieldSpec(
-      name: 'address',
-      label: 'Address',
-      type: FieldType.multiline,
-      initialValue: d?.address,
-    ),
-  ];
-
-  Future<void> _openForm(
-    BuildContext context,
-    WidgetRef ref, {
-    Driver? existing,
-  }) async {
-    await MasterFormDialog.show(
-      context: context,
-      title: existing == null ? 'New Driver' : 'Edit Driver',
-      subtitle: 'Driver master',
-      fields: _fields(existing),
-      initial: existing == null
-          ? const {}
-          : {
-              'name': existing.name,
-              'mobile': existing.mobile,
-              'licenseNo': existing.licenseNo,
-              'licenseExpiry': existing.licenseExpiry ?? '',
-              'address': existing.address,
-            },
-      onSave: (values) async {
-        try {
-          final n = ref.read(driversProvider.notifier);
-          if (existing == null) {
-            await n.add(
-              Driver(
-                id: const Uuid().v4(),
-                name: values['name'] ?? '',
-                mobile: values['mobile'] ?? '',
-                licenseNo: values['licenseNo'] ?? '',
-                licenseExpiry: (values['licenseExpiry'] ?? '').isEmpty
-                    ? null
-                    : values['licenseExpiry'],
-                address: values['address'] ?? '',
-              ),
-            );
-          } else {
-            await n.update(
-              existing.copyWith(
-                name: values['name'],
-                mobile: values['mobile'],
-                licenseNo: values['licenseNo'],
-                licenseExpiry: values['licenseExpiry'],
-                address: values['address'],
-              ),
-            );
-          }
-          return true;
-        } catch (e) {
-          if (context.mounted) MasterActions.showError(context, e);
-          return false;
-        }
-      },
-    );
+  /// Both New Driver and Edit Driver. The bespoke dialog owns the save, the
+  /// error snackbar and the list refresh — drivers carry file uploads now, and
+  /// the generic MasterFormDialog cannot attach a file to a row it has just
+  /// created. Same arrangement as the transporter master.
+  Future<void> _openForm(BuildContext context, {Driver? existing}) async {
+    await DriverFormDialog.show(context, existing: existing);
   }
 
   @override
@@ -114,11 +31,11 @@ class DriversScreen extends ConsumerWidget {
       subtitle: '${drivers.length} drivers registered',
       icon: Icons.badge_outlined,
       canEdit: canEdit,
-      onAdd: canEdit ? () => _openForm(context, ref) : null,
+      onAdd: canEdit ? () => _openForm(context) : null,
       onEdit: canEdit
           ? (id) {
               final d = drivers.firstWhere((x) => x.id == id);
-              _openForm(context, ref, existing: d);
+              _openForm(context, existing: d);
             }
           : null,
       onDelete: canEdit
@@ -135,11 +52,15 @@ class DriversScreen extends ConsumerWidget {
               }
             }
           : null,
+      // MasterPage zips columns[i] to cells[i] positionally — keep the two
+      // lists index-aligned. Address stays last because it is the widest.
       columns: const [
         'Name',
         'Mobile',
         'License No',
         'License Expiry',
+        'Aadhaar',
+        'PAN',
         'Address',
       ],
       rows: [
@@ -151,10 +72,24 @@ class DriversScreen extends ConsumerWidget {
               d.mobile,
               d.licenseNo,
               d.licenseExpiry ?? '—',
+              _maskedAadhaar(d.aadhaar),
+              d.pan.isEmpty ? '—' : d.pan,
               d.address,
             ],
           ),
       ],
     );
   }
+}
+
+/// Last four digits only. The full Aadhaar is on the form, where it was typed;
+/// a master list sits open on a shared screen all day, and the last four are
+/// enough to tell two drivers apart. '—' for every driver added before the KYC
+/// fields existed — MasterPage's phone layout drops those rows from the card,
+/// so an empty value costs no space there either.
+String _maskedAadhaar(String aadhaar) {
+  final digits = aadhaar.trim();
+  if (digits.isEmpty) return '—';
+  if (digits.length <= 4) return digits;
+  return 'XXXX XXXX ${digits.substring(digits.length - 4)}';
 }

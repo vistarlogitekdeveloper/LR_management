@@ -15,6 +15,14 @@ class Transporter {
   final String id;
   final String name;
   final String pan;
+
+  /// 12-digit Aadhaar, stored digits-only. Empty on every transporter added
+  /// before migration 127 — mandatory when ADDING one, optional on a legacy
+  /// edit so an urgent bank correction is never blocked behind a KYC document.
+  final String aadhaar;
+
+  /// Contact number, 10 digits. Same legacy rule as [aadhaar].
+  final String mobile;
   final String tds; // 'Yes' / 'No' (maps to backend tds_applicable)
   /// Default share of the transporter freight released up front as an advance.
   /// Copied onto each new LR for this transporter (which may then override it
@@ -31,6 +39,12 @@ class Transporter {
   // Uploaded TDS attachment (certificate / declaration), also under bank_account.
   final String tdsFileKey;
   final String tdsFileName;
+  // PAN card and Aadhaar card photos. Same bank_account JSONB store and the
+  // same upload endpoint as the cheque — only the ?type differs.
+  final String panFileKey;
+  final String panFileName;
+  final String aadhaarFileKey;
+  final String aadhaarFileName;
   // OCR readout of the uploaded cheque (raw values; the match is computed live).
   final bool ocrDone;
   final String ocrIfsc;
@@ -41,6 +55,8 @@ class Transporter {
     required this.id,
     required this.name,
     required this.pan,
+    this.aadhaar = '',
+    this.mobile = '',
     required this.tds,
     this.advancePercent = kDefaultAdvancePercent,
     this.bankName = '',
@@ -51,6 +67,10 @@ class Transporter {
     this.chequeFileName = '',
     this.tdsFileKey = '',
     this.tdsFileName = '',
+    this.panFileKey = '',
+    this.panFileName = '',
+    this.aadhaarFileKey = '',
+    this.aadhaarFileName = '',
     this.ocrDone = false,
     this.ocrIfsc = '',
     this.ocrAccountNo = '',
@@ -60,6 +80,8 @@ class Transporter {
   bool get tdsApplicable => tds.toLowerCase() == 'yes';
   bool get hasDocument => chequeFileKey.isNotEmpty;
   bool get hasTdsDocument => tdsFileKey.isNotEmpty;
+  bool get hasPanDocument => panFileKey.isNotEmpty;
+  bool get hasAadhaarDocument => aadhaarFileKey.isNotEmpty;
 
   // Built once, not per comparison — these run for every transporter row.
   static final _whitespace = RegExp(r'\s');
@@ -104,6 +126,8 @@ class Transporter {
       id: json['id'] as String,
       name: (json['name'] as String?) ?? '',
       pan: (json['pan'] as String?) ?? '',
+      aadhaar: (json['aadhaar'] as String?) ?? '',
+      mobile: (json['mobile'] as String?) ?? '',
       tds: (json['tds_applicable'] as bool?) == true ? 'Yes' : 'No',
       // NUMERIC comes back as a string ("75.00"); asDoubleOrNull handles both
       // that and a real number. Falls back to 90 only when genuinely absent —
@@ -119,6 +143,10 @@ class Transporter {
       chequeFileName: (bank['cheque_file_name'] as String?) ?? '',
       tdsFileKey: (bank['tds_file_key'] as String?) ?? '',
       tdsFileName: (bank['tds_file_name'] as String?) ?? '',
+      panFileKey: (bank['pan_file_key'] as String?) ?? '',
+      panFileName: (bank['pan_file_name'] as String?) ?? '',
+      aadhaarFileKey: (bank['aadhaar_file_key'] as String?) ?? '',
+      aadhaarFileName: (bank['aadhaar_file_name'] as String?) ?? '',
       ocrDone: (bank['ocr_done'] as bool?) ?? false,
       ocrIfsc: (bank['ocr_ifsc'] as String?) ?? '',
       ocrAccountNo: (bank['ocr_account_no'] as String?) ?? '',
@@ -129,6 +157,10 @@ class Transporter {
   Map<String, dynamic> toJson() => {
     'name': name,
     if (pan.isNotEmpty) 'pan': pan,
+    // Omitted when empty rather than sent as '': a legacy transporter has no
+    // KYC yet, and the server validates the FORMAT of whatever it receives.
+    if (aadhaar.isNotEmpty) 'aadhaar': aadhaar,
+    if (mobile.isNotEmpty) 'mobile': mobile,
     'tds_applicable': tdsApplicable,
     'advance_percent': advancePercent,
     // Only the user-editable bank fields are sent — always (so clearing a
@@ -146,6 +178,8 @@ class Transporter {
   Transporter copyWith({
     String? name,
     String? pan,
+    String? aadhaar,
+    String? mobile,
     String? tds,
     double? advancePercent,
     String? bankName,
@@ -156,6 +190,10 @@ class Transporter {
     String? chequeFileName,
     String? tdsFileKey,
     String? tdsFileName,
+    String? panFileKey,
+    String? panFileName,
+    String? aadhaarFileKey,
+    String? aadhaarFileName,
     bool? ocrDone,
     String? ocrIfsc,
     String? ocrAccountNo,
@@ -165,6 +203,8 @@ class Transporter {
       id: id,
       name: name ?? this.name,
       pan: pan ?? this.pan,
+      aadhaar: aadhaar ?? this.aadhaar,
+      mobile: mobile ?? this.mobile,
       tds: tds ?? this.tds,
       advancePercent: advancePercent ?? this.advancePercent,
       bankName: bankName ?? this.bankName,
@@ -175,6 +215,10 @@ class Transporter {
       chequeFileName: chequeFileName ?? this.chequeFileName,
       tdsFileKey: tdsFileKey ?? this.tdsFileKey,
       tdsFileName: tdsFileName ?? this.tdsFileName,
+      panFileKey: panFileKey ?? this.panFileKey,
+      panFileName: panFileName ?? this.panFileName,
+      aadhaarFileKey: aadhaarFileKey ?? this.aadhaarFileKey,
+      aadhaarFileName: aadhaarFileName ?? this.aadhaarFileName,
       ocrDone: ocrDone ?? this.ocrDone,
       ocrIfsc: ocrIfsc ?? this.ocrIfsc,
       ocrAccountNo: ocrAccountNo ?? this.ocrAccountNo,

@@ -30,6 +30,7 @@ import '../../lookups/providers/lookups_provider.dart';
 import '../../masters/providers/master_providers.dart';
 import '../../users/basic_users_provider.dart';
 import '../../masters/providers/part_descriptions_provider.dart';
+import '../../masters/widgets/driver_form_dialog.dart';
 import '../../masters/widgets/master_actions.dart';
 import '../../masters/widgets/party_form_dialog.dart';
 import '../../masters/widgets/route_form_dialog.dart';
@@ -982,67 +983,14 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     return saved;
   }
 
-  /// Creates a driver from the driver picker's "Add new" entry (same fields as
-  /// the Drivers master screen) and returns it so the picker selects it.
-  Future<Driver?> _addDriverInline([String prefillName = '']) async {
-    Driver? saved;
-    await MasterFormDialog.show(
-      context: context,
-      title: 'New Driver',
-      subtitle: 'Adds to the driver master and selects it on this LR',
-      fields: [
-        FormFieldSpec(
-          name: 'name',
-          label: 'Driver Name',
-          required: true,
-          initialValue: prefillName.trim(),
-        ),
-        const FormFieldSpec(
-          name: 'mobile',
-          label: 'Mobile',
-          required: true,
-          type: FieldType.number,
-          maxLength: 12,
-        ),
-        const FormFieldSpec(
-          name: 'licenseNo',
-          label: 'License Number',
-          required: true,
-        ),
-        const FormFieldSpec(
-          name: 'licenseExpiry',
-          label: 'License Expiry (YYYY-MM-DD)',
-        ),
-        const FormFieldSpec(
-          name: 'address',
-          label: 'Address',
-          type: FieldType.multiline,
-        ),
-      ],
-      onSave: (values) async {
-        try {
-          final expiry = (values['licenseExpiry'] ?? '').trim();
-          saved = await ref
-              .read(driversProvider.notifier)
-              .add(
-                Driver(
-                  id: const Uuid().v4(),
-                  name: values['name'] ?? '',
-                  mobile: values['mobile'] ?? '',
-                  licenseNo: values['licenseNo'] ?? '',
-                  licenseExpiry: expiry.isEmpty ? null : expiry,
-                  address: values['address'] ?? '',
-                ),
-              );
-          return true;
-        } catch (e) {
-          if (mounted) MasterActions.showError(context, e);
-          return false;
-        }
-      },
-    );
-    return saved;
-  }
+  /// Creates a driver from the driver picker's "Add new" entry, prefilled with
+  /// whatever was typed in its search box, and returns it so the picker selects
+  /// it. Uses the driver master's own dialog: a driver now carries an optional
+  /// Aadhaar / PAN number and a scan of each, which the generic form cannot
+  /// express, and going through the same dialog keeps the two entry points
+  /// identical.
+  Future<Driver?> _addDriverInline([String prefillName = '']) =>
+      DriverFormDialog.show(context, initialName: prefillName.trim());
 
   /// Transporter and route creation reuse the masters' own dialogs — both carry
   /// more than the generic form can express (bank details + cheque upload; map
