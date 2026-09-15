@@ -99,10 +99,7 @@ class DriversRepository {
   }
 
   /// Downloads a driver KYC scan ([type] 'aadhaar' or 'pan').
-  Future<List<int>> downloadDocument(
-    String id, {
-    required String type,
-  }) async {
+  Future<List<int>> downloadDocument(String id, {required String type}) async {
     final res = await _api.dio.get(
       '/drivers/$id/document',
       queryParameters: {'type': type},

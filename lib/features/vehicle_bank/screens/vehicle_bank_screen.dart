@@ -126,14 +126,15 @@ class _VehicleBankScreenState extends ConsumerState<VehicleBankScreen> {
                 message: friendlyErrorMessage(error),
                 onRetry: _refresh,
               ),
-              AsyncData(:final value) => value.isEmpty
-                  ? _EmptyState(
-                      filtered: filter.hasFilters,
-                      onClearFilters: () =>
-                          ref.read(vehicleBankFilterProvider.notifier).state =
-                              VehicleBankFilter.empty,
-                    )
-                  : _Directory(rows: value, padding: pad),
+              AsyncData(:final value) =>
+                value.isEmpty
+                    ? _EmptyState(
+                        filtered: filter.hasFilters,
+                        onClearFilters: () =>
+                            ref.read(vehicleBankFilterProvider.notifier).state =
+                                VehicleBankFilter.empty,
+                      )
+                    : _Directory(rows: value, padding: pad),
               // Loading, including a refetch after a filter change: a skeleton
               // says "rows are coming", a bare spinner reads like an empty
               // fleet.
@@ -642,11 +643,7 @@ class _VehicleCard extends StatelessWidget {
 }
 
 class _CardLine extends StatelessWidget {
-  const _CardLine({
-    required this.label,
-    required this.value,
-    this.valueColor,
-  });
+  const _CardLine({required this.label, required this.value, this.valueColor});
 
   final String label;
   final String value;
@@ -902,9 +899,10 @@ class _ExpiryStatus {
 
   String get note => switch (urgency) {
     _Urgency.expired => days == -1 ? 'expired yesterday' : 'expired',
-    _Urgency.soon => days == 0
-        ? 'expires today'
-        : 'expires in $days ${days == 1 ? 'day' : 'days'}',
+    _Urgency.soon =>
+      days == 0
+          ? 'expires today'
+          : 'expires in $days ${days == 1 ? 'day' : 'days'}',
     _Urgency.none => 'valid',
   };
 
