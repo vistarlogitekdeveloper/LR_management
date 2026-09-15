@@ -47,12 +47,12 @@ class _FakeMapsRepository implements MapsRepository {
   }
 
   @override
-  Future<List<MapsSuggestion>> autocomplete(
+  Future<MapsSearchResult> autocomplete(
     String query, {
     String? sessionToken,
     double? lat,
     double? lng,
-  }) async => const [];
+  }) async => const MapsSearchResult(suggestions: []);
 
   @override
   Future<PlaceDetails?> details(

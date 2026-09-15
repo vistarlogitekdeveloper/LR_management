@@ -50,6 +50,39 @@ class MapsSuggestion {
   bool get needsResolve => !hasCoords;
 }
 
+/// One search's rows, plus what actually produced them.
+///
+/// The rows alone are not enough to render honestly. Four different server
+/// states used to arrive as the same 200 with a list in it — the geocoder
+/// answered, the geocoder found nothing, the primary provider died and the free
+/// fallback answered instead, or the caller was never allowed to reach the
+/// primary — and the picker drew all four identically, which is to say it drew
+/// nothing. [live] is what lets an empty list mean "no such place" rather than
+/// "the search is broken".
+class MapsSearchResult {
+  final List<MapsSuggestion> suggestions;
+
+  /// `ok` | `degraded` | `failed`. Defaults to `ok` against a server that does
+  /// not send it.
+  final String live;
+
+  /// Which geocoder answered (`google`, `nominatim`), or empty when unknown.
+  final String provider;
+
+  const MapsSearchResult({
+    required this.suggestions,
+    this.live = 'ok',
+    this.provider = '',
+  });
+
+  /// True when these rows came from somewhere other than the configured
+  /// provider. Worth telling the user, because it changes what they can expect
+  /// to find: the free fallback indexes places, not business listings.
+  bool get degraded => live == 'degraded' || live == 'failed';
+
+  bool get isEmpty => suggestions.isEmpty;
+}
+
 /// A place resolved to an actual pin.
 class PlaceDetails {
   final String placeId;
@@ -95,7 +128,7 @@ class MapsRepository {
   /// [lat]/[lng] are the current map centre, used to bias results towards what
   /// the user is looking at. Optional — an absent or unusable pair simply means
   /// no bias.
-  Future<List<MapsSuggestion>> autocomplete(
+  Future<MapsSearchResult> autocomplete(
     String query, {
     String? sessionToken,
     double? lat,
@@ -111,8 +144,9 @@ class MapsRepository {
         if (lat != null && lng != null) 'lng': lng,
       },
     );
-    final list = (res.data['data']?['suggestions'] as List?) ?? const [];
-    return list
+    final data = (res.data['data'] as Map?)?.cast<String, dynamic>();
+    final list = (data?['suggestions'] as List?) ?? const [];
+    final suggestions = list
         .map((e) {
           final m = (e as Map).cast<String, dynamic>();
           return MapsSuggestion(
@@ -130,6 +164,14 @@ class MapsRepository {
         // it could not act on if tapped.
         .where((s) => s.hasCoords || s.placeId.isNotEmpty)
         .toList();
+    return MapsSearchResult(
+      suggestions: suggestions,
+      // Absent on an older server, which is why it defaults to 'ok' rather than
+      // to a warning: a build talking to a backend that predates this field must
+      // not accuse it of being degraded.
+      live: (data?['live'] as String?) ?? 'ok',
+      provider: (data?['provider'] as String?) ?? '',
+    );
   }
 
   /// Resolve a picked suggestion to a pin.

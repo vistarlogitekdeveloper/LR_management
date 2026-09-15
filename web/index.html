@@ -34,30 +34,25 @@
   <link rel="manifest" href="manifest.json">
 
   <!--
-    Google Maps JavaScript SDK — draws the map inside the location picker.
+    No Google Maps <script> tag here, on purpose.
 
-    THE KEY IN THE LINE BELOW IS A PLACEHOLDER AND IS NOT VALID AS IT STANDS.
-    cloudflare-build.sh substitutes it from the GOOGLE_MAPS_BROWSER_KEY
-    environment variable at build time, and DELETES this whole script when that
-    variable is unset — so a build without a key ships no script, `google.maps`
-    never appears, and the picker draws OpenStreetMap exactly as it always has.
-    Never commit a real key here.
+    The Maps JavaScript SDK is injected at runtime by
+    lib/features/maps/utils/maps_loader.dart, using the key from
+    --dart-define=GOOGLE_MAPS_BROWSER_KEY. It used to be loaded here as well,
+    which meant the key had to arrive through two channels that could disagree —
+    a sed substitution into this file AND the define — and a build where only one
+    of them landed fell back to OpenStreetMap with no way to tell from the app.
+    One channel cannot disagree with itself.
 
-    (This comment deliberately does not spell the placeholder token out: the
-    substitution is a plain global replace, so a second occurrence here would
-    print the live key into the page source twice over.)
+    Deferring is safe: GoogleMapsPlugin.registerWith() only assigns the platform
+    instance, and nothing touches `google.maps` until the GoogleMap WIDGET
+    builds — which PickerMap does not do until the load resolves.
 
-    Loaded synchronously, on purpose: google_maps_flutter_web expects
-    `google.maps` to exist before the first map widget builds, and it has no
-    hook to wait on. `async`/`defer` would race the picker.
-
-    This key is a BROWSER key and is visible to anyone who views source. That is
-    unavoidable for this API and is not the thing protecting it — the HTTP
-    referrer restriction on the key is. Keep that restriction to the Pages
-    domains, and keep this key restricted to Maps JavaScript API alone; place
-    SEARCH goes through our own server, which uses a separate server key.
+    It also means a developer can see the Google map locally with nothing but the
+    define, instead of editing this tracked file and risking a live key in a
+    commit. The key is a BROWSER key and is visible to anyone who views source;
+    the HTTP referrer restriction on it is what protects it, not secrecy.
   -->
-  <script src="https://maps.googleapis.com/maps/api/js?key=__GOOGLE_MAPS_BROWSER_KEY__"></script>
 </head>
 <body>
   <!--

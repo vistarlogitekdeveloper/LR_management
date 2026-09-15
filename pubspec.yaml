@@ -72,6 +72,13 @@ dependencies:
   # dart:html, which is deprecated and unavailable under dart2wasm.
   web: ^1.1.1
   google_maps_flutter: ^2.18.0
+  # Flutter-team package. Required by google_maps_flutter_web: the Google map is
+  # an HtmlElementView, and its README states that a GoogleMap stacked below
+  # other widgets needs PointerInterceptor for those overlays to receive mouse
+  # events. The picker stacks its search-results list on the map, so without
+  # this the results are unclickable on exactly the web+key configuration the
+  # feature exists for. No-op on the OSM fallback and on mobile.
+  pointer_interceptor: ^0.10.1+2
 
 dev_dependencies:
   flutter_test:

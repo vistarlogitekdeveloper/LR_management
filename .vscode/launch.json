@@ -1,5 +1,22 @@
 {
   "version": "0.2.0",
+  // Both configurations pin --web-port so the origin is stable at
+  // http://localhost:5173. That is not cosmetic: a Maps browser key is
+  // restricted by HTTP referrer, and Flutter's default random port (the one
+  // that produced localhost:63255) can never be on an allowlist. Add
+  // http://localhost:5173/* to the key's referrer restrictions in Google Cloud.
+  //
+  // GOOGLE_MAPS_BROWSER_KEY is read from YOUR SHELL ENVIRONMENT and is never
+  // stored here — this file is tracked, and a key committed to it would be a
+  // key to rotate. Set it once per machine:
+  //   PowerShell (persistent):
+  //     [Environment]::SetEnvironmentVariable('GOOGLE_MAPS_BROWSER_KEY','<key>','User')
+  //   bash:
+  //     export GOOGLE_MAPS_BROWSER_KEY=<key>
+  // then restart VS Code so it inherits the variable.
+  //
+  // Unset is fine: the define arrives empty, and the picker draws
+  // OpenStreetMap. The pin it returns is exact either way.
   "configurations": [
     {
       "name": "LR app — LOCAL backend (:4099)",
@@ -8,7 +25,8 @@
       "program": "lib/main.dart",
       "args": [
         "--web-port=5173",
-        "--dart-define=API_BASE_URL=http://localhost:4099/api/v1/lr-management"
+        "--dart-define=API_BASE_URL=http://localhost:4099/api/v1/lr-management",
+        "--dart-define=GOOGLE_MAPS_BROWSER_KEY=${env:GOOGLE_MAPS_BROWSER_KEY}"
       ]
     },
     {
@@ -17,7 +35,8 @@
       "type": "dart",
       "program": "lib/main.dart",
       "args": [
-        "--web-port=5173"
+        "--web-port=5173",
+        "--dart-define=GOOGLE_MAPS_BROWSER_KEY=${env:GOOGLE_MAPS_BROWSER_KEY}"
       ]
     }
   ]

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -12,9 +13,21 @@ import '../data/maps_repository.dart';
 import '../utils/google_maps_link.dart';
 import 'picker_map.dart';
 
-/// A form-field-styled control that opens a free OpenStreetMap picker (place
-/// search + move-the-map centre pin) and returns a [PickedLocation]
-/// (place_id, lat/lng, address, label). No API key required.
+/// What the panel under the search box is showing.
+///
+/// It is a four-state surface, not a list that happens to be empty sometimes.
+/// Rendering it only when rows existed is what made a 502, a rejected API key
+/// and a genuine "no such place" pixel-identical — the user typed a real
+/// company name, saw nothing move, and had no way to tell which had happened.
+enum _SearchPhase { idle, loading, results, empty, error }
+
+/// A form-field-styled control that opens a map picker (place search +
+/// move-the-map centre pin) and returns a [PickedLocation] — place_id, lat/lng,
+/// address and label.
+///
+/// The basemap is Google where this build has a browser key and the SDK loads,
+/// and OpenStreetMap otherwise; see PickerMap. Neither choice changes what comes
+/// back, and no key is required to get an exact pin.
 class LocationPickerField extends StatelessWidget {
   final PickedLocation? value;
   final ValueChanged<PickedLocation> onPicked;
@@ -118,12 +131,31 @@ class _MapPickerDialogState extends ConsumerState<_MapPickerDialog> {
   Timer? _searchDebounce;
   Timer? _reverseDebounce;
   List<MapsSuggestion> _suggestions = [];
-  bool _searching = false;
+
+  // What the results panel is showing, and why.
+  _SearchPhase _phase = _SearchPhase.idle;
+  // The query the current rows answer — quoted back in the empty state, because
+  // "No places match X" is only reassuring if X is what they actually typed.
+  String _resultsFor = '';
+  String _searchError = '';
+  // The server served these from the free fallback rather than the configured
+  // geocoder. Worth saying: the fallback indexes places, not businesses, so
+  // "no results" means something different under it.
+  bool _searchDegraded = false;
+  // Every search takes a ticket. Autocomplete responses are unordered, so an
+  // older, slower query could otherwise land last and replace the newer one's
+  // rows — or blank them — while the user was still reading them.
+  int _searchSeq = 0;
   // Once the user types their own label we stop overwriting it on every move.
   bool _nameEdited = false;
   // Shown under the search box rather than in a snackbar: the dialog is modal,
   // so a snackbar behind it is easy to miss.
   String _linkHint = '';
+  // Which map actually drew, and why it is not the one this build asked for.
+  // Both are pushed up from PickerMap, because the answer is only known after
+  // an async SDK load and can still change if Google refuses the key.
+  PickerMapSurface _surface = PickerMapSurface.loading;
+  String _mapNotice = '';
   // Every action that moves the pin takes a ticket. Reverse-geocodes are slow
   // and unordered, so without this an older pan's response lands after a newer
   // suggestion or pasted link and writes ITS address next to the new
@@ -199,6 +231,7 @@ class _MapPickerDialogState extends ConsumerState<_MapPickerDialog> {
     if (isShortGoogleMapsLink(raw)) {
       setState(() {
         _suggestions = [];
+        _phase = _SearchPhase.idle;
         _linkHint =
             "That's a shortened Google link. Open it once, then paste the "
             'full URL.';
@@ -210,12 +243,14 @@ class _MapPickerDialogState extends ConsumerState<_MapPickerDialog> {
       if (link == null) {
         setState(() {
           _suggestions = [];
+          _phase = _SearchPhase.idle;
           _linkHint = "Couldn't find coordinates in that link.";
         });
         return;
       }
       setState(() {
         _suggestions = [];
+        _phase = _SearchPhase.idle;
         _linkHint = '';
       });
       // Debounced like the search path. Typed rather than pasted, "18.5204,
@@ -232,29 +267,69 @@ class _MapPickerDialogState extends ConsumerState<_MapPickerDialog> {
       setState(() => _linkHint = '');
     }
     if (raw.length < 3) {
-      setState(() => _suggestions = []);
+      // Below the server's minimum, so nothing is pending and nothing failed —
+      // the panel goes away rather than claiming "no matches" for half a word.
+      setState(() {
+        _suggestions = [];
+        _phase = _SearchPhase.idle;
+        _searchError = '';
+      });
       return;
     }
-    _searchDebounce = Timer(const Duration(milliseconds: 400), () async {
-      setState(() => _searching = true);
-      try {
-        final s = await ref
-            .read(mapsRepositoryProvider)
-            .autocomplete(
-              q,
-              sessionToken: _sessionToken,
-              // Bias towards what the user is looking at, so "gate 2" finds the
-              // one in this city rather than the highest-ranked one in India.
-              lat: _center.latitude,
-              lng: _center.longitude,
-            );
-        if (mounted) setState(() => _suggestions = s);
-      } catch (_) {
-        // surfaced if the user searches again / confirms
-      } finally {
-        if (mounted) setState(() => _searching = false);
-      }
-    });
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 400),
+      () => unawaited(_runSearch(raw)),
+    );
+  }
+
+  Future<void> _runSearch(String query) async {
+    final seq = ++_searchSeq;
+    setState(() => _phase = _SearchPhase.loading);
+    try {
+      final result = await ref
+          .read(mapsRepositoryProvider)
+          .autocomplete(
+            query,
+            sessionToken: _sessionToken,
+            // Bias towards what the user is looking at, so "gate 2" finds the
+            // one in this city rather than the highest-ranked one in India.
+            lat: _center.latitude,
+            lng: _center.longitude,
+          );
+      // A newer keystroke already owns the panel; this answer is stale.
+      if (!mounted || seq != _searchSeq) return;
+      setState(() {
+        _suggestions = result.suggestions;
+        _resultsFor = query;
+        _searchDegraded = result.degraded;
+        _searchError = '';
+        _phase = result.isEmpty ? _SearchPhase.empty : _SearchPhase.results;
+      });
+    } catch (e) {
+      if (!mounted || seq != _searchSeq) return;
+      // This used to be a bare `catch (_) {}`, which left the previous query's
+      // rows on screen and rendered a 502, a rejected key and a genuine miss
+      // identically. A search that failed must say so and offer to try again.
+      setState(() {
+        _suggestions = [];
+        _resultsFor = query;
+        _searchError = _searchFailureMessage(e);
+        _phase = _SearchPhase.error;
+      });
+    }
+  }
+
+  // Deliberately short and non-technical: the dispatcher can act on "try again"
+  // or "check your connection", never on a Dio status code. The detail belongs
+  // in the server's logs and in /maps/health, not in a modal over a map.
+  static String _searchFailureMessage(Object e) {
+    final text = e.toString().toLowerCase();
+    if (text.contains('timeout') ||
+        text.contains('socket') ||
+        text.contains('connection')) {
+      return "Couldn't reach the search service. Check your connection.";
+    }
+    return "Place search isn't responding right now.";
   }
 
   // Coordinates pasted as a Google Maps URL: the pin is exact, so it moves at
@@ -351,6 +426,9 @@ class _MapPickerDialogState extends ConsumerState<_MapPickerDialog> {
       _address = address;
       _placeId = placeId;
       _suggestions = [];
+      // The pick is the end of this search — the panel closes rather than
+      // lingering with rows for a query the user has already answered.
+      _phase = _SearchPhase.idle;
       _linkHint = '';
       _source = PickedLocationSource.search;
       _searchCtrl.text = address;
@@ -417,7 +495,7 @@ class _MapPickerDialogState extends ConsumerState<_MapPickerDialog> {
                         Icons.search,
                         color: AppColors.slate,
                       ),
-                      suffixIcon: _searching
+                      suffixIcon: _phase == _SearchPhase.loading
                           ? const Padding(
                               padding: EdgeInsets.all(12),
                               child: SizedBox(
@@ -443,6 +521,33 @@ class _MapPickerDialogState extends ConsumerState<_MapPickerDialog> {
                         ),
                       ),
                     ),
+                  // Only ever non-empty when this build ASKED for a Google map
+                  // and did not get one. A plain OSM build says nothing, because
+                  // there is nothing wrong with it — the pin is exact either way.
+                  if (_mapNotice.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.info_outline_rounded,
+                            size: 13,
+                            color: AppColors.slate,
+                          ),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(
+                              _mapNotice,
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                color: AppColors.slate,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -453,16 +558,40 @@ class _MapPickerDialogState extends ConsumerState<_MapPickerDialog> {
                     controller: _mapCtrl,
                     initialCenter: _center,
                     initialZoom: 13,
+                    onSurfaceChanged: (surface, notice) {
+                      if (!mounted) return;
+                      setState(() {
+                        _surface = surface;
+                        _mapNotice = notice;
+                      });
+                    },
                     onCameraMove: (center, hasGesture) {
                       _center = center;
                       if (!hasGesture) return;
-                      // The place id belongs to where the pin WAS, so it has
-                      // to go with the drag itself. Guarded so one setState
-                      // runs per gesture, not one per frame.
+                      // The place id AND the address belong to where the pin
+                      // WAS, so both go with the drag itself rather than when
+                      // the reverse-geocode returns 700 ms later. Keeping the
+                      // address until then means pressing "Use this" inside
+                      // that window saves the OLD location's address next to
+                      // the NEW coordinates — the same mismatch _applyLink
+                      // already guards against for pasted links.
+                      //
+                      // Self-limiting rather than debounced: after the first
+                      // frame of a drag the address is empty and the id is
+                      // gone, so the condition is false until the reverse
+                      // refills them. One setState per stale-address cycle,
+                      // not one per frame.
                       if (_placeId.isNotEmpty ||
+                          _address.isNotEmpty ||
                           _source != PickedLocationSource.pin) {
                         setState(() {
                           _placeId = '';
+                          _address = '';
+                          _searchCtrl.text = '';
+                          // The label is ours to maintain until the user takes
+                          // it over; leaving a stale one would ship the old
+                          // place's name as this route's From/To city.
+                          if (!_nameEdited) _nameCtrl.text = '';
                           _source = PickedLocationSource.pin;
                         });
                       }
@@ -482,85 +611,60 @@ class _MapPickerDialogState extends ConsumerState<_MapPickerDialog> {
                       ),
                     ),
                   ),
-                  const Positioned(
-                    bottom: 2,
-                    right: 2,
-                    child: ColoredBox(
-                      color: Color(0xCCFFFFFF),
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 1,
-                        ),
-                        child: Text(
-                          '© OpenStreetMap',
-                          style: TextStyle(fontSize: 9, color: AppColors.slate),
+                  // OSM requires this credit; Google forbids covering its own,
+                  // which it draws inside the map itself. Printing OSM's line
+                  // over a Google map was therefore both wrong and a terms
+                  // breach, so it is tied to the surface that actually drew.
+                  if (_surface == PickerMapSurface.osm)
+                    const Positioned(
+                      bottom: 2,
+                      right: 2,
+                      child: ColoredBox(
+                        color: Color(0xCCFFFFFF),
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 1,
+                          ),
+                          child: Text(
+                            '© OpenStreetMap',
+                            style: TextStyle(
+                              fontSize: 9,
+                              color: AppColors.slate,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  if (_suggestions.isNotEmpty)
+                  if (_phase != _SearchPhase.idle)
                     Positioned(
                       left: 0,
                       right: 0,
                       top: 0,
-                      child: Material(
-                        elevation: 3,
-                        child: Container(
-                          color: AppColors.white,
-                          constraints: const BoxConstraints(maxHeight: 240),
-                          child: ListView(
-                            shrinkWrap: true,
-                            padding: EdgeInsets.zero,
-                            children: [
-                              for (final s in _suggestions)
-                                ListTile(
-                                  dense: true,
-                                  // A saved gate is marked, because it is the
-                                  // better answer: somebody already sent a
-                                  // vehicle there and placed this pin by hand,
-                                  // where a search engine drops it on the front
-                                  // office or the postal centroid.
-                                  leading: _resolvingPlaceId == s.placeId
-                                      ? const SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: AppColors.plum,
-                                          ),
-                                        )
-                                      : Icon(
-                                          s.source == 'saved_place'
-                                              ? Icons.bookmark_outline
-                                              : Icons.place_outlined,
-                                          size: 18,
-                                          color: AppColors.plum,
-                                        ),
-                                  title: Text(
-                                    s.text,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 13),
-                                  ),
-                                  subtitle: s.source == 'saved_place'
-                                      ? const Text(
-                                          'Saved route location',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: AppColors.slate,
-                                          ),
-                                        )
-                                      : null,
-                                  // One resolve at a time: a second tap while a
-                                  // pin is being fetched would open a race whose
-                                  // loser silently discards the user's choice.
-                                  onTap: _resolvingPlaceId.isEmpty
-                                      ? () => unawaited(_selectSuggestion(s))
-                                      : null,
-                                ),
-                            ],
-                          ),
+                      // The Google map is an HtmlElementView — a real DOM node
+                      // layered under the Flutter scene, whose own handlers
+                      // consume mouse input over its area. Anything Flutter
+                      // stacks on top of it needs this interceptor to get those
+                      // events back, per google_maps_flutter_web's README;
+                      // without it the results list is the one thing on this
+                      // dialog that stops responding the moment the Google map
+                      // starts drawing, and a drag begun on a row pans the map
+                      // underneath and discards the pick.
+                      //
+                      // `intercepting` is off for the OSM surface, where the
+                      // map is ordinary Flutter painting and an interceptor
+                      // would be a pointless extra DOM node per frame.
+                      child: PointerInterceptor(
+                        intercepting: _surface == PickerMapSurface.google,
+                        child: _SearchPanel(
+                          phase: _phase,
+                          suggestions: _suggestions,
+                          query: _resultsFor,
+                          errorText: _searchError,
+                          degraded: _searchDegraded,
+                          resolvingPlaceId: _resolvingPlaceId,
+                          onPick: (s) => unawaited(_selectSuggestion(s)),
+                          onRetry: () => unawaited(_runSearch(_resultsFor)),
                         ),
                       ),
                     ),
@@ -632,6 +736,213 @@ class _MapPickerDialogState extends ConsumerState<_MapPickerDialog> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The panel under the search box, in whichever of its four states applies.
+///
+/// It exists as one widget because the states have to look like one surface —
+/// same width, same elevation, same place — so that switching between them
+/// reads as the same panel answering, not as things appearing and vanishing.
+class _SearchPanel extends StatelessWidget {
+  final _SearchPhase phase;
+  final List<MapsSuggestion> suggestions;
+  final String query;
+  final String errorText;
+  final bool degraded;
+  final String resolvingPlaceId;
+  final ValueChanged<MapsSuggestion> onPick;
+  final VoidCallback onRetry;
+
+  const _SearchPanel({
+    required this.phase,
+    required this.suggestions,
+    required this.query,
+    required this.errorText,
+    required this.degraded,
+    required this.resolvingPlaceId,
+    required this.onPick,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 3,
+      child: Container(
+        color: AppColors.white,
+        constraints: const BoxConstraints(maxHeight: 240),
+        child: switch (phase) {
+          _SearchPhase.idle => const SizedBox.shrink(),
+          _SearchPhase.loading => const _PanelMessage(
+            icon: Icons.search,
+            title: 'Searching…',
+          ),
+          _SearchPhase.error => _PanelMessage(
+            icon: Icons.cloud_off_rounded,
+            title: errorText,
+            detail: 'You can still drop the pin on the map yourself.',
+            actionLabel: 'Try again',
+            onAction: onRetry,
+          ),
+          _SearchPhase.empty => _PanelMessage(
+            icon: Icons.search_off_rounded,
+            title: query.isEmpty ? 'No matches' : 'No places match “$query”',
+            detail: degraded
+                // The free fallback indexes places, not business listings, so
+                // "not found" means something narrower than usual here. Saying
+                // so is the difference between a user retrying a better query
+                // and a user concluding the product is broken.
+                ? 'Basic search only right now — business names may not be '
+                      'found. Try a street or area, or drop the pin yourself.'
+                : 'Try a street or area name, or drop the pin on the map.',
+          ),
+          _SearchPhase.results => _SearchResults(
+            suggestions: suggestions,
+            degraded: degraded,
+            resolvingPlaceId: resolvingPlaceId,
+            onPick: onPick,
+          ),
+        },
+      ),
+    );
+  }
+}
+
+/// Loading, empty and error share this shape so the panel does not change size
+/// or alignment as it moves between them.
+class _PanelMessage extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? detail;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  const _PanelMessage({
+    required this.icon,
+    required this.title,
+    this.detail,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final action = actionLabel;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: AppColors.slate),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink,
+                  ),
+                ),
+                if (detail != null) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    detail!,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: AppColors.slate,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (action != null) ...[
+            const SizedBox(width: 8),
+            TextButton(onPressed: onAction, child: Text(action)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SearchResults extends StatelessWidget {
+  final List<MapsSuggestion> suggestions;
+  final bool degraded;
+  final String resolvingPlaceId;
+  final ValueChanged<MapsSuggestion> onPick;
+
+  const _SearchResults({
+    required this.suggestions,
+    required this.degraded,
+    required this.resolvingPlaceId,
+    required this.onPick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      shrinkWrap: true,
+      padding: EdgeInsets.zero,
+      children: [
+        // Results arrived, but not from the geocoder we meant to use. Quiet,
+        // because the rows are still usable — just narrower than usual.
+        if (degraded)
+          Container(
+            width: double.infinity,
+            color: AppColors.line.withValues(alpha: 0.5),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: const Text(
+              'Basic search — business names may be missing',
+              style: TextStyle(fontSize: 11, color: AppColors.slate),
+            ),
+          ),
+        for (final s in suggestions)
+          ListTile(
+            dense: true,
+            // A saved gate is marked, because it is the better answer: somebody
+            // already sent a vehicle there and placed this pin by hand, where a
+            // search engine drops it on the front office or the postal centroid.
+            leading: resolvingPlaceId == s.placeId
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.plum,
+                    ),
+                  )
+                : Icon(
+                    s.source == 'saved_place'
+                        ? Icons.bookmark_outline
+                        : Icons.place_outlined,
+                    size: 18,
+                    color: AppColors.plum,
+                  ),
+            title: Text(
+              s.text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13),
+            ),
+            subtitle: s.source == 'saved_place'
+                ? const Text(
+                    'Saved route location',
+                    style: TextStyle(fontSize: 11, color: AppColors.slate),
+                  )
+                : null,
+            // One resolve at a time: a second tap while a pin is being fetched
+            // would open a race whose loser silently discards the user's choice.
+            onTap: resolvingPlaceId.isEmpty ? () => onPick(s) : null,
+          ),
+      ],
     );
   }
 }
