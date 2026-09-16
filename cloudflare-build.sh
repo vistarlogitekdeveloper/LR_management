@@ -9,7 +9,11 @@
 #
 # In the Cloudflare Pages project → Settings → Builds & deployments, set:
 #     Build command:            bash cloudflare-build.sh
-#     Build output directory:   build/web      (already set in wrangler.toml)
+#     Build output directory:   build/web
+#
+# There is deliberately NO wrangler.toml: its presence makes Pages ignore the
+# dashboard build environment variables, which is what silently stripped
+# GOOGLE_MAPS_BROWSER_KEY out of production builds. See DEPLOYMENT.md.
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
@@ -84,9 +88,15 @@ else
     echo "   (the variable EXISTS but is empty — check for stray whitespace or an empty value)"
   else
     echo "   (the variable is NOT in this build's environment at all)"
-    echo "   If you added it under Settings -> Variables and Secrets, that is the RUNTIME"
-    echo "   list and builds cannot see it. Add it under Settings -> Build -> Variables"
-    echo "   and secrets, then redeploy."
+    echo "   Two known causes, in the order they have actually happened here:"
+    echo "   1. A wrangler.toml exists in the repo. Pages then treats that file as the"
+    echo "      source of truth and STOPS loading dashboard build variables — look for"
+    echo "      'Build environment variables: (none found)' earlier in this log. Build"
+    echo "      variables cannot be expressed in that file, so they just vanish."
+    echo "      Delete wrangler.toml; see DEPLOYMENT.md."
+    echo "   2. The variable is in the RUNTIME list. 'Variables and Secrets' on the"
+    echo "      project page is what Functions read when serving a request; builds"
+    echo "      cannot see it. Use Settings -> Build -> Variables and secrets."
   fi
 
   # On the PRODUCTION branch this is now a build failure, not a warning.

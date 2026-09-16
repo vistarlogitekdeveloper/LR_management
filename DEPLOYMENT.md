@@ -20,15 +20,43 @@ Pushing to `main` triggers the Pages Git integration, which:
 2. runs the project's **Build command**, `bash cloudflare-build.sh` — that
    script installs the pinned Flutter SDK (Cloudflare's build image has Node
    and git but no Flutter) and runs `flutter build web --release --base-href "/"`,
-3. publishes `build/web`, the directory named by `pages_build_output_dir` in
-   [wrangler.toml](wrangler.toml).
+3. publishes `build/web`, the **Build output directory** set in the dashboard.
 
 `build/` is gitignored and must never be committed — Cloudflare builds it.
 
-### The one setting that does not live in this repo
+### There is deliberately NO wrangler.toml in this repo
 
-Cloudflare Pages takes its **Build command from the dashboard**, not from
-`wrangler.toml`. If it is ever cleared, every deploy fails with:
+Do not add one back. A Wrangler configuration file makes Pages treat that file
+as the source of truth and **stop loading the dashboard's build environment
+variables** — and build variables cannot be expressed in the file, so they
+simply vanish. The build log says so in one easily-missed line:
+
+```
+Found wrangler.toml file. Reading build configuration...
+Build environment variables: (none found)
+```
+
+That is what silently stripped `GOOGLE_MAPS_BROWSER_KEY` out of every
+production build on 2026-09-16, shipping an OpenStreetMap picker while the key
+sat correctly configured in the dashboard. The file was buying nothing the
+dashboard did not already have: the build command and output directory are
+dashboard settings, and the manual deploy below passes `--project-name`
+explicitly.
+
+See <https://github.com/cloudflare/cloudflare-docs/issues/24125>.
+
+### The settings that do not live in this repo
+
+Both come from the Pages dashboard, and neither can be committed:
+
+- **Build command** — `bash cloudflare-build.sh`
+- **Build environment variables** — `GOOGLE_MAPS_BROWSER_KEY`, under
+  *Settings → Build → Variables and secrets*. Note the near-identical runtime
+  list on the project page is a different thing that builds cannot see.
+  `cloudflare-build.sh` fails the production build if the key is missing rather
+  than quietly publishing the wrong map.
+
+If the build command is ever cleared, every deploy fails with:
 
 ```
 No build command specified. Skipping build step.
