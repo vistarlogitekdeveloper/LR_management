@@ -88,6 +88,27 @@ else
     echo "   list and builds cannot see it. Add it under Settings -> Build -> Variables"
     echo "   and secrets, then redeploy."
   fi
+
+  # On the PRODUCTION branch this is now a build failure, not a warning.
+  #
+  # Shipping without the key is a supported configuration — the picker draws
+  # OpenStreetMap and still returns an exact pin — which is precisely why nobody
+  # noticed that production had been doing it. A green deploy serving a map the
+  # business asked to replace is the worst of both outcomes: nothing is broken
+  # enough to alert on, and the only evidence is a line in a build log nobody
+  # reads. Failing here puts the message in front of the person who just clicked
+  # deploy, at the one moment they can fix it.
+  #
+  # Scoped to the production branch so preview deploys, forks and local runs are
+  # unaffected. CF_PAGES_BRANCH is set by Cloudflare Pages; outside Pages it is
+  # empty and this never fires. Set ALLOW_NO_MAPS_KEY=1 to ship production
+  # without a key deliberately.
+  if [ "${CF_PAGES_BRANCH:-}" = "main" ] && [ "${ALLOW_NO_MAPS_KEY:-}" != "1" ]; then
+    echo "!! Refusing to publish production without a Maps browser key." >&2
+    echo "!! Add GOOGLE_MAPS_BROWSER_KEY under Settings -> Build -> Variables and secrets" >&2
+    echo "!! and retry this deployment, or set ALLOW_NO_MAPS_KEY=1 to ship OpenStreetMap." >&2
+    exit 1
+  fi
 fi
 
 flutter build web --release --base-href "/" "${DART_DEFINES[@]+"${DART_DEFINES[@]}"}"
