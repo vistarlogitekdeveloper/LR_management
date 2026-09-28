@@ -70,6 +70,23 @@ class LrRepository {
 
   LookupResolver get _resolver => _resolve;
 
+  /// Options for a version-locked write: the `If-Match` precondition, plus an
+  /// opt-out from ApiClient's transient retry.
+  ///
+  /// The retry replays a request on a connection error, treating it as "never
+  /// reached the server". That holds for a DNS or connect-timeout failure but
+  /// NOT for a socket dropped mid-flight, which may well have been applied. On
+  /// one of these writes the replay is actively harmful: the first attempt
+  /// lands and bumps `version`, then the replay re-sends the SAME now-stale
+  /// `If-Match` and comes back 412 — reporting a write that succeeded as
+  /// "modified by someone else", and leaving the caller holding a version the
+  /// server has moved past. Every one of these carries a precondition, so a
+  /// silent second attempt can never be right.
+  Options _lockedWrite(int version) => Options(
+    headers: {'If-Match': version.toString()},
+    extra: const {kNoRetryExtra: true},
+  );
+
   /// Loads all LRs. A small FIRST page (100) paints the list almost instantly;
   /// the rest arrive in a single large page (backend allows up to 1000/page for
   /// /lrs). [onPage] fires with each page's parsed rows as it lands so the list
@@ -143,7 +160,7 @@ class LrRepository {
     await _api.dio.patch(
       '/lrs/$id',
       data: payload,
-      options: Options(headers: {'If-Match': version.toString()}),
+      options: _lockedWrite(version),
     );
     if (ewb != null && !ewb.isEmpty) {
       if (existingEwbId != null && existingEwbId.isNotEmpty) {
@@ -161,7 +178,7 @@ class LrRepository {
   Future<LorryReceipt> markAdvancePaid(String id, int version) async {
     await _api.dio.post(
       '/lrs/$id/advance-paid',
-      options: Options(headers: {'If-Match': version.toString()}),
+      options: _lockedWrite(version),
     );
     return getById(id);
   }
@@ -172,7 +189,7 @@ class LrRepository {
   Future<LorryReceipt> completePayment(String id, int version) async {
     await _api.dio.post(
       '/lrs/$id/payment-complete',
-      options: Options(headers: {'If-Match': version.toString()}),
+      options: _lockedWrite(version),
     );
     return getById(id);
   }
@@ -184,11 +201,15 @@ class LrRepository {
   Future<LorryReceipt> sendForPayment(String id, int version) async {
     await _api.dio.post(
       '/lrs/$id/send-for-payment',
-      options: Options(headers: {'If-Match': version.toString()}),
+      options: _lockedWrite(version),
     );
     return getById(id);
   }
 
+  /// Moves the LR along the status graph. Carries no `If-Match` — the backend
+  /// route deliberately omits `requireIfMatch` — but it DOES bump the LR's
+  /// version and append a `lr_status_history` row, so a silent replay would
+  /// double-count both. Opted out of the transient retry for that reason.
   Future<void> changeStatus(String id, String toCode, {String? reason}) async {
     await _api.dio.post(
       '/lrs/$id/status',
@@ -196,6 +217,7 @@ class LrRepository {
         'to': toCode,
         if (reason != null && reason.isNotEmpty) 'reason': reason,
       },
+      options: Options(extra: const {kNoRetryExtra: true}),
     );
   }
 
@@ -214,6 +236,8 @@ class LrRepository {
         if (ewb.loadTypeId != null && ewb.loadTypeId!.isNotEmpty)
           'load_type_id': ewb.loadTypeId,
       },
+      // A replay would attach a SECOND e-way bill to the same LR.
+      options: Options(extra: const {kNoRetryExtra: true}),
     );
   }
 
@@ -226,7 +250,7 @@ class LrRepository {
         if (ewb.loadTypeId != null && ewb.loadTypeId!.isNotEmpty)
           'load_type_id': ewb.loadTypeId,
       },
-      options: Options(headers: {'If-Match': version.toString()}),
+      options: _lockedWrite(version),
     );
   }
 
@@ -254,7 +278,14 @@ class LrRepository {
       throw ArgumentError('Either bytes or filePath is required');
     }
     final form = FormData.fromMap({'file': multipart});
-    await _api.dio.post('/lrs/$lrId/attachments', data: form);
+    await _api.dio.post(
+      '/lrs/$lrId/attachments',
+      data: form,
+      // A replay would attach the same file twice. Dio also cannot re-send a
+      // consumed FormData stream, so the retry would fail anyway — opting out
+      // turns a confusing second error into the original one.
+      options: Options(extra: const {kNoRetryExtra: true}),
+    );
   }
 
   /// Downloads an attachment's raw bytes (auth header applied by the client).

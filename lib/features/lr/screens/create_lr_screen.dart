@@ -1436,6 +1436,25 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     );
   }
 
+  /// Re-reads the LR being edited and replaces [_editing] with it, so the
+  /// optimistic-lock versions the next save sends are the server's current
+  /// ones. Leaves every form field untouched.
+  ///
+  /// Best-effort: on a create, or if the re-read itself fails (the network is
+  /// down, which is often why the save failed), the caller simply reports the
+  /// original error unchanged rather than promising a retry that cannot work.
+  Future<bool> _refreshEditingSnapshot() async {
+    if (!_isEdit || _editing == null) return false;
+    try {
+      final fresh = await ref.read(lrRepositoryProvider).getById(_editing!.id);
+      if (!mounted) return false;
+      _editing = fresh;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _save() async {
     // Guardrail: an LR that has been sent to Accounts for payment is locked and
     // cannot be edited (the Edit button is hidden, this also blocks a direct
@@ -1466,7 +1485,13 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
           _buildPayload(_lrDate ?? _editing!.date),
           ewb: ewb,
           existingEwbId: _editing!.ewb?.id,
-          existingEwbVersion: 0,
+          // The E-way bill carries its OWN optimistic-lock counter, and
+          // PATCH /ewb/:id checks it just as strictly as the LR's. This was
+          // hard-coded to 0, which matched only an EWB that had never been
+          // edited — so the second edit of any LR with one failed on the EWB
+          // step AFTER the LR itself had saved, stranding the form on a stale
+          // LR version and turning every retry into a 412.
+          existingEwbVersion: _editing!.ewb?.version ?? 0,
         );
       } else {
         result = await notifier.create(
@@ -1476,8 +1501,28 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         );
       }
     } catch (e) {
+      // Re-read the LR before reporting, so the NEXT press of Save carries the
+      // current optimistic-lock versions.
+      //
+      // Without this a save could fail in a way that cannot be retried. Two
+      // routes into that: someone changed the LR while this form was open (a
+      // status change bumps the version and sends no If-Match, so it always
+      // wins), or the save itself got halfway — the LR PATCH lands, its version
+      // moves, and a later step throws. Either way the form was left holding a
+      // version the server had already moved past, and every retry answered 412.
+      //
+      // Only `_editing` is refreshed, never the form fields: it supplies the
+      // ids and versions, and re-running _hydrate() here would throw away
+      // everything the user had just typed.
+      final refreshed = await _refreshEditingSnapshot();
       if (mounted) {
-        MasterActions.showError(context, e);
+        MasterActions.showError(
+          context,
+          refreshed
+              ? '${MasterActions.messageFor(e)}\n\nThe latest version has been '
+                    'loaded — press Save again to apply your changes.'
+              : e,
+        );
         setState(() => _saving = false);
       }
       return;

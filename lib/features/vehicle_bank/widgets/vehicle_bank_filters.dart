@@ -9,6 +9,7 @@ import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/searchable_field.dart';
 import '../../masters/providers/master_providers.dart';
+import '../data/ledger_row.dart';
 import '../data/vehicle_bank_models.dart';
 import '../providers/vehicle_bank_providers.dart';
 
@@ -18,8 +19,8 @@ import '../providers/vehicle_bank_providers.dart';
 const Duration _textDebounce = Duration(milliseconds: 300);
 
 /// The Vehicle Bank filter bar: free text, region, route endpoints (from city
-/// and to city as separate inputs), transporter, active state and a
-/// document-expiry window.
+/// and to city as separate inputs) and transporter. Nothing truck-specific: a
+/// ledger row is a person and a lane, not a vehicle.
 ///
 /// The filter itself lives in [vehicleBankFilterProvider] rather than in this
 /// widget, so it survives a navigation away and back and so the export button
@@ -126,7 +127,7 @@ class _VehicleBankFiltersState extends ConsumerState<VehicleBankFilters> {
 
   /// Merges the regions carried by the latest result set into [_regionsSeen]
   /// and returns it. Idempotent, so running it on every build is harmless.
-  Map<String, String> _regionOptions(AsyncValue<List<VehicleBankRow>> rows) {
+  Map<String, String> _regionOptions(AsyncValue<List<LedgerRow>> rows) {
     if (rows case AsyncData(:final value)) {
       for (final row in value) {
         final id = row.regionId;
@@ -146,7 +147,7 @@ class _VehicleBankFiltersState extends ConsumerState<VehicleBankFilters> {
     );
 
     final filter = ref.watch(vehicleBankFilterProvider);
-    final regions = _regionOptions(ref.watch(currentVehicleBankRowsProvider));
+    final regions = _regionOptions(ref.watch(currentVehicleBankLedgerProvider));
     final transporters = ref.watch(transportersProvider);
     final selectedTransporter = transporters
         .where((t) => t.id == filter.transporterId)
@@ -164,7 +165,7 @@ class _VehicleBankFiltersState extends ConsumerState<VehicleBankFilters> {
           _FilterTextField(
             controller: _q,
             width: 280,
-            hint: 'Search vehicle, driver…',
+            hint: 'Search driver, transporter, city, PAN…',
             icon: Icons.search_rounded,
             onChanged: (_) => _scheduleText(),
           ),
@@ -214,24 +215,13 @@ class _VehicleBankFiltersState extends ConsumerState<VehicleBankFilters> {
                     _apply(filter.copyWith(transporterId: t?.id ?? '')),
               ),
             ),
-          _ActiveToggle(
-            value: filter.active,
-            // clearActive is the only way back to "both": passing null to
-            // copyWith means "leave unchanged", not "clear".
-            onChanged: (v) => _apply(
-              v == null
-                  ? filter.copyWith(clearActive: true)
-                  : filter.copyWith(active: v),
-            ),
-          ),
-          _ExpiryChip(
-            days: filter.expiringWithinDays,
-            onChanged: (v) => _apply(
-              v == null
-                  ? filter.copyWith(clearExpiringWithinDays: true)
-                  : filter.copyWith(expiringWithinDays: v),
-            ),
-          ),
+          // The Active / Inactive toggle and the document-expiry window used to
+          // sit here. Both describe a TRUCK — is this vehicle in service, is its
+          // permit lapsing — and a ledger row is a driver/owner + transporter +
+          // lane, which holds no fitness certificate. The server strips them
+          // (VehicleBankFilter.toLedgerQueryParameters drops them too), so
+          // leaving the controls would be offering a filter that silently does
+          // nothing.
           if (filter.hasFilters)
             AppButton(
               label: 'Clear (${filter.activeFilterCount})',
@@ -302,193 +292,6 @@ class _FilterTextField extends StatelessWidget {
                     },
                   ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Three-way active filter: both, active only, inactive only. Null is "both",
-/// which is also the server's default when the parameter is absent.
-class _ActiveToggle extends StatelessWidget {
-  const _ActiveToggle({required this.value, required this.onChanged});
-
-  final bool? value;
-  final ValueChanged<bool?> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.inputBg,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.line, width: 1.4),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _ActiveSegment(
-            label: 'All',
-            selected: value == null,
-            onTap: () => onChanged(null),
-          ),
-          _ActiveSegment(
-            label: 'Active',
-            selected: value == true,
-            onTap: () => onChanged(true),
-          ),
-          _ActiveSegment(
-            label: 'Inactive',
-            selected: value == false,
-            onTap: () => onChanged(false),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActiveSegment extends StatelessWidget {
-  const _ActiveSegment({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      selected: selected,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            curve: Curves.easeOutCubic,
-            constraints: const BoxConstraints(minHeight: 40),
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            margin: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              color: selected
-                  ? AppColors.plum.withValues(alpha: 0.12)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                color: selected ? AppColors.plum : AppColors.slate,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// "Papers expiring within N days" — the question this directory exists to
-/// answer. 0 days means already expired.
-class _ExpiryChip extends StatelessWidget {
-  const _ExpiryChip({required this.days, required this.onChanged});
-
-  final int? days;
-  final ValueChanged<int?> onChanged;
-
-  /// Menu entries, days to label. A PopupMenuButton treats a null selection as
-  /// a dismissal, so "no filter" travels as [_clearValue] and is translated
-  /// back to null before it reaches the caller.
-  static const int _clearValue = -1;
-  static const Map<int, String> _options = {
-    0: 'Already expired',
-    15: 'Within 15 days',
-    30: 'Within 30 days',
-    60: 'Within 60 days',
-    90: 'Within 90 days',
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    final selected = days;
-    final label = selected == null
-        ? 'Any expiry'
-        : (_options[selected] ?? 'Within $selected days');
-    final on = selected != null;
-    return PopupMenuButton<int>(
-      tooltip: 'Filter by document expiry',
-      position: PopupMenuPosition.under,
-      onSelected: (v) => onChanged(v == _clearValue ? null : v),
-      itemBuilder: (context) => [
-        for (final entry in _options.entries)
-          PopupMenuItem<int>(
-            value: entry.key,
-            child: Text(
-              entry.value,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: entry.key == selected
-                    ? FontWeight.w800
-                    : FontWeight.w600,
-                color: entry.key == selected ? AppColors.plum : AppColors.ink,
-              ),
-            ),
-          ),
-        const PopupMenuDivider(),
-        const PopupMenuItem<int>(
-          value: _clearValue,
-          child: Text(
-            'Any expiry',
-            style: TextStyle(fontSize: 13, color: AppColors.slate),
-          ),
-        ),
-      ],
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 46),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: on
-              ? AppColors.warn.withValues(alpha: 0.10)
-              : AppColors.inputBg,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: on ? AppColors.warn.withValues(alpha: 0.45) : AppColors.line,
-            width: 1.4,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.event_busy_outlined,
-              size: 16,
-              color: on ? AppColors.warn : AppColors.slate,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: on ? FontWeight.w800 : FontWeight.w600,
-                color: on ? AppColors.warn : AppColors.slate,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.expand_more_rounded,
-              size: 16,
-              color: on ? AppColors.warn : AppColors.slate,
-            ),
-          ],
         ),
       ),
     );

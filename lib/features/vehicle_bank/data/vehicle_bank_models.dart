@@ -262,6 +262,24 @@ class VehicleBankFilter {
     };
   }
 
+  /// Query string for the LR-sourced ledger, which is the subset of
+  /// [toQueryParameters] that means something for a vendor row.
+  ///
+  /// `active` and `expiring_within_days` are deliberately dropped: both describe
+  /// a TRUCK (is this vehicle in service, is its permit lapsing), and a ledger
+  /// row is a driver/owner + transporter + lane, which has no fitness
+  /// certificate. Sending them would be a filter that silently does nothing —
+  /// the server's Joi schema strips them — and a UI that offered them would be
+  /// lying about what it can narrow.
+  Map<String, dynamic> toLedgerQueryParameters() {
+    final all = toQueryParameters();
+    return <String, dynamic>{
+      for (final e in all.entries)
+        if (e.key != 'active' && e.key != 'expiring_within_days')
+          e.key: e.value,
+    };
+  }
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||

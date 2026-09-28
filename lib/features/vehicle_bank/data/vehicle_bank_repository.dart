@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/paginate.dart';
+import 'ledger_row.dart';
 import 'vehicle_bank_models.dart';
 
 /// One page of the directory, plus the token for the next one.
@@ -34,6 +35,11 @@ class VehicleBankRepository {
 
   static const String _listPath = '/vehicle-bank';
   static const String _exportPath = '/vehicle-bank/export.xlsx';
+
+  /// The LR-sourced vendor ledger — a different lens on the same section, behind
+  /// the same VEHICLE_BANK_VIEW permission. Its KYC/bank columns are gated
+  /// separately server-side and arrive masked or blank, never 403.
+  static const String _ledgerPath = '/vehicle-bank/ledger';
 
   /// Server default; also what `meta.limit` reports when we send none.
   static const int defaultPageSize = 50;
@@ -92,6 +98,31 @@ class VehicleBankRepository {
         maxPages: maxRows ~/ maxPageSize,
       );
       return rows.map(VehicleBankRow.fromJson).toList();
+    } on DioException catch (e) {
+      throw e.error ?? e;
+    }
+  }
+
+  /// Every ledger row for [filter], walking the cursor to the end.
+  ///
+  /// Fetched whole for the same reason [listAll] is: the screen numbers the rows
+  /// (Sr. no. is a position, not an id) and sorts across the full set, and a
+  /// per-page Sr. no. would restart at 1 on every page. Bounded by the same
+  /// [maxRows] ceiling.
+  ///
+  /// Only the filters the ledger understands are sent — `active` and
+  /// `expiring_within_days` describe a truck's paperwork and have no meaning for
+  /// a vendor row, and the server drops them anyway.
+  Future<List<LedgerRow>> ledger(VehicleBankFilter filter) async {
+    try {
+      final rows = await fetchAllPages(
+        _api,
+        _ledgerPath,
+        query: filter.toLedgerQueryParameters(),
+        pageSize: maxPageSize,
+        maxPages: maxRows ~/ maxPageSize,
+      );
+      return rows.map(LedgerRow.fromJson).toList();
     } on DioException catch (e) {
       throw e.error ?? e;
     }

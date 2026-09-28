@@ -13,10 +13,11 @@ import '../../shell/widgets/app_topbar.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/section_title.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../data/route_planner.dart';
 import '../data/tracking_repository.dart';
 import '../providers/tracking_providers.dart';
-import 'live_tracking_screen.dart' show ConsentBadge, relTime;
+import '../widgets/tracking_common.dart' show ConsentBadge, relTime;
 
 /// Individual LR trail + SIM consent controls.
 class LrTrackingScreen extends ConsumerStatefulWidget {
@@ -846,7 +847,42 @@ class _DotPin extends StatelessWidget {
   }
 }
 
-class _Panel extends StatelessWidget {
+/// Shown in place of "Start tracking" to someone without TRACKING_START.
+///
+/// Names the permission so the administrator being asked knows exactly which
+/// toggle to tick, rather than the request arriving as "it isn't working".
+class _NoStartPermissionNote extends StatelessWidget {
+  const _NoStartPermissionNote();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.inputBg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.lock_outline_rounded, size: 15, color: AppColors.slate),
+          SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              'Tracking has not been started for this LR. Ask an administrator '
+              'to start it, or to grant you the "Start SIM tracking" '
+              'permission.',
+              style: TextStyle(fontSize: 12, color: AppColors.slate),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Panel extends ConsumerWidget {
   final LrTracking t;
   final bool rechecking;
   final VoidCallback onRecheck;
@@ -865,8 +901,12 @@ class _Panel extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final cur = t.current;
+    // Mirrors the server gate on POST /tracking/lr/:id/start exactly. Read here
+    // rather than threaded down from the screen so the check cannot drift away
+    // from the button it guards.
+    final canStart = ref.watch(currentUserProvider)?.canStartTracking ?? false;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -939,16 +979,25 @@ class _Panel extends StatelessWidget {
                   ),
                 ),
               // No SCT trip yet (driver assigned after the LR was created) —
-              // let the user start tracking on demand.
+              // let the user start tracking on demand, IF they may.
+              //
+              // Without the permission the button is hidden rather than shown
+              // and rejected: a button that always 403s is worse than no button.
+              // A line takes its place, because a silently missing control reads
+              // as "this LR cannot be tracked" and sends the operator chasing
+              // the driver instead of their administrator.
               if (t.trackingState == null) ...[
-                AppButton(
-                  label: 'Start tracking',
-                  icon: Icons.play_arrow_rounded,
-                  kind: BtnKind.primary,
-                  small: true,
-                  loading: starting,
-                  onPressed: starting ? null : onStart,
-                ),
+                if (canStart)
+                  AppButton(
+                    label: 'Start tracking',
+                    icon: Icons.play_arrow_rounded,
+                    kind: BtnKind.primary,
+                    small: true,
+                    loading: starting,
+                    onPressed: starting ? null : onStart,
+                  )
+                else
+                  const _NoStartPermissionNote(),
                 const SizedBox(height: 8),
               ],
               AppButton(

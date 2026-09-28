@@ -76,6 +76,16 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
   /// settles (whenComplete), so a later call starts a fresh one.
   Future<void>? _pending;
 
+  /// The failure from the most recent load, cleared on the next success.
+  ///
+  /// [refresh] deliberately never throws — the screens that render this state
+  /// keep their previous rows through a transient backend blip rather than
+  /// blanking. That leaves a caller with nothing cached to fall back on (the
+  /// tracking History tab, which derives entirely from this list) unable to
+  /// tell an empty result from a failed one, so it reads this instead.
+  Object? get lastError => _lastError;
+  Object? _lastError;
+
   /// Data younger than this is served from cache; a re-entry within the window
   /// is a no-op. Kept short so anything the user just changed elsewhere
   /// (create / edit / status change) still surfaces on a fresh nav within
@@ -142,9 +152,13 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
       if (mounted && gen == _refreshGen) {
         state = _scoped(all);
         _lastOk = DateTime.now();
+        _lastError = null;
       }
-    } catch (_) {
+    } catch (e) {
       // A transient backend/DB error shouldn't crash the UI; keep prior state.
+      // Recorded on [lastError] so a caller with nothing cached to fall back on
+      // can surface it instead of rendering a misleading empty state.
+      _lastError = e;
     }
   }
 
@@ -180,8 +194,17 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
   ) async {
     try {
       return await write();
-    } on ApiException catch (e) {
-      if (e.isVersionConflict) {
+    } catch (e) {
+      // Caught as Object, then unwrapped — NOT `on ApiException`. The network
+      // interceptor maps a backend error by PARKING an ApiException on
+      // DioException.error (api_client._withMappedError does
+      // `e.copyWith(error: ApiException(...))`), so what actually propagates out
+      // of dio is a DioException. An `on ApiException` clause therefore never
+      // matched, and this whole recovery was dead code: the 412 refetch never
+      // ran, so the cached list kept the stale version and the next write from
+      // it conflicted again.
+      final api = asApiException(e);
+      if (api != null && api.isVersionConflict) {
         await _refetchOne(id);
       }
       rethrow;

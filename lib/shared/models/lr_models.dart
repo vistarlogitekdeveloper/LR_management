@@ -366,6 +366,18 @@ class EwayBill {
   final String loadType; // display label
   final String validationStatus;
 
+  /// Optimistic-lock counter for PATCH /ewb/:id, which requires
+  /// `If-Match: <version>` exactly as the LR does. Starts at 0 and the server
+  /// bumps it on every write.
+  ///
+  /// Parsed here because the edit form has to send it back. It used to be
+  /// absent from this model, so the save path hard-coded `If-Match: 0` — which
+  /// matched only an E-way bill that had never been edited. The second edit of
+  /// any LR carrying one therefore failed, AFTER the LR itself had already been
+  /// saved and its own version bumped, leaving the form holding a stale LR
+  /// version and every retry answering 412 VERSION_CONFLICT.
+  final int version;
+
   const EwayBill({
     this.id = '',
     required this.number,
@@ -373,6 +385,7 @@ class EwayBill {
     this.loadTypeId = '',
     this.loadType = '',
     this.validationStatus = 'pending',
+    this.version = 0,
   });
 
   factory EwayBill.fromJson(
@@ -391,6 +404,7 @@ class EwayBill {
       loadTypeId: loadId ?? '',
       loadType: loadLabel,
       validationStatus: (json['validation_status'] as String?) ?? 'pending',
+      version: asInt(json['version']),
     );
   }
 }

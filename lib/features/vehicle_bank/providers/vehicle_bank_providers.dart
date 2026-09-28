@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_providers.dart';
+import '../data/ledger_row.dart';
 import '../data/vehicle_bank_models.dart';
 import '../data/vehicle_bank_repository.dart';
 
@@ -35,4 +36,24 @@ final currentVehicleBankRowsProvider =
     Provider.autoDispose<AsyncValue<List<VehicleBankRow>>>((ref) {
       final filter = ref.watch(vehicleBankFilterProvider);
       return ref.watch(vehicleBankRowsProvider(filter));
+    });
+
+/// The LR-sourced ledger for one filter — one row per (driver/owner,
+/// transporter, lane) actually seen on an LR, deduplicated server-side.
+///
+/// Keyed by the same [VehicleBankFilter] as [vehicleBankRowsProvider] for the
+/// same reason: the filter carries value equality, so an identical filter reuses
+/// the cached fetch instead of re-requesting.
+final vehicleBankLedgerProvider = FutureProvider.autoDispose
+    .family<List<LedgerRow>, VehicleBankFilter>(
+      (ref, filter) => ref.watch(vehicleBankRepositoryProvider).ledger(filter),
+    );
+
+/// The ledger for the filter currently in [vehicleBankFilterProvider] — what the
+/// screen watches so it does not have to thread the family key through its
+/// widget tree.
+final currentVehicleBankLedgerProvider =
+    Provider.autoDispose<AsyncValue<List<LedgerRow>>>((ref) {
+      final filter = ref.watch(vehicleBankFilterProvider);
+      return ref.watch(vehicleBankLedgerProvider(filter));
     });

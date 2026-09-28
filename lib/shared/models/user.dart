@@ -133,6 +133,21 @@ class AppUser {
       can('ADMIN_ACCESS') ||
       can('SUPERADMIN_ACCESS');
 
+  /// May start SIM tracking for an LR — POST /tracking/lr/:id/start. Authority
+  /// is routes/trackingRoutes.js, which applies
+  /// perm.require(['TRACKING_START','ADMIN_ACCESS','SUPERADMIN_ACCESS']).
+  ///
+  /// Only the START is gated this tightly; reading the map, rechecking consent
+  /// and sharing the live link all answer to LR_VIEW. Starting a trip consumes
+  /// the driver's phone — one SIM carries one trip at a time, so a start can
+  /// take tracking away from another LR — which is why it is handed out per
+  /// user rather than assumed for a role.
+  ///
+  /// Mirrored code for code: looser here shows a button that 403s on tap,
+  /// stricter hides an action the user is entitled to.
+  bool get canStartTracking =>
+      can('TRACKING_START') || can('ADMIN_ACCESS') || can('SUPERADMIN_ACCESS');
+
   // ---- Visibility of sensitive money fields (migration 072) ----
   // Three server-side visibility perms gate WHICH money fields a user may see
   // on LRs and Routes. The backend redacts (null) the matching fields in every

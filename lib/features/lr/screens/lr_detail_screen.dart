@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -17,6 +18,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../masters/widgets/master_actions.dart';
 import '../../shell/widgets/app_topbar.dart';
 import '../providers/lr_providers.dart';
+import '../utils/lr_summary_text.dart';
 
 class LrDetailScreen extends ConsumerWidget {
   final String id;
@@ -175,6 +177,17 @@ class LrDetailScreen extends ConsumerWidget {
                 icon: Icons.my_location_rounded,
                 onPressed: () => context.go('/tracking/lr/${lr.id}'),
               ),
+              AppButton(
+                label: 'Copy',
+                kind: BtnKind.soft,
+                icon: Icons.content_copy_outlined,
+                onPressed: () => _copyDetails(
+                  context,
+                  lr,
+                  canViewTransporterRate: canViewTransporterRate,
+                  canViewVistarMargin: canViewVistarMargin,
+                ),
+              ),
               if (canEdit)
                 AppButton(
                   label: 'Status',
@@ -228,30 +241,64 @@ class LrDetailScreen extends ConsumerWidget {
                   canViewTransporterRate: canViewTransporterRate,
                   canViewVistarMargin: canViewVistarMargin,
                 );
-                return SingleChildScrollView(
-                  padding: EdgeInsets.all(mobile ? 14 : 28),
-                  child: wide
-                      ? Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(flex: 3, child: left),
-                            const SizedBox(width: 20),
-                            Expanded(flex: 2, child: right),
-                          ],
-                        )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            left,
-                            SizedBox(height: mobile ? 12 : 20),
-                            right,
-                          ],
-                        ),
+                // Flutter web paints text into a canvas, so without this the
+                // page is a picture as far as the browser is concerned: nothing
+                // on it can be selected, let alone copied. A dispatcher needing
+                // one GST number had to retype it. Covers the whole body rather
+                // than individual fields so a selection can span cards — copying
+                // the consignee block in one drag is the common case.
+                return SelectionArea(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.all(mobile ? 14 : 28),
+                    child: wide
+                        ? Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(flex: 3, child: left),
+                              const SizedBox(width: 20),
+                              Expanded(flex: 2, child: right),
+                            ],
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              left,
+                              SizedBox(height: mobile ? 12 : 20),
+                              right,
+                            ],
+                          ),
+                  ),
                 );
               },
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Copies the whole LR as plain text, honouring the SAME rate permissions the
+  /// Freight card does — see buildLrSummaryText. The client is holding figures
+  /// this user may not be allowed to see, so "copy everything" would leak them
+  /// into a clipboard and from there into a chat.
+  Future<void> _copyDetails(
+    BuildContext context,
+    LorryReceipt lr, {
+    required bool canViewTransporterRate,
+    required bool canViewVistarMargin,
+  }) async {
+    final text = buildLrSummaryText(
+      lr,
+      includeTransporterRate: canViewTransporterRate,
+      includeVistarMargin: canViewVistarMargin,
+    );
+    final messenger = ScaffoldMessenger.of(context);
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!context.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('${lr.number} copied to clipboard'),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
