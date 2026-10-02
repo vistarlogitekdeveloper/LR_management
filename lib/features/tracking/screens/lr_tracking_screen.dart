@@ -119,6 +119,14 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
         if (agreed == true) return _attemptStart(takeover: true);
         return;
       }
+      // A missing driver / mobile is master data, not a transient failure, and
+      // it is fixed on a different screen. A snackbar slides away before the
+      // operator has read which of the three things is wrong, so this gets a
+      // dialog that names the fix and offers the way there.
+      if (api != null && api.isTrackingPrecondition && mounted) {
+        await _showCannotTrackDialog(api);
+        return;
+      }
       messenger.showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
     }
   }
@@ -126,6 +134,64 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
   /// Explains the clash and offers the one action that resolves it in-app:
   /// stop the trip that currently owns the driver's phone and start fresh here.
   /// Returns true only if the operator explicitly chose that.
+  /// Explains why this LR cannot be tracked yet and offers the way to fix it.
+  ///
+  /// The server's own message is shown verbatim — it already distinguishes "no
+  /// driver assigned" from "has no mobile number on file" from "invalid mobile
+  /// (…)" — and the dialog adds the one thing the message cannot: the reason
+  /// the driver's number matters at all, and a button that goes to the screen
+  /// where it is fixed.
+  Future<void> _showCannotTrackDialog(ApiException api) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(
+          Icons.person_off_outlined,
+          color: AppColors.warn,
+          size: 28,
+        ),
+        title: const Text('Can’t start tracking yet'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              api.message,
+              style: const TextStyle(fontSize: 14, color: AppColors.ink),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'SIM tracking follows the driver’s mobile number, so the LR '
+              'needs a driver with a valid 10-digit number before a trip can '
+              'start.',
+              style: TextStyle(fontSize: 12.5, color: AppColors.slate),
+            ),
+          ],
+        ),
+        actions: [
+          AppButton(
+            label: 'Close',
+            kind: BtnKind.ghost,
+            small: true,
+            onPressed: () => Navigator.of(ctx).pop(),
+          ),
+          AppButton(
+            // Sends them where the driver is actually set. The Drivers master
+            // is the other possible destination, but assigning a driver to THIS
+            // LR is the common case and the only one we can be sure about.
+            label: api.isNoDriver ? 'Assign a driver' : 'Open LR',
+            icon: Icons.edit_outlined,
+            small: true,
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              context.go('/lrs/${widget.id}/edit');
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<bool?> _showSimBusyDialog(ApiException api) {
     // Sent by the backend alongside the 409 so the prompt can name exactly what
     // would stop being tracked, rather than asking the operator to take it on
@@ -851,6 +917,59 @@ class _DotPin extends StatelessWidget {
 ///
 /// Names the permission so the administrator being asked knows exactly which
 /// toggle to tick, rather than the request arriving as "it isn't working".
+/// Shown in place of "Start tracking" when the LR carries no driver.
+///
+/// Pressing Start in this state can only ever return 400 NO_DRIVER, so the
+/// button is replaced by the reason and the fix. Says WHY the driver matters —
+/// tracking follows their phone — because "assign a driver" alone reads as
+/// bureaucracy to someone who assumes the truck is what gets tracked.
+class _NoDriverNote extends ConsumerWidget {
+  const _NoDriverNote();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lrId = GoRouterState.of(context).pathParameters['id'];
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.warn.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.warn.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.person_off_outlined, size: 15, color: AppColors.warn),
+              SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  'No driver assigned to this LR. SIM tracking follows the '
+                  'driver’s mobile number, so one is needed before a trip '
+                  'can start.',
+                  style: TextStyle(fontSize: 12, color: AppColors.ink),
+                ),
+              ),
+            ],
+          ),
+          if (lrId != null && lrId.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            AppButton(
+              label: 'Assign a driver',
+              icon: Icons.edit_outlined,
+              kind: BtnKind.soft,
+              small: true,
+              onPressed: () => context.go('/lrs/$lrId/edit'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _NoStartPermissionNote extends StatelessWidget {
   const _NoStartPermissionNote();
 
@@ -987,7 +1106,15 @@ class _Panel extends ConsumerWidget {
               // as "this LR cannot be tracked" and sends the operator chasing
               // the driver instead of their administrator.
               if (t.trackingState == null) ...[
-                if (canStart)
+                if (!canStart)
+                  const _NoStartPermissionNote()
+                // The response already tells us whether a driver is on the LR,
+                // so say so UP FRONT instead of letting the user press a button
+                // that can only fail. The server still rejects it — this is a
+                // hint, not the gate.
+                else if ((t.driverName ?? '').trim().isEmpty)
+                  const _NoDriverNote()
+                else
                   AppButton(
                     label: 'Start tracking',
                     icon: Icons.play_arrow_rounded,
@@ -995,9 +1122,7 @@ class _Panel extends ConsumerWidget {
                     small: true,
                     loading: starting,
                     onPressed: starting ? null : onStart,
-                  )
-                else
-                  const _NoStartPermissionNote(),
+                  ),
                 const SizedBox(height: 8),
               ],
               AppButton(

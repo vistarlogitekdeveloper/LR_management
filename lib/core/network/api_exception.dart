@@ -101,6 +101,21 @@ class ApiException implements Exception {
   /// than in a snackbar: the resolution is a dispatch decision, not a retry.
   bool get isSimBusy => status == 409 && code == 'SIM_BUSY';
 
+  /// The LR is not set up for SIM tracking yet: no driver, no mobile on the
+  /// driver, or a mobile that is not a 10-digit Indian number.
+  ///
+  /// Grouped because all three are the SAME kind of problem — a missing piece
+  /// of master data, fixed in the same place — and none is a retry. SIM
+  /// tracking follows the driver's phone number, so without a usable one there
+  /// is nothing for the provider to track.
+  bool get isTrackingPrecondition =>
+      status == 400 &&
+      (code == 'NO_DRIVER' || code == 'NO_MOBILE' || code == 'BAD_MOBILE');
+
+  /// True when the LR has no driver at all, as opposed to a driver whose
+  /// number is missing or malformed — the two need different instructions.
+  bool get isNoDriver => code == 'NO_DRIVER';
+
   @override
   String toString() =>
       'ApiException($status $code: $message${traceId != null ? ' [trace=$traceId]' : ''})';
