@@ -80,6 +80,14 @@ dependencies:
   # feature exists for. No-op on the OSM fallback and on mobile.
   pointer_interceptor: ^0.10.1+2
 
+  # --- Usage analytics ----------------------------------------------------
+  # The in-house event tracker (Platform Console > Analytics > Event tracker).
+  # Vendored: the SDK repository is private, so Cloudflare and CI cannot fetch
+  # it (packages/vistar_event_tracker/VENDORED.md). Off unless the build gets
+  # ET_APP_ID + ET_WRITE_KEY (lib/core/telemetry/telemetry.dart).
+  vistar_event_tracker:
+    path: packages/vistar_event_tracker
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

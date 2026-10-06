@@ -47,6 +47,7 @@ import '../../features/vehicle_bank/screens/vehicle_bank_screen.dart';
 import '../../features/warehouse/screens/warehouse_screen.dart';
 import '../../shared/models/user.dart';
 import '../../shared/widgets/refresh_gate.dart';
+import '../telemetry/telemetry.dart';
 
 // Each top-level nav destination gets its own branch so its widget tree is
 // mounted once, on first visit, and preserved forever after. Switching
@@ -61,6 +62,31 @@ import '../../shared/widgets/refresh_gate.dart';
 Page<void> _noAnim(GoRouterState state, Widget child) =>
     NoTransitionPage(key: state.pageKey, child: child);
 
+/// Reports each screen the router shows to usage analytics (by route
+/// pattern; see Telemetry.screen). The listener goes with the router instance
+/// it was added to.
+GoRouter _withScreenViews(Ref ref, GoRouter router) {
+  if (!Telemetry.enabled) return router;
+  // The delegate, not the route-information provider: it also hears the
+  // location changes a redirect makes (splash or sign-in landing on the
+  // dashboard), which the provider does not report.
+  void report() {
+    try {
+      Telemetry.screen(
+        router.routerDelegate.currentConfiguration.uri.toString(),
+      );
+    } catch (_) {
+      // No configuration yet; the next change reports.
+    }
+  }
+
+  router.routerDelegate.addListener(report);
+  ref.onDispose(() => router.routerDelegate.removeListener(report));
+  // The listener only hears changes: report the starting screen too.
+  WidgetsBinding.instance.addPostFrameCallback((_) => report());
+  return router;
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
   // Do NOT ref.watch(authProvider) here — it would rebuild the whole GoRouter
   // on every auth state change (including loading true/false and error
@@ -70,7 +96,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   // ref.read on every invocation, and _AuthListenable pokes GoRouter to
   // re-run the redirect whenever it actually matters (auth transition or
   // splash-init finishing).
-  return GoRouter(
+  final router = GoRouter(
     initialLocation: '/dashboard',
     redirect: (context, state) {
       final auth = ref.read(authProvider);
@@ -593,6 +619,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+  return _withScreenViews(ref, router);
 });
 
 class _AuthListenable extends ChangeNotifier {

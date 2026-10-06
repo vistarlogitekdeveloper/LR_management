@@ -6,6 +6,7 @@ import '../../../core/network/api_config.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/api_providers.dart';
 import '../../../core/network/token_storage.dart';
+import '../../../core/telemetry/telemetry.dart';
 import '../../../shared/models/user.dart';
 
 class AuthState {
@@ -70,6 +71,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final user = AppUser.fromJson(
         (data['user'] as Map).cast<String, dynamic>(),
       );
+      // Before the state change, so the screen it leads to is already theirs.
+      _identify(user);
       state = AuthState(user: user);
     } catch (_) {
       // Do NOT wipe the tokens here. The API client already clears them on a
@@ -102,6 +105,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final user = AppUser.fromJson(
         (data['user'] as Map).cast<String, dynamic>(),
       );
+      // Before the state change, so the screen it leads to is already theirs.
+      _identify(user);
       state = AuthState(user: user);
       return true;
     } on DioException catch (e) {
@@ -137,7 +142,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
     );
   }
 
+  /// Usage analytics: who this is (id, role and organisation codes only).
+  /// Fire and forget.
+  void _identify(AppUser user) => Telemetry.signedIn(
+    userId: user.id,
+    role: user.role.code,
+    tenant: user.tenantCode,
+  );
+
   Future<void> logout() async {
+    // Not awaited: sign-out never waits for analytics.
+    Telemetry.signedOut();
     try {
       // Send the refresh token so the backend REVOKES it server-side (verified:
       // logout without it returns 200 but leaves the session usable). This makes
