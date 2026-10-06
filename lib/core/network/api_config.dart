@@ -6,7 +6,6 @@ class ApiConfig {
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
     //defaultValue: 'https://uat-api.vistarlogitek.com/api/v1/lr-management',
-
     defaultValue: 'https://api.vistarlogitek.com/api/v1/lr-management',
   );
 
