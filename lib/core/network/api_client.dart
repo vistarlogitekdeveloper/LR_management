@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../telemetry/telemetry.dart';
 import 'api_config.dart';
 import 'api_exception.dart';
 import 'token_storage.dart';
@@ -29,6 +30,13 @@ class ApiClient {
         ),
       ) {
     _dio.interceptors.add(_buildAuthInterceptor());
+    // Usage analytics: named actions and failed calls. Changes nothing about
+    // the request or its handling (core/telemetry/telemetry.dart). Added after
+    // the auth interceptor, so it sees what that one passes on: a request
+    // replayed after a token refresh is counted once, on its replay; a 401 or
+    // a failure the transient retry recovered from is not an error. The bare
+    // Dio clients below (token refresh, transient retry) are not covered.
+    _dio.interceptors.add(TelemetryInterceptor());
   }
 
   final Dio _dio;

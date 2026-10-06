@@ -60,8 +60,11 @@ jobs:
 
       # CLAUDE.md §12/§13.2. Kept ahead of analyze because a formatting diff is
       # the cheapest possible failure to read.
+      # lib/ and test/ — every Dart file of the app. Not packages/: the
+      # vendored event-tracker SDK (packages/vistar_event_tracker) is a copy of
+      # another repository and is kept byte-for-byte as it is there.
       - name: Format
-        run: dart format --set-exit-if-changed .
+        run: dart format --set-exit-if-changed lib test
 
       # CLAUDE.md §13.1 wants --fatal-infos --fatal-warnings, and the tree is at
       # zero issues as of the dart:html removal, so the strict gate holds.
@@ -93,4 +96,22 @@ jobs:
         # than after Cloudflare has spent ~10 min cloning the Flutter SDK.
         # Must stay byte-for-byte the same command as cloudflare-build.sh's
         # final line, or this stops predicting what Cloudflare will do.
-        run: flutter build web --release --base-href "/"
+        #
+        # Usage analytics (lib/core/telemetry/telemetry.dart), as in
+        # cloudflare-build.sh: the defines are added only when the repository
+        # variable ET_APP_ID and the secret ET_WRITE_KEY are both set. This job
+        # publishes nothing, so they only make this check build the same app
+        # Cloudflare does; switching analytics on for the live site is the
+        # Cloudflare build variables (see DEPLOYMENT.md).
+        env:
+          ET_APP_ID: ${{ vars.ET_APP_ID }}
+          ET_WRITE_KEY: ${{ secrets.ET_WRITE_KEY }}
+        run: |
+          DART_DEFINES=()
+          if [ -n "$ET_APP_ID" ] && [ -n "$ET_WRITE_KEY" ]; then
+            DART_DEFINES+=(--dart-define=ET_APP_ID="$ET_APP_ID" --dart-define=ET_WRITE_KEY="$ET_WRITE_KEY")
+            echo "Usage analytics on, as $ET_APP_ID"
+          else
+            echo "Usage analytics off (ET_APP_ID / ET_WRITE_KEY not set)"
+          fi
+          flutter build web --release --base-href "/" "${DART_DEFINES[@]+"${DART_DEFINES[@]}"}"

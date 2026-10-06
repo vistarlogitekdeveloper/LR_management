@@ -40,6 +40,11 @@ class AppUser {
   final String roleId;
   final String? regionId;
   final String? regionName;
+
+  /// The organisation (tenant) code, from the nested `tenant` object that
+  /// /auth/login and /auth/me return. Null where the payload has none (the
+  /// admin user list).
+  final String? tenantCode;
   final bool active;
   final int version;
   final List<String> permissions;
@@ -55,6 +60,7 @@ class AppUser {
     this.roleId = '',
     this.regionId,
     this.regionName,
+    this.tenantCode,
     this.active = true,
     this.version = 0,
     this.permissions = const [],
@@ -239,6 +245,11 @@ class AppUser {
       regionName = regionField['name'] as String?;
     }
 
+    final dynamic tenantField = json['tenant'];
+    final tenantCode = tenantField is Map
+        ? tenantField['code']?.toString()
+        : null;
+
     return AppUser(
       id: (json['id'] as String?) ?? '',
       username: json['username'] as String,
@@ -250,6 +261,7 @@ class AppUser {
       roleId: roleId,
       regionId: regionId,
       regionName: regionName,
+      tenantCode: tenantCode,
       active: (json['active'] as bool?) ?? true,
       version: (json['version'] as num?)?.toInt() ?? 0,
       permissions: ((json['permissions'] as List?) ?? const [])

@@ -55,6 +55,11 @@ Both come from the Pages dashboard, and neither can be committed:
   list on the project page is a different thing that builds cannot see.
   `cloudflare-build.sh` fails the production build if the key is missing rather
   than quietly publishing the wrong map.
+- **Usage analytics (optional)** — `ET_APP_ID` (`lr_app`) and `ET_WRITE_KEY`
+  (encrypted), in the same *build* list. `cloudflare-build.sh` passes them to
+  `flutter build web` only when both are set and logs
+  `Usage analytics on, as lr_app` / `off`; unset, the app sends nothing. See
+  "Usage analytics" in [README.md](README.md).
 
 If the build command is ever cleared, every deploy fails with:
 

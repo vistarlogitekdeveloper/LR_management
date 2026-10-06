@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../telemetry/telemetry.dart';
 import '../theme/app_colors.dart';
 
 /// Severity for [report]. Release builds drop anything below [LogLevel.warn]
@@ -36,6 +37,11 @@ void report(
     // Stack traces are noise in release console output and go to the crash
     // reporter instead once one is wired.
     if (!kReleaseMode && stack != null) debugPrintStack(stackTrace: stack);
+    // Usage analytics (off unless the build enables it): the error's TYPE
+    // and source only, never its message. Never awaited, never throws.
+    if (level == LogLevel.error) {
+      Telemetry.clientError(error, source: feature, fatal: fatal);
+    }
   } catch (_) {
     // Deliberately swallowed: the reporter is the last line of defence.
   }
@@ -72,9 +78,14 @@ String _redact(String input) {
 /// user a red screen.
 ///
 /// Everything is wired BEFORE `runApp` so an error thrown during the first
-/// frame is still captured.
-void bootstrap(Widget Function() appBuilder) {
-  runZonedGuarded(() {
+/// frame is still captured. [beforeRunApp], when given, runs after the handlers
+/// and the binding are up and before `runApp`, inside the same zone (so the
+/// binding and `runApp` share a zone).
+void bootstrap(
+  Widget Function() appBuilder, {
+  Future<void> Function()? beforeRunApp,
+}) {
+  runZonedGuarded(() async {
     // Framework errors: build/layout/paint failures and anything the widget
     // tree throws synchronously.
     FlutterError.onError = (details) {
@@ -100,6 +111,11 @@ void bootstrap(Widget Function() appBuilder) {
       if (!kReleaseMode) return ErrorWidget(details.exception);
       return const _ReleaseErrorPanel();
     };
+
+    if (beforeRunApp != null) {
+      WidgetsFlutterBinding.ensureInitialized();
+      await beforeRunApp();
+    }
 
     runApp(appBuilder());
   }, (error, stack) => report(error, stack, feature: 'zone', fatal: true));
