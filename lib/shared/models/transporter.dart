@@ -23,6 +23,9 @@ class Transporter {
 
   /// Contact number, 10 digits. Same legacy rule as [aadhaar].
   final String mobile;
+
+  /// Optional email ("Mail Id" in the Vehicle Bank). Empty when not on file.
+  final String email;
   final String tds; // 'Yes' / 'No' (maps to backend tds_applicable)
   /// Default share of the transporter freight released up front as an advance.
   /// Copied onto each new LR for this transporter (which may then override it
@@ -33,6 +36,9 @@ class Transporter {
   final String accountHolder;
   final String accountNo;
   final String ifsc;
+
+  /// Bank branch name ("Branch Name" in the Vehicle Bank). Optional.
+  final String branch;
   // Uploaded blank cheque / passbook photo (stored under bank_account too).
   final String chequeFileKey;
   final String chequeFileName;
@@ -57,12 +63,14 @@ class Transporter {
     required this.pan,
     this.aadhaar = '',
     this.mobile = '',
+    this.email = '',
     required this.tds,
     this.advancePercent = kDefaultAdvancePercent,
     this.bankName = '',
     this.accountHolder = '',
     this.accountNo = '',
     this.ifsc = '',
+    this.branch = '',
     this.chequeFileKey = '',
     this.chequeFileName = '',
     this.tdsFileKey = '',
@@ -128,6 +136,7 @@ class Transporter {
       pan: (json['pan'] as String?) ?? '',
       aadhaar: (json['aadhaar'] as String?) ?? '',
       mobile: (json['mobile'] as String?) ?? '',
+      email: (json['email'] as String?) ?? '',
       tds: (json['tds_applicable'] as bool?) == true ? 'Yes' : 'No',
       // NUMERIC comes back as a string ("75.00"); asDoubleOrNull handles both
       // that and a real number. Falls back to 90 only when genuinely absent —
@@ -139,6 +148,7 @@ class Transporter {
       accountHolder: (bank['account_holder'] as String?) ?? '',
       accountNo: (bank['account_no'] as String?) ?? '',
       ifsc: (bank['ifsc'] as String?) ?? '',
+      branch: (bank['branch'] as String?) ?? '',
       chequeFileKey: (bank['cheque_file_key'] as String?) ?? '',
       chequeFileName: (bank['cheque_file_name'] as String?) ?? '',
       tdsFileKey: (bank['tds_file_key'] as String?) ?? '',
@@ -161,6 +171,9 @@ class Transporter {
     // KYC yet, and the server validates the FORMAT of whatever it receives.
     if (aadhaar.isNotEmpty) 'aadhaar': aadhaar,
     if (mobile.isNotEmpty) 'mobile': mobile,
+    // Always sent, so clearing it sticks: the server stores '' as "no email"
+    // and only checks the format of a non-empty value.
+    'email': email,
     'tds_applicable': tdsApplicable,
     'advance_percent': advancePercent,
     // Only the user-editable bank fields are sent — always (so clearing a
@@ -172,6 +185,7 @@ class Transporter {
       'account_holder': accountHolder,
       'account_no': accountNo,
       'ifsc': ifsc,
+      'branch': branch,
     },
   };
 
@@ -180,12 +194,14 @@ class Transporter {
     String? pan,
     String? aadhaar,
     String? mobile,
+    String? email,
     String? tds,
     double? advancePercent,
     String? bankName,
     String? accountHolder,
     String? accountNo,
     String? ifsc,
+    String? branch,
     String? chequeFileKey,
     String? chequeFileName,
     String? tdsFileKey,
@@ -205,12 +221,14 @@ class Transporter {
       pan: pan ?? this.pan,
       aadhaar: aadhaar ?? this.aadhaar,
       mobile: mobile ?? this.mobile,
+      email: email ?? this.email,
       tds: tds ?? this.tds,
       advancePercent: advancePercent ?? this.advancePercent,
       bankName: bankName ?? this.bankName,
       accountHolder: accountHolder ?? this.accountHolder,
       accountNo: accountNo ?? this.accountNo,
       ifsc: ifsc ?? this.ifsc,
+      branch: branch ?? this.branch,
       chequeFileKey: chequeFileKey ?? this.chequeFileKey,
       chequeFileName: chequeFileName ?? this.chequeFileName,
       tdsFileKey: tdsFileKey ?? this.tdsFileKey,

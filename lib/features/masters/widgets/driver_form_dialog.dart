@@ -61,6 +61,7 @@ class _DriverFormDialogState extends ConsumerState<DriverFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _mobile;
+  late final TextEditingController _email;
   late final TextEditingController _licenseNo;
   late final TextEditingController _licenseExpiry;
   late final TextEditingController _aadhaar;
@@ -95,6 +96,7 @@ class _DriverFormDialogState extends ConsumerState<DriverFormDialog> {
     final d = _existing;
     _name = TextEditingController(text: d?.name ?? widget.initialName ?? '');
     _mobile = TextEditingController(text: d?.mobile ?? '');
+    _email = TextEditingController(text: d?.email ?? '');
     _licenseNo = TextEditingController(text: d?.licenseNo ?? '');
     _licenseExpiry = TextEditingController(text: d?.licenseExpiry ?? '');
     _aadhaar = TextEditingController(text: d?.aadhaar ?? '');
@@ -107,6 +109,7 @@ class _DriverFormDialogState extends ConsumerState<DriverFormDialog> {
     for (final c in [
       _name,
       _mobile,
+      _email,
       _licenseNo,
       _licenseExpiry,
       _aadhaar,
@@ -184,6 +187,7 @@ class _DriverFormDialogState extends ConsumerState<DriverFormDialog> {
             id: '',
             name: _name.text.trim(),
             mobile: _mobile.text.trim(),
+            email: _email.text.trim(),
             licenseNo: _licenseNo.text.trim(),
             licenseExpiry: expiry.isEmpty ? null : expiry,
             address: _address.text.trim(),
@@ -198,6 +202,7 @@ class _DriverFormDialogState extends ConsumerState<DriverFormDialog> {
           existing.copyWith(
             name: _name.text.trim(),
             mobile: _mobile.text.trim(),
+            email: _email.text.trim(),
             licenseNo: _licenseNo.text.trim(),
             licenseExpiry: expiry,
             address: _address.text.trim(),
@@ -311,6 +316,17 @@ class _DriverFormDialogState extends ConsumerState<DriverFormDialog> {
                           required: true,
                           number: true,
                           maxLength: 12,
+                        ),
+                      ),
+                      SizedBox(
+                        width: w,
+                        child: _LabeledTextField(
+                          controller: _email,
+                          label: 'Email',
+                          email: true,
+                          maxLength: 150,
+                          hint: 'name@example.com (optional)',
+                          validator: validateEmail,
                         ),
                       ),
                       SizedBox(
@@ -480,6 +496,7 @@ class _LabeledTextField extends StatelessWidget {
     this.upper = false,
     this.number = false,
     this.multiline = false,
+    this.email = false,
     this.hint,
     this.validator,
   });
@@ -491,6 +508,7 @@ class _LabeledTextField extends StatelessWidget {
   final bool upper;
   final bool number;
   final bool multiline;
+  final bool email;
   final String? hint;
   final String? Function(String?)? validator;
 
@@ -507,6 +525,8 @@ class _LabeledTextField extends StatelessWidget {
             ? const TextInputType.numberWithOptions(decimal: true)
             : multiline
             ? TextInputType.multiline
+            : email
+            ? TextInputType.emailAddress
             : TextInputType.text,
         textCapitalization: upper
             ? TextCapitalization.characters

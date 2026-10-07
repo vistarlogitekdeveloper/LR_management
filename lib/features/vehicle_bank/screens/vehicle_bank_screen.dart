@@ -67,7 +67,7 @@ class _VehicleBankScreenState extends ConsumerState<VehicleBankScreen> {
       final bytes = buildLedgerWorkbook(rows);
       if (bytes == null) throw StateError('empty workbook');
       final day = DateTime.now().toIso8601String().substring(0, 10);
-      await ExportService.shareBytes(bytes, 'Vehicle_Bank_Ledger_$day.xlsx');
+      await ExportService.shareBytes(bytes, 'Vehicle_Directory_$day.xlsx');
       // A large sheet can outlive the screen; the messenger was captured before
       // the await, but posting to a disposed one still throws.
       if (!mounted) return;

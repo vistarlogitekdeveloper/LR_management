@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../data/ledger_row.dart';
+import 'ledger_documents.dart';
 import 'ledger_table.dart' show kEmptyCell;
 
-/// One ledger row as a stacked card, for viewports too narrow for thirteen
+/// One ledger row as a stacked card, for viewports too narrow for fourteen
 /// columns. Carries exactly the same fields as the table in the same order —
-/// grouped, not dropped: a phone-sized subset would make the two views disagree
-/// about what the sheet contains.
+/// grouped under the sheet's own headings, not dropped: a phone-sized subset
+/// would make the two views disagree about what the sheet contains.
 class LedgerCard extends StatelessWidget {
   final LedgerRow row;
   final int serial;
@@ -28,26 +29,34 @@ class LedgerCard extends StatelessWidget {
         children: [
           _CardHeader(row: row, serial: serial),
           const SizedBox(height: 10),
-          _LedgerLine(label: 'Source', value: row.sourceCity),
-          _LedgerLine(label: 'Route', value: row.routeLabel),
-          _LedgerLine(label: 'Contact', value: row.personMobile),
-          _LedgerLine(label: 'Transporter', value: row.transporterName),
           _LedgerLine(
-            label: 'Transporter contact',
-            value: row.transporterMobile,
+            label: 'Contact Number',
+            value: row.personMobile,
+            mono: true,
           ),
-          const _CardDivider(),
-          _LedgerLine(label: 'PAN', value: row.personPan, mono: true),
-          _LedgerLine(label: 'Aadhaar', value: row.personAadhaar, mono: true),
-          const _CardDivider(),
-          _LedgerLine(label: 'Bank name', value: row.bankName),
-          _LedgerLine(label: 'Branch', value: row.bankBranch),
+          _LedgerLine(label: 'Mail Id', value: row.personEmail),
+          _LedgerLine(label: 'Vehicle Type', value: row.vehicleType),
+          const _CardDivider(title: 'Route'),
+          _LedgerLine(label: 'From', value: row.fromCity),
+          _LedgerLine(label: 'To', value: row.toCity),
+          const _CardDivider(title: 'KYC Documents'),
+          _LedgerLine(label: 'Pan Card', value: row.personPan, mono: true),
           _LedgerLine(
-            label: 'Bank A/C no',
+            label: 'Adhar Card',
+            value: row.personAadhaar,
+            mono: true,
+          ),
+          const _CardDivider(title: 'Bank Details'),
+          _LedgerLine(label: 'Bank Name', value: row.bankName),
+          _LedgerLine(label: 'Branch Name', value: row.bankBranch),
+          _LedgerLine(
+            label: 'Bank AC No',
             value: row.bankAccountNo,
             mono: true,
           ),
-          _LedgerLine(label: 'IFSC', value: row.bankIfsc, mono: true),
+          _LedgerLine(label: 'IFSC Code', value: row.bankIfsc, mono: true),
+          const _CardDivider(title: 'Upload Document'),
+          LedgerDocumentChips(documents: row.documents),
         ],
       ),
     );
@@ -96,10 +105,17 @@ class _CardHeader extends StatelessWidget {
                   color: AppColors.ink,
                 ),
               ),
-              if (!row.personIsDriver && name.isNotEmpty)
-                const Text(
-                  'owner',
-                  style: TextStyle(
+              if (name.isNotEmpty)
+                Text(
+                  // Same sub-label as the table's name cell.
+                  row.personIsDriver
+                      ? (row.transporterName.trim().isEmpty
+                            ? 'driver'
+                            : 'driver · ${row.transporterName.trim()}')
+                      : 'owner',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w700,
                     color: AppColors.slate,
@@ -129,14 +145,32 @@ class _CardHeader extends StatelessWidget {
   }
 }
 
+/// A divider carrying the sheet's group heading (Route, KYC Documents, …).
 class _CardDivider extends StatelessWidget {
-  const _CardDivider();
+  final String title;
+  const _CardDivider({required this.title});
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 7),
-      child: Divider(height: 1, thickness: 1, color: AppColors.line),
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 5),
+      child: Row(
+        children: [
+          Text(
+            title.toUpperCase(),
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              color: AppColors.plum,
+              letterSpacing: 0.4,
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Divider(height: 1, thickness: 1, color: AppColors.line),
+          ),
+        ],
+      ),
     );
   }
 }

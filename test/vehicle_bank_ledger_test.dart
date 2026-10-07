@@ -1,7 +1,9 @@
-// The Vehicle Bank ledger's column set IS the spec, so it is pinned here: the
-// order, the parity between the on-screen table and the workbook, and the two
-// rules that decide what a cell may contain (no cross-party KYC fallback, and
-// no bank block without the permission).
+// The Vehicle Bank ledger's column set IS the spec — the office's "Vehicle
+// Directory" sheet — so it is pinned here: the order and grouping, the parity
+// between the on-screen table and the workbook, and the two rules that decide
+// what a cell may contain (no cross-party KYC fallback, and no bank block
+// without the permission).
+import 'package:excel/excel.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lr_management/features/vehicle_bank/data/ledger_row.dart';
@@ -27,6 +29,27 @@ Map<String, dynamic> _json({
   'person_name': personIsDriver ? 'SALMAN' : 'ONKAR SATISH SONAR',
   'person_is_driver': personIsDriver,
   'person_mobile': '9039992453',
+  'person_email': 'salman@example.com',
+  'driver_id': personIsDriver ? 'd1' : null,
+  'vehicle_type': '20 FT SXL, 32 FT MXL',
+  'documents': [
+    {
+      'owner': 'driver',
+      'owner_id': 'd1',
+      'type': 'pan',
+      'label': 'PAN',
+      'file_name': 'salman-pan.jpg',
+      'viewable': true,
+    },
+    {
+      'owner': 'transporter',
+      'owner_id': 't1',
+      'type': 'cheque',
+      'label': 'Cheque',
+      'file_name': '',
+      'viewable': false,
+    },
+  ],
   'transporter_id': 't1',
   'transporter_name': 'ONKAR SATISH SONAR',
   'transporter_mobile': '9812345670',
@@ -46,32 +69,85 @@ Map<String, dynamic> _json({
 
 void main() {
   group('column spec', () {
-    test('the table shows the 13 agreed columns in the agreed order', () {
-      expect(ledgerColumns.map((c) => c.$1).toList(), [
-        'Sr.',
-        'Source',
-        'Driver / Owner',
-        'Contact',
-        'Transporter',
-        'Transporter Contact',
-        'Route',
-        'PAN',
-        'Aadhaar',
-        'Bank Name',
-        'Branch',
-        'Bank A/C No',
-        'IFSC',
-      ]);
-    });
+    // The office's "Vehicle Directory" sheet, column for column.
+    const sheet = [
+      'Sr.no.',
+      'Driver/Owner Name',
+      'Contact Number',
+      'Mail Id',
+      'Vehicle Type',
+      'From',
+      'To',
+      'Pan Card',
+      'Adhar Card',
+      'Bank Name',
+      'Branch Name',
+      'Bank AC No',
+      'IFSC Code',
+      'Upload Document',
+    ];
 
-    test('the workbook has one header per table column, in the same order', () {
-      // The two lists are maintained separately — this is what stops a column
-      // added to the screen from quietly missing from the download.
-      expect(ledgerWorkbookHeaders.length, ledgerColumns.length);
-      expect(ledgerWorkbookHeaders.first, 'Sr.no.');
-      expect(ledgerWorkbookHeaders[1], 'Source');
-      expect(ledgerWorkbookHeaders[6], 'Route');
-      expect(ledgerWorkbookHeaders.last, 'IFSC Code');
+    test(
+      'the table shows the Vehicle Directory sheet\'s 14 columns, in order',
+      () {
+        expect(ledgerColumns.map((c) => c.$1).toList(), sheet);
+      },
+    );
+
+    test(
+      'the table groups Route, KYC Documents and Bank Details as the sheet does',
+      () {
+        String? groupOf(String label) =>
+            ledgerColumns.firstWhere((c) => c.$1 == label).$3;
+        expect(groupOf('From'), 'Route');
+        expect(groupOf('To'), 'Route');
+        expect(groupOf('Pan Card'), 'KYC Documents');
+        expect(groupOf('Adhar Card'), 'KYC Documents');
+        for (final c in [
+          'Bank Name',
+          'Branch Name',
+          'Bank AC No',
+          'IFSC Code',
+        ]) {
+          expect(groupOf(c), 'Bank Details', reason: c);
+        }
+        expect(groupOf('Mail Id'), isNull);
+      },
+    );
+
+    test(
+      'the workbook has the same columns as the table, in the same order',
+      () {
+        // The two lists are maintained separately — this is what stops a column
+        // added to the screen from quietly missing from the download.
+        expect(ledgerWorkbookHeaders, sheet);
+        expect(ledgerWorkbookHeaderGroups.map((g) => g.$1).toList(), [
+          'Sr.no.',
+          'Driver/Owner Name',
+          'Contact Number',
+          'Mail Id',
+          'Vehicle Type',
+          'Route',
+          'KYC Documents',
+          'Bank Details',
+          'Upload Document',
+        ]);
+      },
+    );
+
+    test('a sheet row has one value per column, identifiers as text', () {
+      final values = ledgerWorkbookRow(LedgerRow.fromJson(_json()), 3);
+      expect(values.length, sheet.length);
+      expect(values[0], isA<IntCellValue>());
+      expect(values.skip(1).every((v) => v is TextCellValue), isTrue);
+      String text(int i) => (values[i] as TextCellValue).value.toString();
+      expect(text(1), 'SALMAN');
+      expect(text(3), 'salman@example.com');
+      expect(text(4), '20 FT SXL, 32 FT MXL');
+      expect(text(5), 'CHAKAN');
+      expect(text(6), 'DEWAS');
+      expect(text(11), '50100288210');
+      expect(text(13), 'PAN, Cheque');
     });
   });
 
@@ -88,10 +164,38 @@ void main() {
       expect(row.transporterMobile, '9812345670');
       expect(row.routeLabel, 'CHAKAN → DEWAS');
       expect(row.routeDistanceKm, 620.5);
+      expect(row.personEmail, 'salman@example.com');
+      expect(row.driverId, 'd1');
+      expect(row.vehicleType, '20 FT SXL, 32 FT MXL');
       expect(row.personPan, 'ABCDE1234F');
       expect(row.lrCount, 7);
       expect(row.lastLrDate, DateTime(2026, 9, 10));
       expect(row.regionName, 'Pune');
+    });
+
+    test('documents parse with owner, type and whether they may be opened', () {
+      final docs = LedgerRow.fromJson(_json()).documents;
+      expect(docs.map((d) => '${d.ownerType}:${d.type}'), [
+        'driver:pan',
+        'transporter:cheque',
+      ]);
+      expect(docs.first.viewable, isTrue);
+      expect(docs.first.fileName, 'salman-pan.jpg');
+      expect(docs.last.viewable, isFalse);
+      expect(docs.last.label, 'Cheque');
+    });
+
+    test('a row from an older server (no new fields) still parses', () {
+      final old = Map<String, dynamic>.from(_json())
+        ..remove('person_email')
+        ..remove('vehicle_type')
+        ..remove('documents')
+        ..remove('driver_id');
+      final row = LedgerRow.fromJson(old);
+      expect(row.personEmail, isEmpty);
+      expect(row.vehicleType, isEmpty);
+      expect(row.documents, isEmpty);
+      expect(row.driverId, isNull);
     });
 
     test('an owner row is flagged, so the name is not read as a driver', () {
