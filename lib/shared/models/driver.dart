@@ -2,6 +2,9 @@ class Driver {
   final String id;
   final String name;
   final String mobile;
+
+  /// Optional email ("Mail Id" in the Vehicle Bank). Empty when not on file.
+  final String email;
   final String licenseNo;
   final String? licenseExpiry; // YYYY-MM-DD
   final String address;
@@ -31,6 +34,7 @@ class Driver {
     required this.id,
     required this.name,
     required this.mobile,
+    this.email = '',
     required this.licenseNo,
     this.licenseExpiry,
     this.address = '',
@@ -58,6 +62,7 @@ class Driver {
       id: json['id'] as String,
       name: (json['name'] as String?) ?? '',
       mobile: (json['mobile'] as String?) ?? '',
+      email: (json['email'] as String?) ?? '',
       licenseNo: (json['license_no'] as String?) ?? '',
       licenseExpiry: (expiry == null || expiry.isEmpty) ? null : expiry,
       address: (json['address'] as String?) ?? '',
@@ -74,6 +79,9 @@ class Driver {
   Map<String, dynamic> toJson() => {
     'name': name,
     if (mobile.isNotEmpty) 'mobile': mobile,
+    // Always sent, so clearing it sticks: the server stores '' as "no email"
+    // and only checks the format of a non-empty value.
+    'email': email,
     if (licenseNo.isNotEmpty) 'license_no': licenseNo,
     if (licenseExpiry != null && licenseExpiry!.isNotEmpty)
       'license_expiry': licenseExpiry,
@@ -88,6 +96,7 @@ class Driver {
   Driver copyWith({
     String? name,
     String? mobile,
+    String? email,
     String? licenseNo,
     String? licenseExpiry,
     String? address,
@@ -103,6 +112,7 @@ class Driver {
       id: id,
       name: name ?? this.name,
       mobile: mobile ?? this.mobile,
+      email: email ?? this.email,
       licenseNo: licenseNo ?? this.licenseNo,
       licenseExpiry: licenseExpiry ?? this.licenseExpiry,
       address: address ?? this.address,

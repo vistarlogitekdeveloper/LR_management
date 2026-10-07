@@ -59,7 +59,9 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
   late final TextEditingController _pan;
   late final TextEditingController _aadhaar;
   late final TextEditingController _mobile;
+  late final TextEditingController _email;
   late final TextEditingController _bank;
+  late final TextEditingController _branch;
   late final TextEditingController _holder;
   late final TextEditingController _accNo;
   late final TextEditingController _ifsc;
@@ -95,7 +97,9 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
     _pan = TextEditingController(text: t?.pan ?? '');
     _aadhaar = TextEditingController(text: t?.aadhaar ?? '');
     _mobile = TextEditingController(text: t?.mobile ?? '');
+    _email = TextEditingController(text: t?.email ?? '');
     _bank = TextEditingController(text: t?.bankName ?? '');
+    _branch = TextEditingController(text: t?.branch ?? '');
     _holder = TextEditingController(text: t?.accountHolder ?? '');
     _accNo = TextEditingController(text: t?.accountNo ?? '');
     _ifsc = TextEditingController(text: t?.ifsc ?? '');
@@ -113,7 +117,9 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
       _pan,
       _aadhaar,
       _mobile,
+      _email,
       _bank,
+      _branch,
       _holder,
       _accNo,
       _ifsc,
@@ -270,9 +276,11 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
             // meant when they typed the spaced "1234 5678 9012" off the card.
             aadhaar: digitsOnly(_aadhaar.text),
             mobile: _mobile.text.trim(),
+            email: _email.text.trim(),
             tds: _tds,
             advancePercent: _advancePercentValue,
             bankName: _bank.text.trim(),
+            branch: _branch.text.trim(),
             accountHolder: _holder.text.trim(),
             accountNo: _accNo.text.trim(),
             ifsc: _ifsc.text.trim(),
@@ -287,9 +295,11 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
             // meant when they typed the spaced "1234 5678 9012" off the card.
             aadhaar: digitsOnly(_aadhaar.text),
             mobile: _mobile.text.trim(),
+            email: _email.text.trim(),
             tds: _tds,
             advancePercent: _advancePercentValue,
             bankName: _bank.text.trim(),
+            branch: _branch.text.trim(),
             accountHolder: _holder.text.trim(),
             accountNo: _accNo.text.trim(),
             ifsc: _ifsc.text.trim(),
@@ -419,6 +429,17 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
                           validator: validateContactNumber,
                         ),
                       ),
+                      SizedBox(
+                        width: w,
+                        child: _text(
+                          _email,
+                          'Email',
+                          email: true,
+                          maxLength: 150,
+                          hint: 'name@example.com (optional)',
+                          validator: validateEmail,
+                        ),
+                      ),
                       SizedBox(width: w, child: _tdsField()),
                       SizedBox(
                         width: w,
@@ -433,6 +454,15 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
                       SizedBox(
                         width: w,
                         child: _text(_bank, 'Bank Name', required: true),
+                      ),
+                      SizedBox(
+                        width: w,
+                        child: _text(
+                          _branch,
+                          'Branch Name',
+                          maxLength: 100,
+                          hint: 'e.g. Chakan (optional)',
+                        ),
                       ),
                       SizedBox(
                         width: w,
@@ -509,6 +539,7 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
     int? maxLength,
     bool upper = false,
     bool number = false,
+    bool email = false,
     String? hint,
     String? Function(String?)? validator,
   }) {
@@ -520,6 +551,8 @@ class _TransporterFormDialogState extends ConsumerState<TransporterFormDialog> {
         maxLength: maxLength,
         keyboardType: number
             ? const TextInputType.numberWithOptions(decimal: true)
+            : email
+            ? TextInputType.emailAddress
             : TextInputType.text,
         textCapitalization: upper
             ? TextCapitalization.characters

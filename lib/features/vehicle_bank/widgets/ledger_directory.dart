@@ -7,8 +7,8 @@ import '../data/vehicle_bank_repository.dart';
 import 'ledger_card.dart';
 import 'ledger_table.dart';
 
-/// The ledger itself: a thirteen-column table on a wide screen, stacked cards on
-/// a phone.
+/// The ledger itself: the Vehicle Directory sheet's fourteen columns as a table
+/// on a wide screen, stacked cards on a phone.
 ///
 /// Wrapped in a [SelectionArea] so an account number or a PAN can be copied
 /// straight out of the list — this sheet exists to be transcribed into payment

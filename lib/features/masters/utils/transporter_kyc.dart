@@ -11,6 +11,22 @@ final _nonDigits = RegExp(r'[^0-9]');
 final _allSameDigits = RegExp(r'^(\d)\1{11}$');
 final _leadingCountryOrTrunk = RegExp(r'^(?:91|0)');
 final _pan = RegExp(r'^[A-Za-z]{5}[0-9]{4}[A-Za-z]$');
+// Mirrors EMAIL_PATTERN in the server's models/emailField.js exactly.
+final _email = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+
+/// Null when [value] is an acceptable email, else the message to show.
+///
+/// For BOTH masters (driver and transporter): the server's `emailField` is the
+/// authority and this mirrors its pattern and wording. Deliberately loose —
+/// something@something.tld — so a real address is never refused; it only stops
+/// a phone number or a name typed into the wrong box. Blank is accepted: the
+/// email is optional on both masters.
+String? validateEmail(String? value) {
+  final raw = (value ?? '').trim();
+  if (raw.isEmpty) return null;
+  if (!_email.hasMatch(raw)) return 'Email must look like name@example.com';
+  return null;
+}
 
 /// Every digit in [value], dropping the spaces people type when copying the
 /// number off the card ("1234 5678 9012").
