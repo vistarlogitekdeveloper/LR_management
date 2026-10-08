@@ -286,8 +286,17 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
       bytes: bytes,
       filePath: filePath,
     );
-    state = [for (final lr in state) lr.id == updated.id ? updated : lr];
-    return updated;
+    // The POD can move the LR to Delivered on the server, and the reply is the
+    // bare row (no status association — it would read as Booked), so cache a
+    // full re-read. Falls back to the reply if that re-read fails.
+    LorryReceipt fresh;
+    try {
+      fresh = await _repo.getById(updated.id);
+    } catch (_) {
+      fresh = updated;
+    }
+    state = [for (final lr in state) lr.id == fresh.id ? fresh : lr];
+    return fresh;
   });
 
   Future<void> changeStatus(String id, LrStatus to, {String? reason}) async {

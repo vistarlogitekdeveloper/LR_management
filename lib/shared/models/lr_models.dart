@@ -38,6 +38,25 @@ extension LrStatusX on LrStatus {
     (e) => e.code == (s ?? '').toUpperCase(),
     orElse: () => LrStatus.booked,
   );
+
+  /// The statuses this one may move to by hand — the server's STATUS_GRAPH
+  /// (lr.service.js). Delivered and Cancelled are final; an [admin]
+  /// (ADMIN_ACCESS) may correct to any other status, as the server allows.
+  /// The dialog used to offer every status, so "Mark as Booked" on a Delivered
+  /// LR was answered with "not allowed" for everyone else.
+  List<LrStatus> nextStatuses({required bool admin}) {
+    if (admin) {
+      return [
+        for (final s in LrStatus.values)
+          if (s != this) s,
+      ];
+    }
+    return switch (this) {
+      LrStatus.booked => const [LrStatus.inTransit, LrStatus.cancelled],
+      LrStatus.inTransit => const [LrStatus.delivered, LrStatus.cancelled],
+      LrStatus.delivered || LrStatus.cancelled => const [],
+    };
+  }
 }
 
 enum PayType { tbb, paid, tbr }

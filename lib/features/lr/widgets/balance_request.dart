@@ -76,22 +76,29 @@ Future<bool> showBalanceRequestDialog(
   WidgetRef ref,
   LorryReceipt lr,
 ) async {
-  final sent = await showDialog<bool>(
+  // The dialog pops with the LR as the server now has it, null if cancelled.
+  final after = await showDialog<LorryReceipt>(
     context: context,
     builder: (_) => _BalanceRequestDialog(lr: lr),
   );
-  if (sent == true && context.mounted) {
+  final sent = after != null;
+  if (sent && context.mounted) {
+    // The POD may have marked the LR Delivered — reload the open detail page.
+    ref.invalidate(lrDetailProvider(lr.id));
+    final delivered =
+        lr.status != LrStatus.delivered && after.status == LrStatus.delivered;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           lr.isBalanceRequested
               ? 'POD replaced for ${lr.number}. Accounts has been told.'
-              : 'Balance requested for ${lr.number}. Accounts has been told.',
+              : 'Balance requested for ${lr.number}. Accounts has been told.'
+                    '${delivered ? ' LR marked Delivered.' : ''}',
         ),
       ),
     );
   }
-  return sent == true;
+  return sent;
 }
 
 class _BalanceRequestDialog extends ConsumerStatefulWidget {
@@ -136,7 +143,7 @@ class _BalanceRequestDialogState extends ConsumerState<_BalanceRequestDialog> {
       _error = null;
     });
     try {
-      await ref
+      final after = await ref
           .read(lrListProvider.notifier)
           .requestBalance(
             lr.id,
@@ -145,7 +152,7 @@ class _BalanceRequestDialogState extends ConsumerState<_BalanceRequestDialog> {
             bytes: f.bytes,
             filePath: f.bytes == null ? f.path : null,
           );
-      if (mounted) Navigator.of(context).pop(true);
+      if (mounted) Navigator.of(context).pop(after);
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -237,7 +244,7 @@ class _BalanceRequestDialogState extends ConsumerState<_BalanceRequestDialog> {
         AppButton(
           label: 'Cancel',
           kind: BtnKind.ghost,
-          onPressed: _sending ? null : () => Navigator.of(context).pop(false),
+          onPressed: _sending ? null : () => Navigator.of(context).pop(),
         ),
         AppButton(
           label: requested ? 'Replace POD' : 'Request balance',

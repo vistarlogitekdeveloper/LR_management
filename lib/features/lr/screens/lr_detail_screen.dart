@@ -189,7 +189,10 @@ class LrDetailScreen extends ConsumerWidget {
                   canViewVistarMargin: canViewVistarMargin,
                 ),
               ),
-              if (canEdit)
+              // Hidden when there is nowhere to go (Delivered / Cancelled for a
+              // non-admin) rather than opening an empty dialog.
+              if (canEdit &&
+                  lr.status.nextStatuses(admin: _statusAdmin(ref)).isNotEmpty)
                 AppButton(
                   label: 'Status',
                   kind: BtnKind.soft,
@@ -315,31 +318,44 @@ class LrDetailScreen extends ConsumerWidget {
     );
   }
 
+  /// The server's admin override for status moves is ADMIN_ACCESS alone
+  /// (lrController.transition).
+  bool _statusAdmin(WidgetRef ref) =>
+      ref.read(currentUserProvider)?.can('ADMIN_ACCESS') ?? false;
+
   Future<void> _changeStatus(
     BuildContext context,
     WidgetRef ref,
     LorryReceipt lr,
   ) async {
+    final options = lr.status.nextStatuses(admin: _statusAdmin(ref));
     final next = await showDialog<LrStatus>(
       context: context,
       builder: (ctx) => SimpleDialog(
         title: const Text('Change status'),
         children: [
-          for (final s in LrStatus.values)
-            if (s != lr.status)
-              SimpleDialogOption(
-                onPressed: () => Navigator.pop(ctx, s),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
-                    children: [
-                      StatusPill(status: s),
-                      const SizedBox(width: 10),
-                      Text('Mark as ${s.label}'),
-                    ],
-                  ),
+          for (final s in options)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, s),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    StatusPill(status: s),
+                    const SizedBox(width: 10),
+                    Flexible(child: Text('Mark as ${s.label}')),
+                  ],
                 ),
               ),
+            ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(24, 10, 24, 4),
+            child: Text(
+              'Automatic: In Transit once the truck is 10 km past the origin; '
+              'Delivered when the POD is uploaded.',
+              style: TextStyle(fontSize: 12, color: AppColors.slate),
+            ),
+          ),
         ],
       ),
     );
