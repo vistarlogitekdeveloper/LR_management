@@ -16,6 +16,7 @@ import '../../masters/providers/master_providers.dart';
 import '../../masters/widgets/master_actions.dart';
 import '../../shell/widgets/app_topbar.dart';
 import '../providers/lr_providers.dart';
+import '../widgets/balance_request.dart';
 
 /// Confirm + delete an LR from the list. Calls the same notifier.remove ->
 /// DELETE /lrs/:id used by the detail screen; the list refreshes from state.
@@ -129,6 +130,8 @@ class LrListScreen extends ConsumerWidget {
                       onSendForPayment: canSend
                           ? (lr) => _confirmSendForPayment(context, ref, lr)
                           : null,
+                      // The same people (server: LR_CREATE / LR_EDIT / admin).
+                      canRequestBalance: canSend,
                     ),
                   ],
                 ),
@@ -376,12 +379,14 @@ class _LrTable extends StatefulWidget {
   final bool canViewTransporterRate;
   final void Function(LorryReceipt lr)? onDelete;
   final void Function(LorryReceipt lr)? onSendForPayment;
+  final bool canRequestBalance;
   const _LrTable({
     required this.lrs,
     required this.loading,
     required this.canViewTransporterRate,
     this.onDelete,
     this.onSendForPayment,
+    this.canRequestBalance = false,
   });
 
   @override
@@ -490,6 +495,7 @@ class _LrTableState extends State<_LrTable> {
                   onSendForPayment: widget.onSendForPayment == null
                       ? null
                       : () => widget.onSendForPayment!(lr),
+                  canRequestBalance: widget.canRequestBalance,
                 ),
             ],
           );
@@ -560,6 +566,10 @@ class _LrTableState extends State<_LrTable> {
                                 ),
                                 onPressed: () => widget.onSendForPayment!(lr),
                               ),
+                            // Once the advance is paid: request the balance
+                            // with the POD (or view / replace it).
+                            if (widget.canRequestBalance)
+                              BalanceRequestIconButton(lr: lr),
                             // Sent-for-payment LRs are locked from deletion.
                             if (widget.onDelete != null && !lr.sentForPayment)
                               IconButton(
@@ -615,11 +625,13 @@ class _LrMobileCard extends StatelessWidget {
   final bool canViewTransporterRate;
   final VoidCallback? onDelete;
   final VoidCallback? onSendForPayment;
+  final bool canRequestBalance;
   const _LrMobileCard({
     required this.lr,
     required this.canViewTransporterRate,
     this.onDelete,
     this.onSendForPayment,
+    this.canRequestBalance = false,
   });
 
   @override
@@ -690,6 +702,8 @@ class _LrMobileCard extends StatelessWidget {
                     ),
                     onPressed: onSendForPayment,
                   ),
+                if (canRequestBalance)
+                  BalanceRequestIconButton(lr: lr, compact: true),
                 // Sent-for-payment LRs are locked from deletion.
                 if (onDelete != null && !lr.sentForPayment)
                   IconButton(

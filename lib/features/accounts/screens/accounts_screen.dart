@@ -17,16 +17,26 @@ import '../../../shared/widgets/searchable_field.dart';
 import '../../../shared/widgets/section_title.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../lr/providers/lr_providers.dart';
+import '../../lr/widgets/balance_request.dart';
 import '../../masters/providers/master_providers.dart';
 import '../../shell/widgets/app_topbar.dart';
 
-enum _PayFilter { all, awaitingAdvance, awaitingBalance, paid }
+enum _PayFilter {
+  all,
+  awaitingAdvance,
+  awaitingBalance,
+  balanceRequested,
+  paid,
+}
 
 extension on _PayFilter {
   String get label => switch (this) {
     _PayFilter.all => 'All',
     _PayFilter.awaitingAdvance => 'Awaiting Advance',
     _PayFilter.awaitingBalance => 'Awaiting Balance',
+    // The operator uploaded the POD and asked for the balance (a subset of
+    // Awaiting Balance, which still lists them too).
+    _PayFilter.balanceRequested => 'Balance Requested',
     _PayFilter.paid => 'Paid',
   };
 }
@@ -186,6 +196,7 @@ final accountsFilteredProvider = Provider<List<LorryReceipt>>((ref) {
       _PayFilter.all => true,
       _PayFilter.awaitingAdvance => lr.freight.advance <= 0 && freight > 0,
       _PayFilter.awaitingBalance => lr.freight.advance > 0 && balance > 0.01,
+      _PayFilter.balanceRequested => lr.isBalanceRequested,
       _PayFilter.paid => freight > 0 && balance <= 0.01,
     };
     if (!matchesPay) return false;
@@ -894,10 +905,45 @@ class _LrPaymentCard extends ConsumerWidget {
               const _BadgePill(text: 'Paid', fg: AppColors.ok)
             else if (!hasAdvance)
               const _BadgePill(text: 'Awaiting Advance', fg: AppColors.orange)
+            else if (lr.isBalanceRequested)
+              const _BadgePill(text: 'Balance Requested', fg: AppColors.plum)
             else
               const _BadgePill(text: 'Awaiting Balance', fg: AppColors.red),
           ],
         ),
+        // The operator's balance request: when, and the POD to check before
+        // Complete Payment (which works with or without one, as before).
+        if (lr.isBalanceRequested) ...[
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.fromLTRB(10, 4, 4, 4),
+            decoration: BoxDecoration(
+              color: AppColors.plum.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.plum.withValues(alpha: 0.2)),
+            ),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              children: [
+                const Icon(
+                  Icons.request_quote_outlined,
+                  size: 16,
+                  color: AppColors.plum,
+                ),
+                Text(
+                  'Balance requested on ${formatDate(lr.balanceRequestedAt!)} · POD received',
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.plum,
+                  ),
+                ),
+                PodButtons(lr: lr, small: true),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 4),
         Text(
           '${lr.consignor.name} → ${lr.consignee.name}',

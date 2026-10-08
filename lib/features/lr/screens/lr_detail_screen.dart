@@ -19,6 +19,7 @@ import '../../masters/widgets/master_actions.dart';
 import '../../shell/widgets/app_topbar.dart';
 import '../providers/lr_providers.dart';
 import '../utils/lr_summary_text.dart';
+import '../widgets/balance_request.dart';
 
 class LrDetailScreen extends ConsumerWidget {
   final String id;
@@ -218,6 +219,17 @@ class LrDetailScreen extends ConsumerWidget {
                   label: 'Send for Payment',
                   icon: Icons.forward_to_inbox_outlined,
                   onPressed: () => _sendForPayment(context, ref, lr),
+                ),
+              // After the advance is paid: request the balance with the POD,
+              // or replace the POD of a request already made.
+              if (canSend && lr.canRequestBalance)
+                AppButton(
+                  label: lr.isBalanceRequested
+                      ? 'Replace POD'
+                      : 'Request Balance',
+                  icon: Icons.request_quote_outlined,
+                  kind: lr.isBalanceRequested ? BtnKind.soft : BtnKind.primary,
+                  onPressed: () => showBalanceRequestDialog(context, ref, lr),
                 ),
               // Print is available as soon as the LR is saved/created — it no
               // longer waits for the LR to be sent to Accounts for payment.
@@ -518,7 +530,9 @@ class _LeftColumn extends StatelessWidget {
               children: [
                 _SectionHeader(
                   icon: Icons.attach_file_rounded,
-                  title: 'Invoice Attachments (${lr.attachments.length})',
+                  // Not invoices only any more: the balance request's POD is
+                  // an attachment too (labelled on its tile).
+                  title: 'Attachments (${lr.attachments.length})',
                   mobile: mobile,
                 ),
                 for (final a in lr.attachments)
@@ -1101,7 +1115,9 @@ class _AttachmentTileState extends ConsumerState<_AttachmentTile> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  a.name,
+                  (a.attachmentType ?? '').toUpperCase() == 'POD'
+                      ? 'POD · ${a.name}'
+                      : a.name,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: AppColors.ink,

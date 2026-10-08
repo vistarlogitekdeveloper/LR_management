@@ -270,6 +270,26 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
         return updated;
       });
 
+  /// Requests the balance with the POD (or replaces the POD), then refreshes
+  /// the LR in local state so both the LR list and Accounts see the request.
+  Future<LorryReceipt> requestBalance(
+    String id,
+    int version, {
+    required String fileName,
+    List<int>? bytes,
+    String? filePath,
+  }) => _versionSafeWrite(id, () async {
+    final updated = await _repo.requestBalance(
+      id,
+      version,
+      fileName: fileName,
+      bytes: bytes,
+      filePath: filePath,
+    );
+    state = [for (final lr in state) lr.id == updated.id ? updated : lr];
+    return updated;
+  });
+
   Future<void> changeStatus(String id, LrStatus to, {String? reason}) async {
     await _repo.changeStatus(id, to.code, reason: reason);
     final fresh = await _repo.getById(id);

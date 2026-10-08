@@ -480,6 +480,40 @@ class LorryReceipt {
   final bool driverIncentivePaid;
   final DateTime? driverIncentivePaidAt;
 
+  /// "Request for balance payment": when the operator first asked Accounts for
+  /// the balance, and the POD attachment the request points at (the latest
+  /// upload). Both null until requested, and on an older backend.
+  final DateTime? balanceRequestedAt;
+  final String? balanceRequestPodId;
+
+  /// The server knows about balance requests (migration 201): it sends
+  /// `balance_requested_at` on every LR, null or not. An older backend sends no
+  /// such key, and then the "Request balance" button must not appear — it
+  /// would only answer 404. Makes the app safe to deploy before the backend.
+  final bool balanceRequestSupported;
+
+  /// Transporter freight still to pay — the same arithmetic as the Accounts
+  /// screen's "Awaiting Balance".
+  bool get _balanceOutstanding =>
+      balancePaidAt == null &&
+      freight.advance > 0 &&
+      (freight.freight - freight.advance) > 0.01;
+
+  /// The balance may be requested (or its POD replaced): sent for payment, not
+  /// cancelled, advance paid, balance not yet paid. Mirrors the server's
+  /// balanceRequestBlock, which still decides.
+  bool get canRequestBalance =>
+      balanceRequestSupported &&
+      sentForPayment &&
+      status != LrStatus.cancelled &&
+      _balanceOutstanding;
+
+  /// Requested and still waiting for Accounts — the "Balance Requested" filter.
+  bool get isBalanceRequested =>
+      balanceRequestedAt != null &&
+      status != LrStatus.cancelled &&
+      _balanceOutstanding;
+
   const LorryReceipt({
     required this.id,
     required this.number,
@@ -526,6 +560,9 @@ class LorryReceipt {
     this.sentForPaymentAt,
     this.driverIncentivePaid = false,
     this.driverIncentivePaidAt,
+    this.balanceRequestedAt,
+    this.balanceRequestPodId,
+    this.balanceRequestSupported = false,
   });
 
   int get totalPackages => items.fold(0, (sum, item) => sum + item.packages);
@@ -673,6 +710,11 @@ class LorryReceipt {
       driverIncentivePaidAt: DateTime.tryParse(
         json['driver_incentive_paid_at']?.toString() ?? '',
       ),
+      balanceRequestedAt: DateTime.tryParse(
+        json['balance_requested_at']?.toString() ?? '',
+      ),
+      balanceRequestPodId: json['balance_request_pod_id'] as String?,
+      balanceRequestSupported: json.containsKey('balance_requested_at'),
     );
   }
 
@@ -742,6 +784,9 @@ class LorryReceipt {
       driverIncentivePaid: driverIncentivePaid ?? this.driverIncentivePaid,
       driverIncentivePaidAt:
           driverIncentivePaidAt ?? this.driverIncentivePaidAt,
+      balanceRequestedAt: balanceRequestedAt,
+      balanceRequestPodId: balanceRequestPodId,
+      balanceRequestSupported: balanceRequestSupported,
     );
   }
 }

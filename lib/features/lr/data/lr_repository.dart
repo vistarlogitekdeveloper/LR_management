@@ -206,6 +206,42 @@ class LrRepository {
     return getById(id);
   }
 
+  /// "Request for balance payment": uploads the POD and asks Accounts for the
+  /// balance in one call (POST /lrs/:id/request-balance, multipart "file").
+  /// Calling it again replaces the POD. Locked by `If-Match` like the other
+  /// payment steps, and never retried — a replay would upload the POD twice.
+  Future<LorryReceipt> requestBalance(
+    String id,
+    int version, {
+    required String fileName,
+    List<int>? bytes,
+    String? filePath,
+  }) async {
+    final contentType = _mediaTypeForName(fileName);
+    final MultipartFile multipart;
+    if (bytes != null) {
+      multipart = MultipartFile.fromBytes(
+        bytes,
+        filename: fileName,
+        contentType: contentType,
+      );
+    } else if (filePath != null) {
+      multipart = await MultipartFile.fromFile(
+        filePath,
+        filename: fileName,
+        contentType: contentType,
+      );
+    } else {
+      throw ArgumentError('Either bytes or filePath is required');
+    }
+    await _api.dio.post(
+      '/lrs/$id/request-balance',
+      data: FormData.fromMap({'file': multipart}),
+      options: _lockedWrite(version),
+    );
+    return getById(id);
+  }
+
   /// Moves the LR along the status graph. Carries no `If-Match` — the backend
   /// route deliberately omits `requireIfMatch` — but it DOES bump the LR's
   /// version and append a `lr_status_history` row, so a silent replay would
@@ -298,6 +334,38 @@ class LrRepository {
       options: Options(responseType: ResponseType.bytes),
     );
     return (res.data as List).cast<int>();
+  }
+
+  /// Downloads an attachment with the name and type the server stored, for a
+  /// caller that has only its id (the LR list carries no attachments — e.g.
+  /// the POD a balance request points at). Falls back to [fallbackName].
+  Future<({List<int> bytes, String fileName, String mimeType})>
+  downloadAttachment(
+    String lrId,
+    String attachmentId, {
+    String fallbackName = 'file',
+  }) async {
+    final res = await _api.dio.get(
+      '/lrs/$lrId/attachments/$attachmentId/file',
+      options: Options(responseType: ResponseType.bytes),
+    );
+    final type = res.headers.value('content-type') ?? '';
+    // Content-Disposition: inline; filename="<url-encoded name>"
+    final disposition = res.headers.value('content-disposition') ?? '';
+    final match = RegExp(r'filename="([^"]*)"').firstMatch(disposition);
+    var name = fallbackName;
+    if (match != null && match.group(1)!.isNotEmpty) {
+      try {
+        name = Uri.decodeComponent(match.group(1)!);
+      } catch (_) {
+        name = match.group(1)!;
+      }
+    }
+    return (
+      bytes: (res.data as List).cast<int>(),
+      fileName: name,
+      mimeType: type.split(';').first.trim(),
+    );
   }
 
   Future<void> deleteAttachment(String lrId, String attachmentId) async {
