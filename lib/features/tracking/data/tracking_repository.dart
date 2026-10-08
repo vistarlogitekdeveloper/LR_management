@@ -38,6 +38,42 @@ class TrackPoint {
   );
 }
 
+/// How fresh a running trip's signal is (server: trackingController.signalOf).
+enum FleetSignal {
+  /// A location fix within the last 24 h.
+  live,
+
+  /// No fix yet, but the trip is less than a day old.
+  awaiting,
+
+  /// Nothing for over a day — almost always a finished trip whose LR was never
+  /// marked Delivered, so it (and the driver's SIM) was never released.
+  noSignal,
+}
+
+/// The same 24 h as the server's LIVE_SIGNAL_HOURS.
+const fleetLiveWindow = Duration(hours: 24);
+
+/// The server's rule, for a response from a backend too old to send `signal`.
+FleetSignal fleetSignalOf({
+  DateTime? lastFixAt,
+  DateTime? trackingSince,
+  DateTime? now,
+}) {
+  final t = now ?? DateTime.now();
+  if (lastFixAt != null) {
+    return t.difference(lastFixAt) <= fleetLiveWindow
+        ? FleetSignal.live
+        : FleetSignal.noSignal;
+  }
+  // An old server sends no start time either: give the trip the benefit of the
+  // doubt rather than hiding it.
+  if (trackingSince == null || t.difference(trackingSince) <= fleetLiveWindow) {
+    return FleetSignal.awaiting;
+  }
+  return FleetSignal.noSignal;
+}
+
 /// One actively-tracked vehicle/LR for the fleet view.
 class FleetVehicle {
   final String lrId;
@@ -49,6 +85,16 @@ class FleetVehicle {
   final String? consentStatus;
   final String? trackingState;
   final TrackPoint? location;
+
+  /// When tracking began (the LR's creation, when it auto-starts).
+  final DateTime? trackingSince;
+
+  /// Region short code ("PUN", "SBN") — from the server, else from the LR
+  /// number's middle segment (LR/PUN/26-27/01278).
+  final String regionCode;
+  final String? regionName;
+  final FleetSignal signal;
+
   const FleetVehicle({
     required this.lrId,
     required this.lrNumber,
@@ -59,21 +105,54 @@ class FleetVehicle {
     this.consentStatus,
     this.trackingState,
     this.location,
+    this.trackingSince,
+    this.regionCode = '',
+    this.regionName,
+    this.signal = FleetSignal.live,
   });
 
-  factory FleetVehicle.fromJson(Map<String, dynamic> j) => FleetVehicle(
-    lrId: j['lr_id'].toString(),
-    lrNumber: (j['lr_number'] ?? '').toString(),
-    fromCity: j['from_city'] as String?,
-    toCity: j['to_city'] as String?,
-    truckNumber: j['truck_number'] as String?,
-    driverName: j['driver_name'] as String?,
-    consentStatus: j['consent_status'] as String?,
-    trackingState: j['tracking_state'] as String?,
-    location: (j['location'] is Map)
+  factory FleetVehicle.fromJson(Map<String, dynamic> j) {
+    final location = (j['location'] is Map)
         ? TrackPoint.fromJson((j['location'] as Map).cast<String, dynamic>())
-        : null,
-  );
+        : null;
+    final since = _dt(j['tracking_since']);
+    final number = (j['lr_number'] ?? '').toString();
+    final segments = number.split('/');
+    final serverCode = (j['region_code'] ?? '').toString().trim();
+    return FleetVehicle(
+      lrId: j['lr_id'].toString(),
+      lrNumber: number,
+      fromCity: j['from_city'] as String?,
+      toCity: j['to_city'] as String?,
+      truckNumber: j['truck_number'] as String?,
+      driverName: j['driver_name'] as String?,
+      consentStatus: j['consent_status'] as String?,
+      trackingState: j['tracking_state'] as String?,
+      location: location,
+      trackingSince: since,
+      regionCode:
+          (serverCode.isNotEmpty
+                  ? serverCode
+                  : (segments.length >= 3 ? segments[1] : ''))
+              .toUpperCase(),
+      regionName: j['region_name'] as String?,
+      signal: switch (j['signal']) {
+        'live' => FleetSignal.live,
+        'awaiting' => FleetSignal.awaiting,
+        'no_signal' => FleetSignal.noSignal,
+        _ => fleetSignalOf(
+          lastFixAt: _dt(j['last_fix_at']) ?? location?.at,
+          trackingSince: since,
+        ),
+      },
+    );
+  }
+
+  /// The trip itself is over (an older server still lists these).
+  bool get tripOver {
+    final s = (trackingState ?? '').toUpperCase();
+    return s == 'STOPPED' || s == 'ENDED';
+  }
 }
 
 /// Full tracking detail for one LR (trail + consent).

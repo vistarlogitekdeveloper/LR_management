@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_providers.dart';
 import '../../../shared/models/lr_models.dart';
 import '../../lr/providers/lr_providers.dart';
+import '../data/fleet_filter.dart';
 import '../data/tracking_repository.dart';
 import '../data/trip_history.dart';
 
@@ -28,6 +29,12 @@ final lrTrackingProvider = FutureProvider.autoDispose
 /// back should land on History again, not silently reset to Active.
 final trackingTabProvider = StateProvider<TrackingTab>(
   (ref) => TrackingTab.active,
+);
+
+/// Scope / region / search for the Active tab (defaults to "Live now"). Kept
+/// alive so opening a trip and coming back keeps the same view.
+final fleetFilterProvider = StateProvider<FleetFilter>(
+  (ref) => const FleetFilter(),
 );
 
 /// Search / period / status narrowing for the History tab. Kept alive with the

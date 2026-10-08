@@ -8,8 +8,10 @@ import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../lr/providers/lr_providers.dart';
 import '../../shell/widgets/app_topbar.dart';
+import '../data/fleet_filter.dart';
 import '../data/trip_history.dart';
 import '../providers/tracking_providers.dart';
+import '../widgets/fleet_filters.dart';
 import '../widgets/fleet_view.dart';
 import '../widgets/tracking_common.dart';
 import '../widgets/tracking_tabs.dart';
@@ -101,7 +103,11 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
               TrackingTabs(
                 selected: tab,
                 onChanged: _selectTab,
-                activeCount: active.valueOrNull?.length,
+                // Live trips only — a month-old trip nobody closed is not
+                // "active".
+                activeCount: active.whenOrNull(
+                  data: (v) => fleetScopeCounts(v, null)[FleetScope.live],
+                ),
                 historyCount: historyCount,
               ),
               AppButton(
@@ -146,7 +152,65 @@ class _ActivePanel extends ConsumerWidget {
             message: 'Could not load tracking.\n${friendlyErrorMessage(e)}',
             onRetry: () => ref.invalidate(activeVehiclesProvider),
           ),
-          data: (vehicles) => FleetView(vehicles: vehicles),
+          data: (vehicles) {
+            final filter = ref.watch(fleetFilterProvider);
+            final shown = filterFleet(vehicles, filter);
+            return Column(
+              children: [
+                FleetFilters(all: vehicles),
+                Expanded(
+                  // Keyed on scope + region so the map re-fits to what is now
+                  // shown; the 60 s refresh and typing keep the camera.
+                  child: FleetView(
+                    key: ValueKey('${filter.scope}|${filter.region}'),
+                    vehicles: shown,
+                    empty: _emptyFor(ref, filter),
+                  ),
+                ),
+              ],
+            );
+          },
         );
+  }
+
+  Widget _emptyFor(WidgetRef ref, FleetFilter filter) {
+    void reset() =>
+        ref.read(fleetFilterProvider.notifier).state = const FleetFilter();
+    if (filter.query.trim().isNotEmpty || filter.region != null) {
+      return TrackingEmptyState(
+        icon: Icons.search_off_rounded,
+        title: 'No matching trips',
+        message: 'Nothing in "${filter.scope.label}" matches this search.',
+        actionLabel: 'Clear filters',
+        onAction: reset,
+      );
+    }
+    return switch (filter.scope) {
+      FleetScope.live => const TrackingEmptyState(
+        icon: Icons.local_shipping_outlined,
+        title: 'No vehicles on the road',
+        message:
+            'Only trips with a location in the last 24 h (or started today) '
+            'show here. Older ones are under "No signal 24h+"; finished trips '
+            'are on the History tab.',
+      ),
+      FleetScope.noSignal => const TrackingEmptyState(
+        icon: Icons.check_circle_outline_rounded,
+        title: 'Nothing stale',
+        message: 'Every running trip has reported in the last 24 h.',
+      ),
+      FleetScope.consentPending => const TrackingEmptyState(
+        icon: Icons.verified_user_outlined,
+        title: 'No consent pending',
+        message: 'Every running trip\'s driver has answered the SIM consent.',
+      ),
+      FleetScope.all => const TrackingEmptyState(
+        icon: Icons.local_shipping_outlined,
+        title: 'No trips running',
+        message:
+            'Tracking starts when an LR is created for a driver whose SIM '
+            'consent is approved. Finished trips are on the History tab.',
+      ),
+    };
   }
 }

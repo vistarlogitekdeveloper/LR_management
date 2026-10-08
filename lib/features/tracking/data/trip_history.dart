@@ -11,7 +11,7 @@ extension TrackingTabX on TrackingTab {
 
   /// Header subtitle, so the page says what is on screen right now.
   String get subtitle => switch (this) {
-    TrackingTab.active => 'All active vehicles',
+    TrackingTab.active => 'Vehicles on the road right now',
     TrackingTab.history => 'Completed and cancelled trips',
   };
 }

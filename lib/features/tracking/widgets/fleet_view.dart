@@ -13,7 +13,10 @@ class FleetView extends StatelessWidget {
   static const _india = LatLng(22.9734, 78.6569);
 
   final List<FleetVehicle> vehicles;
-  const FleetView({super.key, required this.vehicles});
+
+  /// What the list shows when [vehicles] is empty (a default otherwise).
+  final Widget? empty;
+  const FleetView({super.key, required this.vehicles, this.empty});
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +28,7 @@ class FleetView extends StatelessWidget {
     final map = RepaintBoundary(
       child: _FleetMap(vehicles: located, points: points, india: _india),
     );
-    final list = _FleetList(vehicles: vehicles);
+    final list = _FleetList(vehicles: vehicles, empty: empty);
 
     return LayoutBuilder(
       builder: (context, c) {
@@ -92,7 +95,10 @@ class _FleetMap extends StatelessWidget {
                       child: Tooltip(
                         message:
                             '${v.lrNumber}${v.truckNumber != null ? ' · ${v.truckNumber}' : ''}',
-                        child: _TruckPin(consent: v.consentStatus),
+                        child: _TruckPin(
+                          consent: v.consentStatus,
+                          stale: v.signal == FleetSignal.noSignal,
+                        ),
                       ),
                     ),
                   ),
@@ -128,7 +134,10 @@ class _FleetMap extends StatelessWidget {
 
 class _TruckPin extends StatelessWidget {
   final String? consent;
-  const _TruckPin({this.consent});
+
+  /// A last-known position over a day old: drawn grey, not as a moving truck.
+  final bool stale;
+  const _TruckPin({this.consent, this.stale = false});
 
   @override
   Widget build(BuildContext context) {
@@ -145,7 +154,7 @@ class _TruckPin extends StatelessWidget {
       height: 40,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: AppColors.plum,
+        color: stale ? AppColors.slate : AppColors.plum,
         shape: BoxShape.circle,
         border: Border.all(color: ring, width: 3),
         boxShadow: const [
@@ -167,26 +176,27 @@ class _TruckPin extends StatelessWidget {
 
 class _FleetList extends StatelessWidget {
   final List<FleetVehicle> vehicles;
-  const _FleetList({required this.vehicles});
+  final Widget? empty;
+  const _FleetList({required this.vehicles, this.empty});
 
   @override
   Widget build(BuildContext context) {
     if (vehicles.isEmpty) {
-      return const TrackingEmptyState(
-        icon: Icons.local_shipping_outlined,
-        title: 'No vehicles on the road',
-        message:
-            'Tracking starts when an LR is created for a driver whose SIM '
-            'consent is approved. Finished trips are on the History tab.',
-      );
+      return empty ??
+          const TrackingEmptyState(
+            icon: Icons.local_shipping_outlined,
+            title: 'No vehicles on the road',
+            message:
+                'Tracking starts when an LR is created for a driver whose SIM '
+                'consent is approved. Finished trips are on the History tab.',
+          );
     }
     // Located vehicles first, then the rest (awaiting first fix / consent).
-    final sorted = [...vehicles]
-      ..sort((a, b) {
-        final al = a.location != null ? 0 : 1;
-        final bl = b.location != null ? 0 : 1;
-        return al.compareTo(bl);
-      });
+    // A stable sort, so the newest-fix-first order filterFleet gave survives.
+    final sorted = [
+      ...vehicles.where((v) => v.location != null),
+      ...vehicles.where((v) => v.location == null),
+    ];
     return ListView.separated(
       padding: const EdgeInsets.all(10),
       itemCount: sorted.length,
@@ -277,10 +287,36 @@ class _VehicleTile extends StatelessWidget {
                   ),
                 ],
               ),
+              if (v.signal == FleetSignal.noSignal)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    '${staleFor(v)} — mark the LR Delivered to stop '
+                    'tracking.',
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.danger,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
       ),
     );
   }
+}
+
+/// "No signal for 39 days" / "No location for 2 days" — from the last fix, else
+/// from when tracking began.
+String staleFor(FleetVehicle v, {DateTime? now}) {
+  final since = v.location?.at ?? v.trackingSince;
+  final what = v.location != null ? 'No signal' : 'No location';
+  if (since == null) return '$what for over a day';
+  final d = (now ?? DateTime.now()).difference(since);
+  final days = d.inDays;
+  return days >= 1
+      ? '$what for $days day${days == 1 ? '' : 's'}'
+      : '$what for ${d.inHours} h';
 }
