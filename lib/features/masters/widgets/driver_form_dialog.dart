@@ -186,7 +186,7 @@ class _DriverFormDialogState extends ConsumerState<DriverFormDialog> {
             // The server generates the id; a create sends none.
             id: '',
             name: _name.text.trim(),
-            mobile: _mobile.text.trim(),
+            mobile: normalizeIndianMobile(_mobile.text) ?? _mobile.text.trim(),
             email: _email.text.trim(),
             licenseNo: _licenseNo.text.trim(),
             licenseExpiry: expiry.isEmpty ? null : expiry,
@@ -201,7 +201,7 @@ class _DriverFormDialogState extends ConsumerState<DriverFormDialog> {
         d = await repo.update(
           existing.copyWith(
             name: _name.text.trim(),
-            mobile: _mobile.text.trim(),
+            mobile: normalizeIndianMobile(_mobile.text) ?? _mobile.text.trim(),
             email: _email.text.trim(),
             licenseNo: _licenseNo.text.trim(),
             licenseExpiry: expiry,
@@ -315,7 +315,12 @@ class _DriverFormDialogState extends ConsumerState<DriverFormDialog> {
                           label: 'Mobile',
                           required: true,
                           number: true,
+                          digitsOnly: true,
                           maxLength: 12,
+                          // SIM tracking follows this number for every LR the
+                          // driver is on, so it must be a real 10-digit one.
+                          hint: '10-digit mobile (used for tracking)',
+                          validator: validateContactNumber,
                         ),
                       ),
                       SizedBox(
@@ -497,6 +502,7 @@ class _LabeledTextField extends StatelessWidget {
     this.number = false,
     this.multiline = false,
     this.email = false,
+    this.digitsOnly = false,
     this.hint,
     this.validator,
   });
@@ -509,6 +515,10 @@ class _LabeledTextField extends StatelessWidget {
   final bool number;
   final bool multiline;
   final bool email;
+
+  /// Only digits can be typed — the number keyboard is just a hint on web and
+  /// desktop, where letters and dots got into mobile numbers.
+  final bool digitsOnly;
   final String? hint;
   final String? Function(String?)? validator;
 
@@ -534,7 +544,11 @@ class _LabeledTextField extends StatelessWidget {
         // textCapitalization only hints the soft keyboard, so it does nothing
         // on web or desktop; the formatter is what actually keeps the PAN
         // upper-case as it is typed, on every platform.
-        inputFormatters: upper ? _upperCaseOnly : null,
+        inputFormatters: upper
+            ? _upperCaseOnly
+            : digitsOnly
+            ? [FilteringTextInputFormatter.digitsOnly]
+            : null,
         decoration: InputDecoration(counterText: '', hintText: hint),
         validator: (v) {
           final s = v?.trim() ?? '';

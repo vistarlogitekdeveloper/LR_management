@@ -543,7 +543,9 @@ class _LeftColumn extends StatelessWidget {
                   ('Vehicle', '${lr.vehicle.number} · ${lr.vehicle.type}'),
                   (
                     'Driver',
-                    '${lr.vehicle.driver} (${lr.vehicle.driverMobile})',
+                    lr.tripDriverMobile.isEmpty
+                        ? lr.tripDriverName
+                        : '${lr.tripDriverName} (${lr.tripDriverMobile})',
                   ),
                   ('Capacity', lr.vehicle.capacity),
                   ('Route', lr.route),

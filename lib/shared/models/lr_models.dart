@@ -425,6 +425,21 @@ class LorryReceipt {
   final Vehicle vehicle;
   final Transporter transporter;
   final String? driverId;
+
+  /// The LR's OWN driver — the one tracking follows — as embedded in the LR
+  /// response. Not [vehicle]'s current driver, which can differ.
+  final String driverName;
+  final String driverMobile;
+
+  /// The driver of THIS trip, for display: the LR's own driver, falling back to
+  /// the vehicle's current driver only when the LR names none (older rows / a
+  /// response without the nested driver). Screens used to show the vehicle's
+  /// driver, which disagrees with the LR — and with tracking — once the vehicle
+  /// is reassigned.
+  String get tripDriverName =>
+      driverName.trim().isNotEmpty ? driverName.trim() : vehicle.driver;
+  String get tripDriverMobile =>
+      driverName.trim().isNotEmpty ? driverMobile.trim() : vehicle.driverMobile;
   final String? routeId;
   final String? regionId;
   final String? regionName;
@@ -481,6 +496,8 @@ class LorryReceipt {
     required this.vehicle,
     required this.transporter,
     this.driverId,
+    this.driverName = '',
+    this.driverMobile = '',
     this.routeId,
     this.regionId,
     this.regionName,
@@ -601,6 +618,8 @@ class LorryReceipt {
               tds: 'No',
             ),
       driverId: json['driver_id'] as String? ?? driverJson?['id'] as String?,
+      driverName: (driverJson?['name'] as String?) ?? '',
+      driverMobile: (driverJson?['mobile'] as String?) ?? '',
       routeId: json['route_id'] as String?,
       regionId: json['region_id'] as String?,
       regionName:
@@ -692,6 +711,8 @@ class LorryReceipt {
       vehicle: vehicle,
       transporter: transporter,
       driverId: driverId,
+      driverName: driverName,
+      driverMobile: driverMobile,
       routeId: routeId,
       regionId: regionId,
       regionName: regionName,

@@ -3,6 +3,32 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/app_button.dart';
 
+/// What the provider's SIM-consent status means for tracking.
+enum ConsentKind { granted, pending, refused, unknown }
+
+/// One reading of the consent status for every screen. Exactly ALLOWED is
+/// granted; anything PENDING is pending; anything else the provider sends
+/// (NOT_ALLOWED, DENIED, …) means consent was not given.
+///
+/// It used to be read three ways: the badge called anything containing "NOT"
+/// pending, so a refusal (NOT_ALLOWED) read as "Consent pending", and the fleet
+/// map pin went green for anything containing "ALLOW" — NOT_ALLOWED included.
+ConsentKind consentKind(String? status) {
+  final s = (status ?? '').trim().toUpperCase();
+  if (s.isEmpty) return ConsentKind.unknown;
+  if (s == 'ALLOWED') return ConsentKind.granted;
+  if (s.contains('PENDING')) return ConsentKind.pending;
+  return ConsentKind.refused;
+}
+
+/// The words for [consentKind], for badges and snackbars (never the raw code).
+String consentLabel(String? status) => switch (consentKind(status)) {
+  ConsentKind.granted => 'Consent OK',
+  ConsentKind.pending => 'Consent pending',
+  ConsentKind.refused => 'Consent not given',
+  ConsentKind.unknown => '—',
+};
+
 /// Consent status chip, shared by the fleet map, the trip-history list and the
 /// per-LR trail screen.
 class ConsentBadge extends StatelessWidget {
@@ -11,27 +37,22 @@ class ConsentBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = (status ?? '').toUpperCase();
-    late Color bg;
-    late Color fg;
-    late String label;
-    if (s == 'ALLOWED') {
-      bg = AppColors.ok.withValues(alpha: 0.14);
-      fg = AppColors.ok;
-      label = 'Consent OK';
-    } else if (s.contains('PENDING') || s.contains('NOT')) {
-      bg = AppColors.warn.withValues(alpha: 0.16);
-      fg = AppColors.warn;
-      label = 'Consent pending';
-    } else if (s.isEmpty) {
-      bg = AppColors.line;
-      fg = AppColors.slate;
-      label = '—';
-    } else {
-      bg = AppColors.danger.withValues(alpha: 0.14);
-      fg = AppColors.danger;
-      label = status!;
-    }
+    final label = consentLabel(status);
+    final (Color bg, Color fg) = switch (consentKind(status)) {
+      ConsentKind.granted => (
+        AppColors.ok.withValues(alpha: 0.14),
+        AppColors.ok,
+      ),
+      ConsentKind.pending => (
+        AppColors.warn.withValues(alpha: 0.16),
+        AppColors.warn,
+      ),
+      ConsentKind.refused => (
+        AppColors.danger.withValues(alpha: 0.14),
+        AppColors.danger,
+      ),
+      ConsentKind.unknown => (AppColors.line, AppColors.slate),
+    };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(

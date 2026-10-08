@@ -105,7 +105,7 @@ class _TripTile extends StatelessWidget {
     final vehicle = lr.vehicle;
     final who = [
       if (vehicle.number.isNotEmpty) vehicle.number,
-      if (vehicle.driver.isNotEmpty) vehicle.driver,
+      if (lr.tripDriverName.isNotEmpty) lr.tripDriverName,
     ].join(' · ');
 
     return Material(

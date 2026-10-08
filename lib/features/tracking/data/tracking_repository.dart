@@ -84,6 +84,21 @@ class LrTracking {
   final String? toCity;
   final String? truckNumber;
   final String? driverName;
+
+  /// The driver's mobile, and whether tracking can use it. Let the screen say
+  /// what is wrong BEFORE Start is pressed — the press used to be the first
+  /// place a bad number surfaced. All null from a server too old to send them,
+  /// in which case nothing is assumed.
+  final String? driverMobile;
+  final bool? driverMobileValid;
+  final bool? driverActive;
+
+  /// Delivered or cancelled: tracking can no longer be started.
+  final bool lrClosed;
+
+  /// The trip was stopped (taken over, driver changed) or ended by the
+  /// provider, and the LR is open: tracking may be started again.
+  final bool canRestart;
   final String? consentStatus;
   final String? consentSuggestion;
   final String? trackingState;
@@ -107,6 +122,11 @@ class LrTracking {
     this.toCity,
     this.truckNumber,
     this.driverName,
+    this.driverMobile,
+    this.driverMobileValid,
+    this.driverActive,
+    this.lrClosed = false,
+    this.canRestart = false,
     this.consentStatus,
     this.consentSuggestion,
     this.trackingState,
@@ -139,6 +159,11 @@ class LrTracking {
       toCity: j['to_city'] as String?,
       truckNumber: j['truck_number'] as String?,
       driverName: j['driver_name'] as String?,
+      driverMobile: j['driver_mobile'] as String?,
+      driverMobileValid: j['driver_mobile_valid'] as bool?,
+      driverActive: j['driver_active'] as bool?,
+      lrClosed: j['lr_closed'] == true,
+      canRestart: j['can_restart'] == true,
       consentStatus: j['consent_status'] as String?,
       consentSuggestion: j['consent_suggestion'] as String?,
       trackingState: j['tracking_state'] as String?,

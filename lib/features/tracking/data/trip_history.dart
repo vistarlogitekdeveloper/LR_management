@@ -117,7 +117,7 @@ bool _matches(LorryReceipt lr, String query) {
   final hay = [
     lr.number,
     lr.vehicle.number,
-    lr.vehicle.driver,
+    lr.tripDriverName,
     lr.fromCity,
     lr.toCity,
     lr.route,

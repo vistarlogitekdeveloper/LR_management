@@ -108,9 +108,16 @@ class ApiException implements Exception {
   /// of master data, fixed in the same place — and none is a retry. SIM
   /// tracking follows the driver's phone number, so without a usable one there
   /// is nothing for the provider to track.
+  ///
+  /// Also DRIVER_INACTIVE (the driver was deactivated) and LR_CLOSED (the LR is
+  /// delivered or cancelled) — the same kind of "fix the LR, not a retry".
   bool get isTrackingPrecondition =>
       status == 400 &&
-      (code == 'NO_DRIVER' || code == 'NO_MOBILE' || code == 'BAD_MOBILE');
+      (code == 'NO_DRIVER' ||
+          code == 'NO_MOBILE' ||
+          code == 'BAD_MOBILE' ||
+          code == 'DRIVER_INACTIVE' ||
+          code == 'LR_CLOSED');
 
   /// True when the LR has no driver at all, as opposed to a driver whose
   /// number is missing or malformed — the two need different instructions.

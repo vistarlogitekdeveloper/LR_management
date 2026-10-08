@@ -9,7 +9,6 @@ library;
 
 final _nonDigits = RegExp(r'[^0-9]');
 final _allSameDigits = RegExp(r'^(\d)\1{11}$');
-final _leadingCountryOrTrunk = RegExp(r'^(?:91|0)');
 final _pan = RegExp(r'^[A-Za-z]{5}[0-9]{4}[A-Za-z]$');
 // Mirrors EMAIL_PATTERN in the server's models/emailField.js exactly.
 final _email = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
@@ -80,8 +79,23 @@ String? validateContactNumber(String? value) {
   // a value made entirely of letters is refused rather than read as absent.
   final raw = (value ?? '').trim();
   if (raw.isEmpty) return null;
-  final digits = digitsOnly(raw);
-  final local = digits.replaceFirst(_leadingCountryOrTrunk, '');
-  if (local.length != 10) return 'Enter a 10-digit mobile number';
+  if (normalizeIndianMobile(raw) == null) {
+    return 'Enter a 10-digit mobile number';
+  }
   return null;
+}
+
+/// The bare 10 digits of an Indian mobile however it was pasted (+91, 91, a
+/// leading 0, spaces, hyphens), or null when it is not one. Mirrors the
+/// server's utils/mobile.js, which the driver and transporter masters and SIM
+/// tracking all use.
+///
+/// The 91 / 0 prefix is dropped only when it makes the number too long. The old
+/// rule dropped a leading "91" from ANY number, so a valid mobile that begins
+/// with 91 (91234 56789) lost two digits and was refused.
+String? normalizeIndianMobile(String? value) {
+  var s = digitsOnly(value);
+  if (s.length == 12 && s.startsWith('91')) s = s.substring(2);
+  if (s.length == 11 && s.startsWith('0')) s = s.substring(1);
+  return s.length == 10 ? s : null;
 }

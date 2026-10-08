@@ -65,6 +65,15 @@ void main() {
       }
     });
 
+    test('a valid mobile that begins with 91 is not mistaken for a prefix', () {
+      // The old rule stripped this "91" and was left with 8 digits.
+      expect(validateContactNumber('9123456789'), isNull);
+      expect(validateContactNumber('91234 56789'), isNull);
+      expect(normalizeIndianMobile('+91 91234 56789'), '9123456789');
+      expect(normalizeIndianMobile('09123456789'), '9123456789');
+      expect(normalizeIndianMobile('12345'), isNull);
+    });
+
     test('too few or too many digits are refused', () {
       expect(validateContactNumber('12345'), 'Enter a 10-digit mobile number');
       expect(

@@ -133,9 +133,13 @@ class _TruckPin extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Ring colour reflects consent so the fleet map reads at a glance: green =
-    // consent granted (fixes flow), amber = still pending.
-    final ok = (consent ?? '').toUpperCase().contains('ALLOW');
-    final ring = ok ? AppColors.ok : AppColors.warn;
+    // consent granted (fixes flow), red = refused, amber = pending / unknown.
+    // (It used to go green for anything containing "ALLOW", NOT_ALLOWED too.)
+    final ring = switch (consentKind(consent)) {
+      ConsentKind.granted => AppColors.ok,
+      ConsentKind.refused => AppColors.danger,
+      ConsentKind.pending || ConsentKind.unknown => AppColors.warn,
+    };
     return Container(
       width: 40,
       height: 40,

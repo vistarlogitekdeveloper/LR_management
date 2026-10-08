@@ -15,9 +15,17 @@ import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/section_title.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../data/route_planner.dart';
+import '../data/tracking_action.dart';
 import '../data/tracking_repository.dart';
 import '../providers/tracking_providers.dart';
-import '../widgets/tracking_common.dart' show ConsentBadge, relTime;
+import '../widgets/tracking_common.dart'
+    show ConsentBadge, consentLabel, relTime;
+
+/// A trip that can still send fixes: anything but none, STOPPED or ENDED.
+bool _tripLive(String? state) {
+  final s = (state ?? '').toUpperCase();
+  return s.isNotEmpty && s != 'STOPPED' && s != 'ENDED';
+}
 
 /// Individual LR trail + SIM consent controls.
 class LrTrackingScreen extends ConsumerStatefulWidget {
@@ -40,8 +48,14 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
     // SIM fixes land only every ~15-20 min, so poll the backend on a gentle
     // cadence — each load re-ingests the latest fix from SCT — so the map keeps
     // itself current without the user pressing Refresh.
+    // Only while a trip is live: with no trip, a stopped / ended one, or an
+    // error on screen, nothing new can arrive and each load costs a provider
+    // round-trip on the server.
     _autoRefresh = Timer.periodic(const Duration(seconds: 90), (_) {
-      if (mounted) ref.invalidate(lrTrackingProvider(widget.id));
+      if (!mounted) return;
+      final t = ref.read(lrTrackingProvider(widget.id)).valueOrNull;
+      if (t == null || !_tripLive(t.trackingState)) return;
+      ref.invalidate(lrTrackingProvider(widget.id));
     });
   }
 
@@ -58,10 +72,11 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
       final r = await ref
           .read(trackingRepositoryProvider)
           .recheckConsent(widget.id);
+      // The screen may have been left while the provider was asked (it can
+      // take a while); `ref` must not be used once it is gone.
+      if (!mounted) return;
       ref.invalidate(lrTrackingProvider(widget.id));
-      messenger.showSnackBar(
-        SnackBar(content: Text('Consent: ${r.status ?? 'unknown'}')),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(consentLabel(r.status))));
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
@@ -95,6 +110,7 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
       await ref
           .read(trackingRepositoryProvider)
           .startTracking(widget.id, takeover: takeover);
+      if (!mounted) return;
       ref.invalidate(lrTrackingProvider(widget.id));
       messenger.showSnackBar(
         SnackBar(
@@ -913,18 +929,18 @@ class _DotPin extends StatelessWidget {
   }
 }
 
-/// Shown in place of "Start tracking" to someone without TRACKING_START.
+/// Shown in place of "Start tracking" when the LR's driver cannot be tracked:
+/// none assigned, marked inactive, or a mobile that is missing / not 10 digits.
 ///
-/// Names the permission so the administrator being asked knows exactly which
-/// toggle to tick, rather than the request arriving as "it isn't working".
-/// Shown in place of "Start tracking" when the LR carries no driver.
-///
-/// Pressing Start in this state can only ever return 400 NO_DRIVER, so the
-/// button is replaced by the reason and the fix. Says WHY the driver matters —
-/// tracking follows their phone — because "assign a driver" alone reads as
-/// bureaucracy to someone who assumes the truck is what gets tracked.
-class _NoDriverNote extends ConsumerWidget {
-  const _NoDriverNote();
+/// Pressing Start in these states can only fail, so the button is replaced by
+/// the reason and the fix. Says WHY the driver matters — tracking follows their
+/// phone — because "assign a driver" alone reads as bureaucracy to someone who
+/// assumes the truck is what gets tracked. [editLr] false means the fix is on
+/// the driver master, not the LR (the mobile).
+class _DriverNote extends ConsumerWidget {
+  final String message;
+  final bool editLr;
+  const _DriverNote({required this.message, this.editLr = true});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -939,37 +955,83 @@ class _NoDriverNote extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.person_off_outlined, size: 15, color: AppColors.warn),
-              SizedBox(width: 7),
+              const Icon(
+                Icons.person_off_outlined,
+                size: 15,
+                color: AppColors.warn,
+              ),
+              const SizedBox(width: 7),
               Expanded(
                 child: Text(
-                  'No driver assigned to this LR. SIM tracking follows the '
-                  'driver’s mobile number, so one is needed before a trip '
-                  'can start.',
-                  style: TextStyle(fontSize: 12, color: AppColors.ink),
+                  message,
+                  style: const TextStyle(fontSize: 12, color: AppColors.ink),
                 ),
               ),
             ],
           ),
-          if (lrId != null && lrId.isNotEmpty) ...[
-            const SizedBox(height: 8),
+          const SizedBox(height: 8),
+          if (editLr && lrId != null && lrId.isNotEmpty)
             AppButton(
               label: 'Assign a driver',
               icon: Icons.edit_outlined,
               kind: BtnKind.soft,
               small: true,
               onPressed: () => context.go('/lrs/$lrId/edit'),
+            )
+          else if (!editLr)
+            AppButton(
+              label: 'Open Drivers',
+              icon: Icons.badge_outlined,
+              kind: BtnKind.soft,
+              small: true,
+              onPressed: () => context.go('/masters/drivers'),
             ),
-          ],
         ],
       ),
     );
   }
 }
 
+/// A plain grey line in place of the Start button — no fix the user can make
+/// from here (no permission, or the LR is closed).
+class _InfoNote extends StatelessWidget {
+  final IconData icon;
+  final String message;
+  const _InfoNote({required this.icon, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.inputBg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 15, color: AppColors.slate),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(fontSize: 12, color: AppColors.slate),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown in place of "Start tracking" to someone without TRACKING_START.
+///
+/// Names the permission so the administrator being asked knows exactly which
+/// toggle to tick, rather than the request arriving as "it isn't working".
 class _NoStartPermissionNote extends StatelessWidget {
   const _NoStartPermissionNote();
 
@@ -1026,6 +1088,8 @@ class _Panel extends ConsumerWidget {
     // rather than threaded down from the screen so the check cannot drift away
     // from the button it guards.
     final canStart = ref.watch(currentUserProvider)?.canStartTracking ?? false;
+    final action = trackingActionFor(t, canStart: canStart);
+    final tripLive = _tripLive(t.trackingState);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1105,34 +1169,63 @@ class _Panel extends ConsumerWidget {
               // A line takes its place, because a silently missing control reads
               // as "this LR cannot be tracked" and sends the operator chasing
               // the driver instead of their administrator.
-              if (t.trackingState == null) ...[
-                if (!canStart)
-                  const _NoStartPermissionNote()
-                // The response already tells us whether a driver is on the LR,
-                // so say so UP FRONT instead of letting the user press a button
-                // that can only fail. The server still rejects it — this is a
-                // hint, not the gate.
-                else if ((t.driverName ?? '').trim().isEmpty)
-                  const _NoDriverNote()
-                else
-                  AppButton(
-                    label: 'Start tracking',
+              // The response says whether a driver is on the LR, whether its
+              // mobile is usable and whether the LR is still open, so every
+              // reason Start would fail is said UP FRONT (trackingActionFor).
+              if (action != TrackingAction.none) ...[
+                switch (action) {
+                  TrackingAction.start || TrackingAction.restart => AppButton(
+                    label: action == TrackingAction.restart
+                        ? 'Restart tracking'
+                        : 'Start tracking',
                     icon: Icons.play_arrow_rounded,
                     kind: BtnKind.primary,
                     small: true,
                     loading: starting,
                     onPressed: starting ? null : onStart,
                   ),
+                  TrackingAction.noPermission => const _NoStartPermissionNote(),
+                  TrackingAction.noDriver => const _DriverNote(
+                    message:
+                        'No driver assigned to this LR. SIM tracking follows '
+                        'the driver’s mobile number, so one is needed before '
+                        'a trip can start.',
+                  ),
+                  TrackingAction.inactiveDriver => _DriverNote(
+                    message:
+                        '${t.driverName} is marked inactive. Assign an active '
+                        'driver to track this LR.',
+                  ),
+                  TrackingAction.badMobile => _DriverNote(
+                    editLr: false,
+                    message: (t.driverMobile ?? '').trim().isEmpty
+                        ? '${t.driverName} has no mobile number. SIM tracking '
+                              'follows it — add it in Masters → Drivers.'
+                        : "${t.driverName}'s mobile (${t.driverMobile}) is not "
+                              'a valid 10-digit number. Correct it in Masters → '
+                              'Drivers, then start tracking.',
+                  ),
+                  TrackingAction.closed => const _InfoNote(
+                    icon: Icons.flag_outlined,
+                    message:
+                        'This LR is delivered or cancelled, so it can no '
+                        'longer be tracked.',
+                  ),
+                  TrackingAction.none => const SizedBox.shrink(),
+                },
                 const SizedBox(height: 8),
               ],
-              AppButton(
-                label: 'Recheck consent',
-                icon: Icons.refresh_rounded,
-                kind: BtnKind.soft,
-                small: true,
-                loading: rechecking,
-                onPressed: rechecking ? null : onRecheck,
-              ),
+              // Only while a trip is live: before one exists (or after it is
+              // over) a recheck can only report on a phone nobody is tracking.
+              if (tripLive)
+                AppButton(
+                  label: 'Recheck consent',
+                  icon: Icons.refresh_rounded,
+                  kind: BtnKind.soft,
+                  small: true,
+                  loading: rechecking,
+                  onPressed: rechecking ? null : onRecheck,
+                ),
               // Share a public live-tracking link once a trip exists, so a
               // customer/consignee can watch the truck without an app login.
               if (t.trackingState != null) ...[
@@ -1166,6 +1259,8 @@ class _Panel extends ConsumerWidget {
               if ((t.truckNumber ?? '').isNotEmpty)
                 _kv('Vehicle', t.truckNumber!),
               if ((t.driverName ?? '').isNotEmpty) _kv('Driver', t.driverName!),
+              if ((t.driverMobile ?? '').isNotEmpty)
+                _kv('Driver mobile', t.driverMobile!),
               _kv('Tracking', t.trackingState ?? '—'),
               _kv(
                 'Last fix',

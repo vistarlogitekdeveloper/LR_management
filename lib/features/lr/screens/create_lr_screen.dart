@@ -40,6 +40,7 @@ import '../data/lr_repository.dart';
 import '../providers/lr_providers.dart';
 import '../providers/templates_provider.dart';
 import '../utils/lr_date_rules.dart';
+import '../utils/lr_driver_rules.dart';
 
 class CreateLrScreen extends ConsumerStatefulWidget {
   final String? editId;
@@ -98,6 +99,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   final _deliveryTypeFieldKey = GlobalKey();
   final _customerFieldKey = GlobalKey();
   final _vehicleFieldKey = GlobalKey();
+  final _driverFieldKey = GlobalKey();
   final _transporterFieldKey = GlobalKey();
   final _routeFieldKey = GlobalKey();
   final _freightFieldKey = GlobalKey();
@@ -113,6 +115,10 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   Vehicle? _vehicle;
   Transporter? _transporter;
   Driver? _driver;
+
+  /// The driver the currently selected vehicle brought with it, so a later
+  /// vehicle change can tell an auto-filled driver from a hand-picked one.
+  String? _previousVehicleDriverId;
   RouteMaster? _route;
 
   LookupValue? _payType;
@@ -238,10 +244,24 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         _vehicle =
             pick(vehicles, (v) => v.id == lr.vehicle.id) ??
             (lr.vehicle.id.isNotEmpty ? lr.vehicle : null);
+        _previousVehicleDriverId = _vehicle?.currentDriverId;
         _transporter =
             pick(transporters, (t) => t.id == lr.transporter.id) ??
             (lr.transporter.id.isNotEmpty ? lr.transporter : null);
-        _driver = pick(drivers, (d) => d.id == lr.driverId);
+        // Same fallback as vehicle / transporter: the LR carries its own driver,
+        // so a cold-start edit (the "Assign a driver" links land here) shows it
+        // even before the drivers list has loaded, instead of a blank field the
+        // now-mandatory check would then refuse.
+        _driver =
+            pick(drivers, (d) => d.id == lr.driverId) ??
+            ((lr.driverId ?? '').isNotEmpty
+                ? Driver(
+                    id: lr.driverId!,
+                    name: lr.driverName,
+                    mobile: lr.driverMobile,
+                    licenseNo: '',
+                  )
+                : null);
         _route = pick(routes, (r) => r.id == lr.routeId);
 
         // Resolve by the real FK id first (most stable), then by code; never
@@ -806,10 +826,19 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     final drivers = ref.read(driversProvider);
     final transporters = ref.read(transportersProvider);
     final routes = ref.read(routesProvider);
-    if (v.currentDriverId != null && v.currentDriverId!.isNotEmpty) {
-      final d = _byId(drivers, v.currentDriverId, (x) => x.id);
-      if (d != null) _driver = d;
-    }
+    // Fill in the new vehicle's driver unless the user chose one by hand (see
+    // driverAfterVehicleChange). _previousVehicleDriverId remembers which
+    // driver the LAST vehicle brought, so an auto-filled one is still replaced.
+    final vehicleDriver = (v.currentDriverId ?? '').isEmpty
+        ? null
+        : _byId(drivers, v.currentDriverId, (x) => x.id);
+    _driver = driverAfterVehicleChange(
+      current: _driver,
+      previousVehicleDriverId: _previousVehicleDriverId,
+      newVehicleDriver: vehicleDriver,
+    );
+    _previousVehicleDriverId = v.currentDriverId;
+    if (_driver != null) _fieldErrors.remove('driver');
     if (v.transporterId != null && v.transporterId!.isNotEmpty) {
       final t = _byId(transporters, v.transporterId, (x) => x.id);
       // Carries the transporter's advance % too — same path as picking the
@@ -1272,6 +1301,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     'consignor',
     'consignee',
     'vehicle',
+    'driver',
     'transporter',
     'route',
     'deliveryType',
@@ -1284,6 +1314,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     'consignor': 'Consignor / Sender',
     'consignee': 'Consignee / Receiver',
     'vehicle': 'Vehicle Number',
+    'driver': 'Driver (with a 10-digit mobile)',
     'transporter': 'Transporter Name',
     'route': 'Route',
     'deliveryType': 'Delivery Type',
@@ -1310,6 +1341,17 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     if (_vehicle == null) {
       errors['vehicle'] = 'Select a vehicle.';
     }
+    // Tracking starts when the LR is saved and follows the driver's mobile, so
+    // the driver is required and must have a usable number (lrDriverError).
+    final editingStatus = _editing?.status;
+    final driverError = lrDriverError(
+      driver: _driver,
+      closed:
+          editingStatus == LrStatus.delivered ||
+          editingStatus == LrStatus.cancelled,
+      savedDriverId: _editing?.driverId,
+    );
+    if (driverError != null) errors['driver'] = driverError;
     if (_transporter == null) {
       errors['transporter'] = 'Select a transporter.';
     }
@@ -1397,6 +1439,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       'consignor': _consignorFieldKey,
       'consignee': _consigneeFieldKey,
       'vehicle': _vehicleFieldKey,
+      'driver': _driverFieldKey,
       'transporter': _transporterFieldKey,
       'route': _routeFieldKey,
       'deliveryType': _deliveryTypeFieldKey,
@@ -1466,6 +1509,15 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       MasterActions.showError(
         context,
         'This LR has been sent for payment and can no longer be edited.',
+      );
+      return;
+    }
+    // Editing, but the LR never loaded: saving would take the CREATE branch
+    // below and make a second copy of the LR with whatever the form holds.
+    if (_isEdit && _editing == null) {
+      MasterActions.showError(
+        context,
+        'This LR could not be loaded, so it cannot be saved. Go back and open it again.',
       );
       return;
     }
@@ -1902,20 +1954,30 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                 ),
                               ),
                               LabeledField(
+                                key: _driverFieldKey,
                                 label: 'Driver',
+                                required: true,
+                                errorText: _fieldErrors['driver'],
                                 child: SearchableField<Driver>(
                                   value: _driver,
                                   options: drivers,
                                   clearable: true,
-                                  labelOf: (d) => d.name,
-                                  subtitleOf: (d) => d.mobile,
+                                  labelOf: (d) => d.mobile.trim().isEmpty
+                                      ? d.name
+                                      : '${d.name} · ${d.mobile.trim()}',
+                                  subtitleOf: (d) => d.mobile.trim().isEmpty
+                                      ? 'No mobile — cannot be tracked'
+                                      : d.mobile,
                                   hintText: 'Select driver',
                                   dialogTitle: 'Select Driver',
                                   onAddNew: canAddDriver
                                       ? _addDriverInline
                                       : null,
                                   addNewLabel: 'Add new driver',
-                                  onChanged: (v) => setState(() => _driver = v),
+                                  onChanged: (v) => setState(() {
+                                    _driver = v;
+                                    _fieldErrors.remove('driver');
+                                  }),
                                 ),
                               ),
                               LabeledField(
