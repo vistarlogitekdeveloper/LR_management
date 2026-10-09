@@ -140,7 +140,7 @@ class _TruckPin extends StatelessWidget {
   /// A last-known position over a day old: drawn grey, not as a moving truck.
   final bool stale;
 
-  /// Halted 10 h+: drawn red, so it stands out on a map of moving trucks.
+  /// Halted 5 h+: drawn red, so it stands out on a map of moving trucks.
   final bool halted;
   const _TruckPin({this.consent, this.stale = false, this.halted = false});
 

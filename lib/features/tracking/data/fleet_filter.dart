@@ -6,7 +6,7 @@ enum FleetScope {
   /// waiting for its first fix. The default, and the "Active trips" count.
   live,
 
-  /// Standing in one spot (within ~2 km) for 10 h or more — the halt alert.
+  /// Standing in one spot (within ~2 km) for 5 h or more — the halt alert.
   halted,
 
   /// Running trips with nothing for over a day — the ones to close.

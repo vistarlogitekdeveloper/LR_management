@@ -3,7 +3,7 @@ import 'package:lr_management/features/tracking/data/fleet_filter.dart';
 import 'package:lr_management/features/tracking/data/tracking_repository.dart';
 import 'package:lr_management/features/tracking/widgets/halt_widgets.dart';
 
-// A truck standing within ~2 km for 10 h raises the halt alert (server:
+// A truck standing within ~2 km for 5 h raises the halt alert (server:
 // services/tripHalt.service.js); the app shows it on Live Tracking and the
 // trip screen, and lets someone acknowledge it with the reason.
 void main() {
@@ -46,7 +46,7 @@ void main() {
         'halt': halt,
       });
 
-  test('the "Halted 10h+" chip counts only ongoing halts of 10 h or more', () {
+  test('the "Halted 5h+" chip counts only ongoing halts of 5 h or more', () {
     final all = [
       truck('1', haltJson(hours: 12)),
       truck('2', haltJson(hours: 4)), // recorded, not yet alerted
@@ -62,7 +62,7 @@ void main() {
     );
     // A halted truck is still on the road: it stays in "Live now" too.
     expect(fleetScopeCounts(all, null)[FleetScope.live], 3);
-    expect(FleetScope.halted.label, 'Halted 10h+');
+    expect(FleetScope.halted.label, 'Halted 5h+');
   });
 
   test(

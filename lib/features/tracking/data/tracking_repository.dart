@@ -69,10 +69,10 @@ extension HaltReasonX on HaltReason {
 }
 
 /// The hours at which a halt is alerted (server: LRM_HALT_ALERT_HOURS).
-const haltAlertHours = 10;
+const haltAlertHours = 5;
 
 /// A stretch where the truck's fixes stayed within ~2 km of one spot (server:
-/// services/tripHalt.service.js). Recorded from 2 h; alerted at 10 h.
+/// services/tripHalt.service.js). Recorded from 2 h; alerted at 5 h.
 class TripHalt {
   final String id;
   final DateTime? startedAt;
@@ -211,7 +211,7 @@ class FleetVehicle {
     this.halt,
   });
 
-  /// Halted long enough to have raised the alert (10 h+).
+  /// Halted long enough to have raised the alert (5 h+).
   bool get haltAlert => halt != null && halt!.ongoing && halt!.overAlertLimit;
 
   factory FleetVehicle.fromJson(Map<String, dynamic> j) {
