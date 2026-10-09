@@ -65,7 +65,8 @@ class FleetFilters extends ConsumerWidget {
                           fontWeight: FontWeight.w700,
                           color: filter.scope == s
                               ? AppColors.white
-                              : (s == FleetScope.noSignal &&
+                              : ((s == FleetScope.noSignal ||
+                                            s == FleetScope.halted) &&
                                         (counts[s] ?? 0) > 0
                                     ? AppColors.danger
                                     : AppColors.ink),

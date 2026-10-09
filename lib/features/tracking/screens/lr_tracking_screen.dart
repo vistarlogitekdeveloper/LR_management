@@ -18,6 +18,7 @@ import '../data/route_planner.dart';
 import '../data/tracking_action.dart';
 import '../data/tracking_repository.dart';
 import '../providers/tracking_providers.dart';
+import '../widgets/halt_widgets.dart';
 import '../widgets/tracking_common.dart'
     show ConsentBadge, consentLabel, relTime;
 
@@ -1090,9 +1091,16 @@ class _Panel extends ConsumerWidget {
     final canStart = ref.watch(currentUserProvider)?.canStartTracking ?? false;
     final action = trackingActionFor(t, canStart: canStart);
     final tripLive = _tripLive(t.trackingState);
+    final halt = t.currentHalt;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Standing still right now (2 h+): first, because it is the one thing
+        // on this screen that may need someone to act.
+        if (halt != null) ...[
+          HaltBanner(lrId: t.lrId, halt: halt),
+          const SizedBox(height: 12),
+        ],
         // Consent card.
         AppCard(
           padding: const EdgeInsets.all(16),
@@ -1302,6 +1310,24 @@ class _Panel extends ConsumerWidget {
             ],
           ),
         ),
+        // Every halt of 2 h or more on this trip.
+        if (t.haltsSupported) ...[
+          const SizedBox(height: 12),
+          AppCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SectionTitle(
+                  icon: Icons.pause_circle_outline_rounded,
+                  title: 'Halts',
+                ),
+                const SizedBox(height: 8),
+                HaltHistory(halts: t.halts),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }

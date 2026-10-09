@@ -9,6 +9,7 @@ import '../../../shared/widgets/app_button.dart';
 import '../../lr/providers/lr_providers.dart';
 import '../../shell/widgets/app_topbar.dart';
 import '../data/fleet_filter.dart';
+import '../data/tracking_repository.dart';
 import '../data/trip_history.dart';
 import '../providers/tracking_providers.dart';
 import '../widgets/fleet_filters.dart';
@@ -193,6 +194,13 @@ class _ActivePanel extends ConsumerWidget {
             'Only trips with a location in the last 24 h (or started today) '
             'show here. Older ones are under "No signal 24h+"; finished trips '
             'are on the History tab.',
+      ),
+      FleetScope.halted => const TrackingEmptyState(
+        icon: Icons.check_circle_outline_rounded,
+        title: 'No vehicle halted',
+        message:
+            'No running trip has stood in one place for $haltAlertHours hours '
+            'or more. Trucks waiting at their destination are not counted.',
       ),
       FleetScope.noSignal => const TrackingEmptyState(
         icon: Icons.check_circle_outline_rounded,

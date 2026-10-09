@@ -6,6 +6,9 @@ enum FleetScope {
   /// waiting for its first fix. The default, and the "Active trips" count.
   live,
 
+  /// Standing in one spot (within ~2 km) for 10 h or more — the halt alert.
+  halted,
+
   /// Running trips with nothing for over a day — the ones to close.
   noSignal,
 
@@ -19,6 +22,7 @@ enum FleetScope {
 extension FleetScopeX on FleetScope {
   String get label => switch (this) {
     FleetScope.live => 'Live now',
+    FleetScope.halted => 'Halted ${haltAlertHours}h+',
     FleetScope.noSignal => 'No signal 24h+',
     FleetScope.consentPending => 'Consent pending',
     FleetScope.all => 'All running',
@@ -61,6 +65,7 @@ bool _consentPending(FleetVehicle v) =>
 
 bool _inScope(FleetVehicle v, FleetScope scope) => switch (scope) {
   FleetScope.live => _isLive(v),
+  FleetScope.halted => v.haltAlert,
   FleetScope.noSignal => v.signal == FleetSignal.noSignal,
   FleetScope.consentPending => _consentPending(v),
   FleetScope.all => true,

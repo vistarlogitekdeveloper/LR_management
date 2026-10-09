@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../data/tracking_repository.dart';
+import 'halt_widgets.dart';
 import 'tracking_common.dart';
 
 /// Fleet map + the side list of every actively-tracked vehicle. Tapping either
@@ -98,6 +99,7 @@ class _FleetMap extends StatelessWidget {
                         child: _TruckPin(
                           consent: v.consentStatus,
                           stale: v.signal == FleetSignal.noSignal,
+                          halted: v.haltAlert,
                         ),
                       ),
                     ),
@@ -137,7 +139,10 @@ class _TruckPin extends StatelessWidget {
 
   /// A last-known position over a day old: drawn grey, not as a moving truck.
   final bool stale;
-  const _TruckPin({this.consent, this.stale = false});
+
+  /// Halted 10 h+: drawn red, so it stands out on a map of moving trucks.
+  final bool halted;
+  const _TruckPin({this.consent, this.stale = false, this.halted = false});
 
   @override
   Widget build(BuildContext context) {
@@ -154,7 +159,9 @@ class _TruckPin extends StatelessWidget {
       height: 40,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: stale ? AppColors.slate : AppColors.plum,
+        color: halted
+            ? AppColors.danger
+            : (stale ? AppColors.slate : AppColors.plum),
         shape: BoxShape.circle,
         border: Border.all(color: ring, width: 3),
         boxShadow: const [
@@ -300,6 +307,8 @@ class _VehicleTile extends StatelessWidget {
                     ),
                   ),
                 ),
+              if (v.halt != null && v.halt!.ongoing)
+                HaltLine(lrId: v.lrId, halt: v.halt!),
             ],
           ),
         ),

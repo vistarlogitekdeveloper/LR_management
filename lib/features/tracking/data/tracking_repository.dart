@@ -38,6 +38,100 @@ class TrackPoint {
   );
 }
 
+/// Why a halt was acknowledged — the server's tripHalt.ACK_REASONS.
+enum HaltReason { driverRest, breakdown, accident, documents, checkpost, other }
+
+extension HaltReasonX on HaltReason {
+  String get code => switch (this) {
+    HaltReason.driverRest => 'DRIVER_REST',
+    HaltReason.breakdown => 'BREAKDOWN',
+    HaltReason.accident => 'ACCIDENT',
+    HaltReason.documents => 'DOCUMENTS',
+    HaltReason.checkpost => 'CHECKPOST',
+    HaltReason.other => 'OTHER',
+  };
+
+  String get label => switch (this) {
+    HaltReason.driverRest => 'Driver rest',
+    HaltReason.breakdown => 'Breakdown',
+    HaltReason.accident => 'Accident',
+    HaltReason.documents => 'Waiting for documents',
+    HaltReason.checkpost => 'RTO / police check',
+    HaltReason.other => 'Other',
+  };
+
+  static HaltReason? fromCode(String? s) {
+    for (final r in HaltReason.values) {
+      if (r.code == s) return r;
+    }
+    return null;
+  }
+}
+
+/// The hours at which a halt is alerted (server: LRM_HALT_ALERT_HOURS).
+const haltAlertHours = 10;
+
+/// A stretch where the truck's fixes stayed within ~2 km of one spot (server:
+/// services/tripHalt.service.js). Recorded from 2 h; alerted at 10 h.
+class TripHalt {
+  final String id;
+  final DateTime? startedAt;
+  final DateTime? endedAt;
+  final bool ongoing;
+  final double hours;
+  final double? lat;
+  final double? lng;
+  final String? city;
+  final String? address;
+  final bool alerted;
+  final DateTime? acknowledgedAt;
+  final HaltReason? ackReason;
+  final String? ackNote;
+
+  const TripHalt({
+    required this.id,
+    this.startedAt,
+    this.endedAt,
+    this.ongoing = false,
+    this.hours = 0,
+    this.lat,
+    this.lng,
+    this.city,
+    this.address,
+    this.alerted = false,
+    this.acknowledgedAt,
+    this.ackReason,
+    this.ackNote,
+  });
+
+  factory TripHalt.fromJson(Map<String, dynamic> j) => TripHalt(
+    id: j['id'].toString(),
+    startedAt: _dt(j['started_at']),
+    endedAt: _dt(j['ended_at']),
+    ongoing: j['ongoing'] == true,
+    hours: (j['hours'] is num) ? (j['hours'] as num).toDouble() : 0,
+    lat: j['lat'] == null ? null : _d(j['lat']),
+    lng: j['lng'] == null ? null : _d(j['lng']),
+    city: j['city'] as String?,
+    address: j['address'] as String?,
+    alerted: j['alerted'] == true,
+    acknowledgedAt: _dt(j['acknowledged_at']),
+    ackReason: HaltReasonX.fromCode(j['ack_reason'] as String?),
+    ackNote: j['ack_note'] as String?,
+  );
+
+  /// Long enough to have been alerted — what the Live Tracking chip counts.
+  bool get overAlertLimit => hours >= haltAlertHours;
+  bool get acknowledged => acknowledgedAt != null;
+
+  /// "10 h 20 m"
+  String get durationLabel {
+    final h = hours.floor();
+    final m = ((hours - h) * 60).round();
+    return m == 0 ? '$h h' : '$h h $m m';
+  }
+}
+
 /// How fresh a running trip's signal is (server: trackingController.signalOf).
 enum FleetSignal {
   /// A location fix within the last 24 h.
@@ -94,6 +188,10 @@ class FleetVehicle {
   final String regionCode;
   final String? regionName;
   final FleetSignal signal;
+  final String? driverMobile;
+
+  /// The halt the truck is in right now (2 h+), or null.
+  final TripHalt? halt;
 
   const FleetVehicle({
     required this.lrId,
@@ -109,7 +207,12 @@ class FleetVehicle {
     this.regionCode = '',
     this.regionName,
     this.signal = FleetSignal.live,
+    this.driverMobile,
+    this.halt,
   });
+
+  /// Halted long enough to have raised the alert (10 h+).
+  bool get haltAlert => halt != null && halt!.ongoing && halt!.overAlertLimit;
 
   factory FleetVehicle.fromJson(Map<String, dynamic> j) {
     final location = (j['location'] is Map)
@@ -145,6 +248,10 @@ class FleetVehicle {
           trackingSince: since,
         ),
       },
+      driverMobile: j['driver_mobile'] as String?,
+      halt: (j['halt'] is Map)
+          ? TripHalt.fromJson((j['halt'] as Map).cast<String, dynamic>())
+          : null,
     );
   }
 
@@ -194,6 +301,14 @@ class LrTracking {
   // Public shareable tracking link, if one has already been generated (null
   // until the user first taps Share).
   final String? publicLink;
+
+  /// Every recorded halt of this trip (2 h+), oldest first. Empty from a
+  /// server that does not track halts yet.
+  final List<TripHalt> halts;
+
+  /// The server tracks halts (sends `halts`, even empty). False from an older
+  /// backend, so the screen does not claim "no halts" it never checked for.
+  final bool haltsSupported;
   const LrTracking({
     required this.lrId,
     this.lrNumber,
@@ -219,7 +334,17 @@ class LrTracking {
     this.history = const [],
     this.current,
     this.publicLink,
+    this.halts = const [],
+    this.haltsSupported = false,
   });
+
+  /// The halt the truck is in right now, if any.
+  TripHalt? get currentHalt {
+    for (final h in halts.reversed) {
+      if (h.ongoing) return h;
+    }
+    return null;
+  }
 
   factory LrTracking.fromJson(Map<String, dynamic> j) {
     final hist = (j['history'] as List? ?? const [])
@@ -267,6 +392,11 @@ class LrTracking {
       history: hist,
       current: cur,
       publicLink: j['public_link'] as String?,
+      halts: (j['halts'] as List? ?? const [])
+          .whereType<Map>()
+          .map((m) => TripHalt.fromJson(m.cast<String, dynamic>()))
+          .toList(),
+      haltsSupported: j['halts'] is List,
     );
   }
 }
@@ -327,6 +457,23 @@ class TrackingRepository {
 
   /// Generate (or fetch the cached) public shareable tracking link so a
   /// customer/consignee can watch the truck live without an app login.
+  /// Acknowledge a halt alert with the reason — stops the 24 h reminder.
+  Future<TripHalt> acknowledgeHalt(
+    String lrId,
+    String haltId, {
+    required HaltReason reason,
+    String? note,
+  }) async {
+    final res = await _api.dio.post(
+      '/tracking/lr/$lrId/halts/$haltId/ack',
+      data: {
+        'reason': reason.code,
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      },
+    );
+    return TripHalt.fromJson((res.data['data'] as Map).cast<String, dynamic>());
+  }
+
   Future<String> publicLink(String lrId) async {
     final res = await _api.dio.post('/tracking/lr/$lrId/public-link');
     return ((res.data['data'] as Map)['link'] ?? '').toString();
