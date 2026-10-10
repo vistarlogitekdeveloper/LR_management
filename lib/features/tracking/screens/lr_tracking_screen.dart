@@ -14,10 +14,13 @@ import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/section_title.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../lr/providers/lr_providers.dart';
 import '../data/route_planner.dart';
 import '../data/tracking_action.dart';
 import '../data/tracking_repository.dart';
 import '../providers/tracking_providers.dart';
+import '../widgets/change_driver_dialog.dart';
+import '../widgets/driver_history.dart';
 import '../widgets/halt_widgets.dart';
 import '../widgets/tracking_common.dart'
     show ConsentBadge, consentLabel, relTime;
@@ -275,6 +278,33 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
     );
   }
 
+  /// The driver changed on the way: pick the new one; the server moves
+  /// tracking to their phone and closes the handover halt. When the new phone
+  /// is already on another truck's trip, the ordinary Start tracking flow takes
+  /// over — it explains the clash and offers the takeover.
+  Future<void> _changeDriver() async {
+    final t = ref.read(lrTrackingProvider(widget.id)).valueOrNull;
+    if (t == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final r = await showChangeDriverDialog(
+      context,
+      lrId: widget.id,
+      currentDriverId: t.driverId,
+      currentDriverName: t.driverName,
+    );
+    if (r == null || !mounted) return;
+    ref.invalidate(lrTrackingProvider(widget.id));
+    ref.invalidate(activeVehiclesProvider);
+    // The LR's driver and version changed: an LR screen opened next must not
+    // show (or save over) the old ones.
+    ref.invalidate(lrDetailProvider(widget.id));
+    unawaited(ref.read(lrListProvider.notifier).refresh(force: true));
+    messenger.showSnackBar(
+      SnackBar(content: Text(r.summary), duration: const Duration(seconds: 8)),
+    );
+    if (r.simBusy) await _start();
+  }
+
   Future<void> _share() async {
     setState(() => _sharing = true);
     final messenger = ScaffoldMessenger.of(context);
@@ -426,6 +456,7 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
                 onStart: _start,
                 sharing: _sharing,
                 onShare: _share,
+                onChangeDriver: _changeDriver,
               ),
             ),
           ),
@@ -443,6 +474,7 @@ class _Body extends StatelessWidget {
   final VoidCallback onStart;
   final bool sharing;
   final VoidCallback onShare;
+  final VoidCallback onChangeDriver;
   const _Body({
     required this.t,
     required this.rechecking,
@@ -451,6 +483,7 @@ class _Body extends StatelessWidget {
     required this.onStart,
     required this.sharing,
     required this.onShare,
+    required this.onChangeDriver,
   });
 
   @override
@@ -464,6 +497,7 @@ class _Body extends StatelessWidget {
       onStart: onStart,
       sharing: sharing,
       onShare: onShare,
+      onChangeDriver: onChangeDriver,
     );
 
     return LayoutBuilder(
@@ -674,6 +708,20 @@ class _TrailMap extends StatelessWidget {
                     height: 30,
                     child: const _DotPin(color: AppColors.red, label: 'D'),
                   ),
+                // Where the driver changed.
+                for (final c in t.driverChanges)
+                  if (_coord(c.lat, c.lng) case final at?)
+                    Marker(
+                      point: at,
+                      width: 30,
+                      height: 30,
+                      child: Tooltip(
+                        message:
+                            'Driver changed: ${c.fromName ?? '—'} → ${c.toName ?? '—'}'
+                            '${(c.city ?? '').isNotEmpty ? ' at ${c.city}' : ''}',
+                        child: const _HandoverPin(),
+                      ),
+                    ),
                 if (cur != null)
                   Marker(
                     point: cur,
@@ -904,6 +952,33 @@ class _PulsingTruckState extends State<_PulsingTruck>
 }
 
 /// Small labelled circular pin for the route's start (S) and destination (D).
+class _HandoverPin extends StatelessWidget {
+  const _HandoverPin();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: AppColors.plum, width: 2),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33000000),
+            blurRadius: 4,
+            offset: Offset(0, 1),
+          ),
+        ],
+      ),
+      child: const Icon(
+        Icons.swap_horiz_rounded,
+        size: 16,
+        color: AppColors.plum,
+      ),
+    );
+  }
+}
+
 class _DotPin extends StatelessWidget {
   final Color color;
   final String label;
@@ -1033,6 +1108,58 @@ class _InfoNote extends StatelessWidget {
 ///
 /// Names the permission so the administrator being asked knows exactly which
 /// toggle to tick, rather than the request arriving as "it isn't working".
+/// "Driver  MANSAR   [Change]" — the Change action only for someone who may
+/// change it (null [onChange] hides it).
+class _DriverRow extends StatelessWidget {
+  final String name;
+  final VoidCallback? onChange;
+  const _DriverRow({required this.name, required this.onChange});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 74,
+            child: Text(
+              'Driver',
+              style: TextStyle(fontSize: 12, color: AppColors.slate),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              name,
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.ink,
+              ),
+            ),
+          ),
+          if (onChange != null)
+            TextButton.icon(
+              onPressed: onChange,
+              icon: const Icon(Icons.swap_horiz_rounded, size: 16),
+              label: const Text('Change'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.plum,
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 28),
+                textStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _NoStartPermissionNote extends StatelessWidget {
   const _NoStartPermissionNote();
 
@@ -1072,6 +1199,7 @@ class _Panel extends ConsumerWidget {
   final VoidCallback onStart;
   final bool sharing;
   final VoidCallback onShare;
+  final VoidCallback onChangeDriver;
   const _Panel({
     required this.t,
     required this.rechecking,
@@ -1080,6 +1208,7 @@ class _Panel extends ConsumerWidget {
     required this.onStart,
     required this.sharing,
     required this.onShare,
+    required this.onChangeDriver,
   });
 
   @override
@@ -1089,6 +1218,12 @@ class _Panel extends ConsumerWidget {
     // rather than threaded down from the screen so the check cannot drift away
     // from the button it guards.
     final canStart = ref.watch(currentUserProvider)?.canStartTracking ?? false;
+    // Mirrors the server gate on POST .../change-driver (LR_EDIT or an admin
+    // umbrella), on an open LR that has a driver to change.
+    final canChangeDriver =
+        (ref.watch(currentUserProvider)?.canEditLr ?? false) &&
+        !t.lrClosed &&
+        (t.driverName ?? '').isNotEmpty;
     final action = trackingActionFor(t, canStart: canStart);
     final tripLive = _tripLive(t.trackingState);
     final halt = t.currentHalt;
@@ -1098,7 +1233,11 @@ class _Panel extends ConsumerWidget {
         // Standing still right now (2 h+): first, because it is the one thing
         // on this screen that may need someone to act.
         if (halt != null) ...[
-          HaltBanner(lrId: t.lrId, halt: halt),
+          HaltBanner(
+            lrId: t.lrId,
+            halt: halt,
+            onChangeDriver: canChangeDriver ? onChangeDriver : null,
+          ),
           const SizedBox(height: 12),
         ],
         // Consent card.
@@ -1266,7 +1405,11 @@ class _Panel extends ConsumerWidget {
               _kv('Route', '${t.fromCity ?? '?'} → ${t.toCity ?? '?'}'),
               if ((t.truckNumber ?? '').isNotEmpty)
                 _kv('Vehicle', t.truckNumber!),
-              if ((t.driverName ?? '').isNotEmpty) _kv('Driver', t.driverName!),
+              if ((t.driverName ?? '').isNotEmpty)
+                _DriverRow(
+                  name: t.driverName!,
+                  onChange: canChangeDriver ? onChangeDriver : null,
+                ),
               if ((t.driverMobile ?? '').isNotEmpty)
                 _kv('Driver mobile', t.driverMobile!),
               _kv('Tracking', t.trackingState ?? '—'),
@@ -1275,6 +1418,16 @@ class _Panel extends ConsumerWidget {
                 cur != null ? (cur.city ?? cur.address ?? 'Located') : '—',
               ),
               if (cur != null) _freshness(cur.at),
+              // The map's latest fix still came from the previous driver's
+              // phone: say so, rather than present it as where the truck is.
+              if (t.fixBeforeDriverChange)
+                _InfoNote(
+                  icon: Icons.hourglass_top_rounded,
+                  message:
+                      'This location is from the previous driver’s phone. '
+                      'Waiting for the first fix from ${t.driverName ?? 'the new driver'} '
+                      '(after the SIM consent is approved).',
+                ),
               if (t.remainingRoute != null)
                 _kv(
                   'To destination',
@@ -1310,6 +1463,24 @@ class _Panel extends ConsumerWidget {
             ],
           ),
         ),
+        // Who drove this trip, when the driver changed.
+        if (t.driverChanges.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          AppCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SectionTitle(
+                  icon: Icons.swap_horiz_rounded,
+                  title: 'Driver changes',
+                ),
+                const SizedBox(height: 8),
+                DriverHistory(changes: t.driverChanges),
+              ],
+            ),
+          ),
+        ],
         // Every halt of 2 h or more on this trip.
         if (t.haltsSupported) ...[
           const SizedBox(height: 12),

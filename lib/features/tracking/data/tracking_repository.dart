@@ -1,4 +1,5 @@
 import '../../../core/network/api_client.dart';
+import 'driver_change.dart';
 import 'route_planner.dart';
 
 /// Parse a lat/lng that may arrive as a number (from /tracking/active, where the
@@ -38,8 +39,18 @@ class TrackPoint {
   );
 }
 
-/// Why a halt was acknowledged — the server's tripHalt.ACK_REASONS.
-enum HaltReason { driverRest, breakdown, accident, documents, checkpost, other }
+/// Why a halt was acknowledged — the server's tripHalt.ACK_REASONS, plus
+/// [HaltReason.driverChanged], which the server sets itself when Change driver
+/// closes the handover halt (never offered in the picker: [pickable]).
+enum HaltReason {
+  driverRest,
+  breakdown,
+  accident,
+  documents,
+  checkpost,
+  other,
+  driverChanged,
+}
 
 extension HaltReasonX on HaltReason {
   String get code => switch (this) {
@@ -49,6 +60,7 @@ extension HaltReasonX on HaltReason {
     HaltReason.documents => 'DOCUMENTS',
     HaltReason.checkpost => 'CHECKPOST',
     HaltReason.other => 'OTHER',
+    HaltReason.driverChanged => 'DRIVER_CHANGED',
   };
 
   String get label => switch (this) {
@@ -58,7 +70,18 @@ extension HaltReasonX on HaltReason {
     HaltReason.documents => 'Waiting for documents',
     HaltReason.checkpost => 'RTO / police check',
     HaltReason.other => 'Other',
+    HaltReason.driverChanged => 'Driver changed',
   };
+
+  /// What a person may acknowledge with — not the system's driver change.
+  static const pickable = [
+    HaltReason.driverRest,
+    HaltReason.breakdown,
+    HaltReason.accident,
+    HaltReason.documents,
+    HaltReason.checkpost,
+    HaltReason.other,
+  ];
 
   static HaltReason? fromCode(String? s) {
     for (final r in HaltReason.values) {
@@ -271,6 +294,16 @@ class LrTracking {
   final String? truckNumber;
   final String? driverName;
 
+  /// The LR's current driver (null from an older server).
+  final String? driverId;
+
+  /// Driver handovers on this trip, oldest first.
+  final List<DriverChange> driverChanges;
+
+  /// The latest fix is from before the last handover: the previous driver's
+  /// phone. True until the new driver's phone reports.
+  final bool fixBeforeDriverChange;
+
   /// The driver's mobile, and whether tracking can use it. Let the screen say
   /// what is wrong BEFORE Start is pressed — the press used to be the first
   /// place a bad number surfaced. All null from a server too old to send them,
@@ -316,6 +349,9 @@ class LrTracking {
     this.toCity,
     this.truckNumber,
     this.driverName,
+    this.driverId,
+    this.driverChanges = const [],
+    this.fixBeforeDriverChange = false,
     this.driverMobile,
     this.driverMobileValid,
     this.driverActive,
@@ -363,6 +399,12 @@ class LrTracking {
       toCity: j['to_city'] as String?,
       truckNumber: j['truck_number'] as String?,
       driverName: j['driver_name'] as String?,
+      driverId: j['driver_id'] as String?,
+      driverChanges: (j['driver_changes'] as List? ?? const [])
+          .whereType<Map>()
+          .map((m) => DriverChange.fromJson(m.cast<String, dynamic>()))
+          .toList(),
+      fixBeforeDriverChange: j['fix_before_driver_change'] == true,
       driverMobile: j['driver_mobile'] as String?,
       driverMobileValid: j['driver_mobile_valid'] as bool?,
       driverActive: j['driver_active'] as bool?,
@@ -472,6 +514,27 @@ class TrackingRepository {
       },
     );
     return TripHalt.fromJson((res.data['data'] as Map).cast<String, dynamic>());
+  }
+
+  /// The driver changed mid-route: switch the LR to [driverId] and move
+  /// tracking to the new driver's phone. Throws for a request that cannot be
+  /// done (closed LR, same driver, an untrackable driver); otherwise the
+  /// change is made and the result says how far tracking got.
+  Future<DriverChangeResult> changeDriver(
+    String lrId, {
+    required String driverId,
+    String? note,
+  }) async {
+    final res = await _api.dio.post(
+      '/tracking/lr/$lrId/change-driver',
+      data: {
+        'driver_id': driverId,
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      },
+    );
+    return DriverChangeResult.fromJson(
+      (res.data['data'] as Map).cast<String, dynamic>(),
+    );
   }
 
   Future<String> publicLink(String lrId) async {

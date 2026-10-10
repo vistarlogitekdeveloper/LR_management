@@ -185,7 +185,7 @@ class _AckDialogState extends ConsumerState<_AckDialog> {
               spacing: 6,
               runSpacing: 6,
               children: [
-                for (final r in HaltReason.values)
+                for (final r in HaltReasonX.pickable)
                   ChoiceChip(
                     label: Text(r.label),
                     selected: _reason == r,
@@ -231,7 +231,17 @@ class _AckDialogState extends ConsumerState<_AckDialog> {
 class HaltBanner extends ConsumerWidget {
   final String lrId;
   final TripHalt halt;
-  const HaltBanner({super.key, required this.lrId, required this.halt});
+
+  /// Offered when the stop may be a driver handover: changing the driver
+  /// closes the halt as "Driver changed" and moves tracking to the new phone,
+  /// which acknowledging it does not. Null hides it.
+  final VoidCallback? onChangeDriver;
+  const HaltBanner({
+    super.key,
+    required this.lrId,
+    required this.halt,
+    this.onChangeDriver,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -267,6 +277,21 @@ class HaltBanner extends ConsumerWidget {
                       : 'Alerted at $haltAlertHours h if the vehicle does not move.',
                   style: const TextStyle(fontSize: 12, color: AppColors.slate),
                 ),
+                if (onChangeDriver != null)
+                  TextButton.icon(
+                    onPressed: onChangeDriver,
+                    icon: const Icon(Icons.swap_horiz_rounded, size: 16),
+                    label: const Text('Driver changed? Change driver'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.plum,
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                      textStyle: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
