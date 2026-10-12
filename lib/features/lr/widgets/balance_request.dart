@@ -1,4 +1,3 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,33 +10,15 @@ import '../../../shared/models/lr_models.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../reports/services/export_service.dart';
 import '../providers/lr_providers.dart';
+import 'pod_picker.dart';
+
+export '../utils/pod_photo.dart' show podExtensions, podMaxBytes, podFileError;
 
 /// "Request for balance payment": once the transporter advance is paid, the
 /// operator uploads the POD and asks Accounts for the balance. Accounts sees
 /// the LR under "Balance Requested" with the POD. The server
 /// (POST /lrs/:id/request-balance) holds the rule; [LorryReceipt.canRequestBalance]
 /// mirrors it so the button only shows when the request can succeed.
-
-/// What may be picked as a POD — a photo or a scanned PDF. Matches the
-/// server's POD check (services/balanceRequest.service.js).
-const podExtensions = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'pdf'];
-
-/// The server's upload limit (middleware/upload.js), checked here so a large
-/// photo is refused before it is sent rather than after.
-const podMaxBytes = 25 * 1024 * 1024;
-
-/// Null when [fileName] / [size] is an acceptable POD, else the message.
-String? podFileError(String fileName, int size) {
-  final ext = fileName.contains('.')
-      ? fileName.split('.').last.toLowerCase()
-      : '';
-  if (!podExtensions.contains(ext)) {
-    return 'The POD must be a photo (JPG, PNG, HEIC) or a PDF.';
-  }
-  if (size <= 0) return 'That file is empty. Choose the POD again.';
-  if (size > podMaxBytes) return 'The POD must be smaller than 25 MB.';
-  return null;
-}
 
 /// The row action on the Lorry Receipts list / LR detail: "Request balance
 /// payment" while the balance can be requested, then "Balance requested" (to
@@ -111,26 +92,11 @@ class _BalanceRequestDialog extends ConsumerStatefulWidget {
 }
 
 class _BalanceRequestDialogState extends ConsumerState<_BalanceRequestDialog> {
-  PlatformFile? _file;
+  PodFile? _file;
   String? _error;
   bool _sending = false;
 
   LorryReceipt get lr => widget.lr;
-
-  Future<void> _pick() async {
-    final picked = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: podExtensions,
-      // Web has no file path, so the bytes are needed to upload.
-      withData: true,
-    );
-    if (picked == null || picked.files.isEmpty) return;
-    final f = picked.files.first;
-    setState(() {
-      _error = podFileError(f.name, f.size);
-      _file = _error == null ? f : null;
-    });
-  }
 
   Future<void> _send() async {
     final f = _file;
@@ -179,9 +145,9 @@ class _BalanceRequestDialogState extends ConsumerState<_BalanceRequestDialog> {
           children: [
             if (!requested)
               Text(
-                'LR ${lr.number}. Upload the POD (proof of delivery) — a '
-                'photo or a PDF. Accounts will see it under "Balance '
-                'Requested" and pay the transporter balance.',
+                'LR ${lr.number}. Take a photo of the POD (proof of '
+                'delivery) or upload a photo / PDF. Accounts will see it under '
+                '"Balance Requested" and pay the transporter balance.',
                 style: const TextStyle(fontSize: 13, color: AppColors.ink),
               )
             else ...[
@@ -204,31 +170,12 @@ class _BalanceRequestDialogState extends ConsumerState<_BalanceRequestDialog> {
               ),
             ),
             const SizedBox(height: 6),
-            Row(
-              children: [
-                AppButton(
-                  label: f == null ? 'Choose photo / PDF' : 'Change file',
-                  icon: Icons.upload_file_rounded,
-                  kind: BtnKind.soft,
-                  small: true,
-                  onPressed: _sending ? null : _pick,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    f == null
-                        ? 'No file chosen'
-                        : '${f.name} · ${(f.size / 1024).ceil()} KB',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      color: f == null ? AppColors.slate : AppColors.ink,
-                      fontWeight: f == null ? FontWeight.w500 : FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
+            PodPicker(
+              lrNumber: lr.number,
+              file: f,
+              enabled: !_sending,
+              onPicked: (p) => setState(() => _file = p),
+              onError: (e) => setState(() => _error = e),
             ),
             if (_error != null) ...[
               const SizedBox(height: 10),

@@ -87,6 +87,7 @@ dependencies:
   # ET_APP_ID + ET_WRITE_KEY (lib/core/telemetry/telemetry.dart).
   vistar_event_tracker:
     path: packages/vistar_event_tracker
+  image_picker: ^1.2.4
 
 dev_dependencies:
   flutter_test:
