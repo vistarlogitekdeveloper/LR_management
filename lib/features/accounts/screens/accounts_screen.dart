@@ -17,6 +17,7 @@ import '../../../shared/widgets/searchable_field.dart';
 import '../../../shared/widgets/section_title.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../lr/providers/lr_providers.dart';
+import '../../lr/utils/manual_lr_number.dart';
 import '../../lr/widgets/balance_request.dart';
 import '../../masters/providers/master_providers.dart';
 import '../../shell/widgets/app_topbar.dart';
@@ -97,8 +98,6 @@ final accountsSortedProvider = Provider<List<LorryReceipt>>((ref) {
 
 // The region code is the 2–6 letter segment after the first '/' in an LR
 // number. Built once, not per LR row.
-final _regionCodeRe = RegExp(r'^[A-Za-z]{2,6}$');
-
 /// region_id -> short code (embedded in the LR number) for the region filter.
 final accountsRegionCodesProvider = Provider<Map<String, String>>((ref) {
   final sw = kAccPerfLog ? (Stopwatch()..start()) : null;
@@ -107,10 +106,8 @@ final accountsRegionCodesProvider = Provider<Map<String, String>>((ref) {
   for (final lr in sorted) {
     final rid = lr.regionId;
     if (rid == null || rid.isEmpty) continue;
-    final parts = lr.number.split('/');
-    if (parts.length > 1 && _regionCodeRe.hasMatch(parts[1])) {
-      regionCodes[rid] = parts[1].toUpperCase();
-    }
+    final code = regionCodeFromLrNumber(lr.number);
+    if (code != null) regionCodes[rid] = code;
   }
   if (kAccPerfLog) {
     sw!.stop();

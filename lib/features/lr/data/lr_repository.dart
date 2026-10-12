@@ -5,6 +5,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/paginate.dart';
 import '../../../features/lookups/data/lookup_value.dart';
 import '../../../shared/models/lr_models.dart';
+import 'lr_number_check.dart';
 
 /// Optional E-way bill payload attached to an LR on create/update. EWBs live in
 /// their own backend table (`/ewb`) linked by `lr_id`, so the repository creates
@@ -119,6 +120,18 @@ class LrRepository {
   Future<String> nextNumber() async {
     final res = await _api.dio.get('/lrs/next-number');
     return ((res.data['data'] as Map)['next_number'] ?? '').toString();
+  }
+
+  /// May [number] be used as a manual LR number? The server normalises it and
+  /// checks the format and that no LR of the organisation has it.
+  Future<LrNumberCheck> checkNumber(String number) async {
+    final res = await _api.dio.get(
+      '/lrs/number-check',
+      queryParameters: {'number': number},
+    );
+    return LrNumberCheck.fromJson(
+      (res.data['data'] as Map).cast<String, dynamic>(),
+    );
   }
 
   Future<LorryReceipt> getById(String id) async {

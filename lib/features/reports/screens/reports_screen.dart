@@ -12,6 +12,7 @@ import '../../../shared/widgets/searchable_field.dart';
 import '../../../shared/widgets/section_title.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../lr/providers/lr_providers.dart';
+import '../../lr/utils/manual_lr_number.dart';
 import '../../shell/widgets/app_topbar.dart';
 import '../data/reports_repository.dart';
 import '../providers/reports_providers.dart';
@@ -465,10 +466,8 @@ class _AccountsTab extends ConsumerWidget {
     for (final l in lrs) {
       final rid = l.regionId;
       if (rid != null && rid.isNotEmpty) {
-        final parts = l.number.split('/');
-        if (parts.length > 1 && RegExp(r'^[A-Za-z]{2,6}$').hasMatch(parts[1])) {
-          misRegions[rid] = parts[1].toUpperCase();
-        }
+        final code = regionCodeFromLrNumber(l.number);
+        if (code != null) misRegions[rid] = code;
       }
       if (l.enteredBy.isNotEmpty && l.enteredByName.isNotEmpty) {
         misCreators[l.enteredBy] = l.enteredByName;

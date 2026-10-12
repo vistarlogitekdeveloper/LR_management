@@ -1,4 +1,5 @@
 import '../../../core/network/api_client.dart';
+import '../../lr/utils/manual_lr_number.dart';
 import 'driver_change.dart';
 import 'route_planner.dart';
 
@@ -259,7 +260,10 @@ class FleetVehicle {
       regionCode:
           (serverCode.isNotEmpty
                   ? serverCode
-                  : (segments.length >= 3 ? segments[1] : ''))
+                  // A manual number (LR/Manual/...) names no region.
+                  : (segments.length >= 3 && !isManualLrNumber(number)
+                        ? segments[1]
+                        : ''))
               .toUpperCase(),
       regionName: j['region_name'] as String?,
       signal: switch (j['signal']) {

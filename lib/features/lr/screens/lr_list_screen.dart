@@ -16,6 +16,7 @@ import '../../masters/providers/master_providers.dart';
 import '../../masters/widgets/master_actions.dart';
 import '../../shell/widgets/app_topbar.dart';
 import '../providers/lr_providers.dart';
+import '../utils/manual_lr_number.dart';
 import '../widgets/balance_request.dart';
 
 /// Confirm + delete an LR from the list. Calls the same notifier.remove ->
@@ -214,11 +215,8 @@ class _FilterBar extends ConsumerWidget {
           if (name != null && name.isNotEmpty) {
             regionLabels[rid] = name;
           } else {
-            final parts = lr.number.split('/');
-            if (parts.length > 1 &&
-                RegExp(r'^[A-Za-z]{2,6}$').hasMatch(parts[1])) {
-              regionLabels.putIfAbsent(rid, () => parts[1].toUpperCase());
-            }
+            final code = regionCodeFromLrNumber(lr.number);
+            if (code != null) regionLabels.putIfAbsent(rid, () => code);
           }
         }
         final regionIds = regionLabels.keys.toList()

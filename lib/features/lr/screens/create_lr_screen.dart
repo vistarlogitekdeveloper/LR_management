@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/file_opener.dart';
 import '../../../core/utils/formatters.dart';
@@ -39,6 +40,9 @@ import '../../shell/widgets/app_topbar.dart';
 import '../data/lr_repository.dart';
 import '../providers/lr_providers.dart';
 import '../providers/templates_provider.dart';
+import '../utils/manual_lr_entry.dart';
+import '../utils/manual_lr_number.dart';
+import '../widgets/lr_number_banner.dart';
 import '../utils/lr_date_rules.dart';
 import '../utils/lr_driver_rules.dart';
 
@@ -168,6 +172,13 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   // Stable per-form idempotency key: re-submitting the same new LR can never
   // create a duplicate (the server dedupes on this key).
   final String _idempotencyKey = const Uuid().v4();
+
+  // A manual LR number the operator typed instead of the automatic one, with
+  // its check (widgets/lr_number_banner.dart); null = the automatic number.
+  ManualLrEntry? _manualNumber;
+  // Bumped when the save finds the manual number already used, so the banner
+  // checks it again and shows that.
+  int _numberRecheck = 0;
 
   LrTemplate? _appliedTemplate;
 
@@ -629,6 +640,9 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
 
   Map<String, dynamic> _buildPayload(DateTime date) {
     return {
+      // Set once, at creation (the server ignores it on an edit).
+      if (!_isEdit && _manualNumber != null)
+        'manual_number': _manualNumber!.number,
       'lr_date': date.toIso8601String().substring(0, 10),
       'customer_name': _customerCtrl.text.trim(),
       if (_orderNoCtrl.text.trim().isNotEmpty)
@@ -1522,6 +1536,14 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       return;
     }
     if (!_validateMandatory()) return;
+    // A manual LR number with a wrong format, or one an LR already has, is not
+    // sent. One still being checked (or that could not be) is — the server
+    // checks it again either way.
+    final manualBlocker = _isEdit ? null : _manualNumber?.blocker;
+    if (manualBlocker != null) {
+      MasterActions.showError(context, manualBlocker);
+      return;
+    }
 
     setState(() => _saving = true);
     final notifier = ref.read(lrListProvider.notifier);
@@ -1567,6 +1589,11 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       // ids and versions, and re-running _hydrate() here would throw away
       // everything the user had just typed.
       final refreshed = await _refreshEditingSnapshot();
+      // Someone saved an LR with this manual number in the meantime: show it
+      // on the number field too.
+      if (mounted && asApiException(e)?.code == 'LR_NUMBER_TAKEN') {
+        setState(() => _numberRecheck++);
+      }
       if (mounted) {
         MasterActions.showError(
           context,
@@ -1614,7 +1641,9 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   /// Best-effort preview of the number the server will assign. The real number
   /// is reserved atomically on save — this just bumps the latest LR's trailing
   /// sequence so the operator can see the likely number while filling the form.
-  String _previewLrNumber(List<LorryReceipt> lrs) {
+  String _previewLrNumber(List<LorryReceipt> all) {
+    // Manual numbers (LR/Manual/...) are not from the counter.
+    final lrs = all.where((l) => !isManualLrNumber(l.number)).toList();
     if (lrs.isEmpty) return '';
     int seqOf(String n) {
       final m = RegExp(r'(\d+)\D*$').firstMatch(n);
@@ -1636,70 +1665,6 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     final suffix = m.group(3)!;
     final next = (int.parse(digits) + 1).toString().padLeft(digits.length, '0');
     return '$prefix$next$suffix';
-  }
-
-  /// Banner shown at the top of the form with the (preview) LR number.
-  Widget _lrNumberBanner(String number) {
-    final showPreviewTag = !_isEdit && number.isNotEmpty;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.plum.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.plum.withValues(alpha: 0.18)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: AppColors.plum.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.confirmation_number_outlined,
-              color: AppColors.plum,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _isEdit ? 'LR Number' : 'LR Number (preview)',
-                  style: const TextStyle(
-                    color: AppColors.slate,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  number.isEmpty ? 'Assigned automatically on save' : number,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: number.isEmpty ? AppColors.slate : AppColors.ink,
-                    fontWeight: FontWeight.w800,
-                    fontSize: number.isEmpty ? 13.5 : 18,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (showPreviewTag)
-            const Text(
-              'confirmed on save',
-              style: TextStyle(color: AppColors.slate, fontSize: 10.5),
-            ),
-        ],
-      ),
-    );
   }
 
   // We store the picked wall-clock AS UTC so the In/Out time never shifts with
@@ -1843,7 +1808,12 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _lrNumberBanner(previewNumber),
+                      LrNumberBanner(
+                        isEdit: _isEdit,
+                        number: previewNumber,
+                        recheck: _numberRecheck,
+                        onManualChanged: (e) => _manualNumber = e,
+                      ),
                       const SizedBox(height: 16),
                       _templateBar(),
                       const SizedBox(height: 20),
