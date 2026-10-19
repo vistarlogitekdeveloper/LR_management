@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:dio/dio.dart';
 
 import '../telemetry/telemetry.dart';
@@ -14,6 +16,21 @@ import 'token_storage.dart';
 /// request may already have been applied, and the retry then returns the
 /// server's rejection of the duplicate, reporting a success as a failure.
 const String kNoRetryExtra = 'lrm_no_retry';
+
+final _jitter = Random();
+
+/// Wait before transient retry [attempt] (1-based): ~1s, then ~3s, plus up to
+/// 25% jitter so the desks at one site do not retry in step.
+///
+/// It was 400 ms then 800 ms, shorter than a site Wi-Fi blip: in October 2026
+/// the event tracker still logged ~150 lr_app connectionErrors on reads
+/// (`/tracking/lr/:id/route`, `/part-descriptions`, `/lrs/next-number`) whose
+/// three tries had all failed within ~1.2 s.
+Duration transientRetryDelay(int attempt, {Random? random}) {
+  final ms = 1000 * pow(3, attempt - 1);
+  final r = (random ?? _jitter).nextDouble();
+  return Duration(milliseconds: (ms * (1 + r * 0.25)).round());
+}
 
 class ApiClient {
   ApiClient(this._tokens)
@@ -141,8 +158,11 @@ class ApiClient {
     final preConnect =
         e.type == DioExceptionType.connectionError ||
         e.type == DioExceptionType.connectionTimeout;
-    final retryGet5xx = opts.method.toUpperCase() == 'GET' && transient5xx;
-    if (!preConnect && !retryGet5xx) return false;
+    final isGet = opts.method.toUpperCase() == 'GET';
+    final retryGet5xx = isGet && transient5xx;
+    // A read that timed out waiting for the body is safe to ask for again.
+    final retryGetTimeout = isGet && e.type == DioExceptionType.receiveTimeout;
+    if (!preConnect && !retryGet5xx && !retryGetTimeout) return false;
     // A call site may opt out (see [kNoRetryExtra]). connectionError also covers
     // a socket dropped MID-request, which may well have reached the server, so
     // for a non-idempotent write the retry can hit an action that already
@@ -157,7 +177,8 @@ class ApiClient {
       ),
     );
     for (var attempt = 1; attempt <= 2; attempt++) {
-      await Future.delayed(Duration(milliseconds: 400 * attempt));
+      await Future.delayed(transientRetryDelay(attempt));
+      if (opts.cancelToken?.isCancelled ?? false) return false;
       try {
         final resp = await bare.fetch(opts);
         handler.resolve(resp);
