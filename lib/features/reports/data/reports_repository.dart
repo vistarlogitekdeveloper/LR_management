@@ -262,6 +262,9 @@ class ReportsRepository {
   /// the user isn't allowed to see, so clearing on blank would let a restricted
   /// user wipe billing data by re-uploading their own download.
   ///
+  /// How long the app waits for a real MIS upload to finish saving.
+  static const misImportTimeout = Duration(minutes: 10);
+
   /// With [dryRun] true the server parses and diffs but writes nothing, and
   /// returns the identical summary — used to show a confirmation preview.
   Future<MisImportResult> importMisXlsx({
@@ -284,6 +287,16 @@ class ReportsRepository {
         '/reports/mis/import',
         data: form,
         queryParameters: {if (dryRun) 'dry_run': 'true'},
+        // The real upload saves its LRs one by one on the server — up to 5000,
+        // a few minutes. The app-wide 30 s wait would report a timeout while
+        // the server is still saving. The preview (dry run) writes nothing and
+        // keeps the normal timeout.
+        options: dryRun
+            ? null
+            : Options(
+                receiveTimeout: misImportTimeout,
+                sendTimeout: misImportTimeout,
+              ),
       );
       return MisImportResult.fromJson(
         (res.data['data'] as Map).cast<String, dynamic>(),
