@@ -187,6 +187,7 @@ class FreightDetails {
   final double extraPointDelivery; // total received from client
   final double extraPointDeliveryDriverShare; // portion paid out to the driver
   final double haltingCharge;
+  final double detentionCharges; // migration 222, in total / balance
   final double gst;
   final double advance;
 
@@ -218,6 +219,7 @@ class FreightDetails {
     this.extraPointDelivery = 0,
     this.extraPointDeliveryDriverShare = 0,
     this.haltingCharge = 0,
+    this.detentionCharges = 0,
     this.gst = 0,
     this.advance = 0,
     this.advancePercent = kDefaultAdvancePercent,
@@ -255,7 +257,8 @@ class FreightDetails {
           collection +
           vistarMargin +
           additionalFreight +
-          haltingCharge);
+          haltingCharge +
+          detentionCharges);
   double get balance => _balance ?? (total - advance);
 
   // ---- Client incentive charges (express + extra-point delivery) -----------
@@ -304,6 +307,7 @@ class FreightDetails {
         json['extra_point_delivery_driver_share'],
       ),
       haltingCharge: asDouble(json['halting_charge']),
+      detentionCharges: asDouble(json['detention_charges']),
       gst: asDouble(json['gst']),
       advance: asDouble(json['advance']),
       // asDoubleOrNull (not asDouble) so an absent column falls back to the
@@ -336,6 +340,7 @@ class FreightDetails {
     double? extraPointDelivery,
     double? extraPointDeliveryDriverShare,
     double? haltingCharge,
+    double? detentionCharges,
     double? gst,
     double? advance,
     double? advancePercent,
@@ -362,6 +367,7 @@ class FreightDetails {
       extraPointDeliveryDriverShare:
           extraPointDeliveryDriverShare ?? this.extraPointDeliveryDriverShare,
       haltingCharge: haltingCharge ?? this.haltingCharge,
+      detentionCharges: detentionCharges ?? this.detentionCharges,
       gst: gst ?? this.gst,
       advance: advance ?? this.advance,
       advancePercent: advancePercent ?? this.advancePercent,
@@ -511,6 +517,13 @@ class LorryReceipt {
   /// would only answer 404. Makes the app safe to deploy before the backend.
   final bool balanceRequestSupported;
 
+  /// Two-point delivery (migration 222): 1 = the consignee only, 2 = also
+  /// [secondConsignee], dropped at [secondToCity].
+  final int deliveryPoints;
+  final Consignee? secondConsignee;
+  final String secondToCity;
+  bool get isTwoPoint => deliveryPoints == 2 && secondConsignee != null;
+
   /// Transporter freight still to pay — the same arithmetic as the Accounts
   /// screen's "Awaiting Balance".
   bool get _balanceOutstanding =>
@@ -582,6 +595,9 @@ class LorryReceipt {
     this.balanceRequestedAt,
     this.balanceRequestPodId,
     this.balanceRequestSupported = false,
+    this.deliveryPoints = 1,
+    this.secondConsignee,
+    this.secondToCity = '',
   });
 
   int get totalPackages => items.fold(0, (sum, item) => sum + item.packages);
@@ -734,6 +750,11 @@ class LorryReceipt {
       ),
       balanceRequestPodId: json['balance_request_pod_id'] as String?,
       balanceRequestSupported: json.containsKey('balance_requested_at'),
+      deliveryPoints: (json['delivery_points'] as num?)?.toInt() ?? 1,
+      secondConsignee: nested('secondConsignee') != null
+          ? Consignee.fromJson(nested('secondConsignee')!)
+          : null,
+      secondToCity: (json['second_to_city'] as String?) ?? '',
     );
   }
 
@@ -806,6 +827,9 @@ class LorryReceipt {
       balanceRequestedAt: balanceRequestedAt,
       balanceRequestPodId: balanceRequestPodId,
       balanceRequestSupported: balanceRequestSupported,
+      deliveryPoints: deliveryPoints,
+      secondConsignee: secondConsignee,
+      secondToCity: secondToCity,
     );
   }
 }

@@ -160,6 +160,22 @@ class AppUser {
   bool get canEnterManualLrNumber =>
       can('LR_MANUAL_NUMBER') || can('SUPERADMIN_ACCESS');
 
+  /// Edit LR. After creation an LR is changed by the super admin alone — the
+  /// server answers LR_EDIT_LOCKED to anyone else (Accounts still record the
+  /// advance and billing dates from the Accounts screen). Status changes,
+  /// change driver and the POD keep [canEditLr].
+  bool get canEditLrDetails => isSuperAdmin || can('SUPERADMIN_ACCESS');
+
+  /// Two-point delivery on Create LR (migration 222), granted by the super
+  /// admin alone. Mirrors the server gate on POST /lrs.
+  bool get canTwoPointDelivery =>
+      can('LR_TWO_POINT_DELIVERY') || can('SUPERADMIN_ACCESS');
+
+  /// Detention / express charges, on Create LR or with the balance POD
+  /// (migration 222), granted by the super admin alone.
+  bool get canAddExtraCharges =>
+      can('LR_EXTRA_CHARGES') || can('SUPERADMIN_ACCESS');
+
   // ---- Visibility of sensitive money fields (migration 072) ----
   // Three server-side visibility perms gate WHICH money fields a user may see
   // on LRs and Routes. The backend redacts (null) the matching fields in every

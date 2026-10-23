@@ -278,6 +278,7 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
     required String fileName,
     List<int>? bytes,
     String? filePath,
+    Map<String, String> charges = const {},
   }) => _versionSafeWrite(id, () async {
     final updated = await _repo.requestBalance(
       id,
@@ -285,6 +286,7 @@ class LrNotifier extends StateNotifier<List<LorryReceipt>> {
       fileName: fileName,
       bytes: bytes,
       filePath: filePath,
+      charges: charges,
     );
     // The POD can move the LR to Delivered on the server, and the reply is the
     // bare row (no status association — it would read as Booked), so cache a

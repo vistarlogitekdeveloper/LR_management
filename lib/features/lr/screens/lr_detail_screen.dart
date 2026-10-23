@@ -31,11 +31,9 @@ class LrDetailScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final canEdit = user?.canEditLr ?? false;
     final canDelete = user?.canDeleteLr ?? false;
-    // A super admin may edit an LR at ANY stage — including after it was sent for
-    // payment (the sent-for-payment lock on the Edit button is bypassed for them).
-    // The backend already permits this (no sent-for-payment block; the delivered
-    // lock is bypassed for admins).
-    final isSuperAdmin = user?.isSuperAdmin ?? false;
+    // Edit LR is the super admin's alone, at any stage: after creation the
+    // server answers LR_EDIT_LOCKED to everyone else (23 Oct 2026).
+    final isSuperAdmin = user?.canEditLrDetails ?? false;
     // The ops user who creates/manages LRs is the one who sends it to Accounts.
     final canSend =
         (user?.canCreateLr ?? false) ||
@@ -199,11 +197,10 @@ class LrDetailScreen extends ConsumerWidget {
                   icon: Icons.flag_outlined,
                   onPressed: () => _changeStatus(context, ref, lr),
                 ),
-              // Once an LR is sent to Accounts for payment it is locked — no
-              // more edits or deletes (status changes are still allowed so the
-              // LR can be progressed/delivered). A super admin is exempt: they
-              // may edit the LR at any stage.
-              if (canEdit && (!lr.sentForPayment || isSuperAdmin))
+              // Edit: the super admin alone, at any stage. Delete stops once
+              // the LR is sent to Accounts; status changes stay allowed so the
+              // LR can be progressed / delivered.
+              if (isSuperAdmin)
                 AppButton(
                   label: 'Edit',
                   kind: BtnKind.soft,
@@ -508,6 +505,15 @@ class _LeftColumn extends StatelessWidget {
                   ('Consignee', lr.consignee.name),
                   ('GST', lr.consignee.gst),
                   ('Delivery', lr.consignee.location),
+                  if (lr.isTwoPoint) ...[
+                    ('2nd Consignee', lr.secondConsignee!.name),
+                    (
+                      '2nd Delivery',
+                      lr.secondToCity.isNotEmpty
+                          ? lr.secondToCity
+                          : lr.secondConsignee!.location,
+                    ),
+                  ],
                 ],
                 mobile: mobile,
               ),
@@ -720,6 +726,12 @@ class _RightColumn extends StatelessWidget {
                 value: lr.freight.haltingCharge,
                 hidden: !canViewTransporterRate,
               ),
+              if (lr.freight.detentionCharges > 0)
+                _FreightRow(
+                  label: 'Detention Charges',
+                  value: lr.freight.detentionCharges,
+                  hidden: !canViewTransporterRate,
+                ),
               const Divider(),
               _FreightRow(
                 label: 'Total',

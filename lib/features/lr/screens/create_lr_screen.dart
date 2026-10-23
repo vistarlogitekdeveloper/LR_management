@@ -42,6 +42,7 @@ import '../providers/lr_providers.dart';
 import '../providers/templates_provider.dart';
 import '../utils/manual_lr_entry.dart';
 import '../utils/manual_lr_number.dart';
+import '../widgets/delivery_points_section.dart';
 import '../widgets/lr_number_banner.dart';
 import '../utils/lr_date_rules.dart';
 import '../utils/lr_driver_rules.dart';
@@ -116,6 +117,9 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   Party? _consignor;
   Party? _customer;
   Party? _consignee;
+  // Two-point delivery (migration 222): 1 = single point, the default.
+  int _deliveryPoints = 1;
+  Party? _secondConsignee;
   Vehicle? _vehicle;
   Transporter? _transporter;
   Driver? _driver;
@@ -148,6 +152,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   final _extraPointDeliveryCtrl = TextEditingController(text: '0');
   final _extraPointDriverCtrl = TextEditingController(text: '0');
   final _haltingChargeCtrl = TextEditingController(text: '0');
+  final _detentionCtrl = TextEditingController(text: '0');
   final _advanceCtrl = TextEditingController(text: '0');
   // Share of the transporter freight released as this LR's advance. Seeded from
   // the selected transporter's default (see _selectTransporter) and editable
@@ -252,6 +257,23 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                     email: '',
                   )
                 : null);
+        _deliveryPoints = lr.isTwoPoint ? 2 : 1;
+        final second = lr.secondConsignee;
+        _secondConsignee = second == null || !lr.isTwoPoint
+            ? null
+            : pick(parties, (p) => p.id == second.id) ??
+                  Party(
+                    id: second.id,
+                    name: second.name,
+                    gst: second.gst,
+                    city: lr.secondToCity.isNotEmpty
+                        ? lr.secondToCity
+                        : second.location,
+                    address: second.address,
+                    contact: second.contact,
+                    mobile: second.mobile,
+                    email: '',
+                  );
         _vehicle =
             pick(vehicles, (v) => v.id == lr.vehicle.id) ??
             (lr.vehicle.id.isNotEmpty ? lr.vehicle : null);
@@ -316,6 +338,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         _extraPointDriverCtrl.text = lr.freight.extraPointDeliveryDriverShare
             .toStringAsFixed(0);
         _haltingChargeCtrl.text = lr.freight.haltingCharge.toStringAsFixed(0);
+        _detentionCtrl.text = lr.freight.detentionCharges.toStringAsFixed(0);
         _advanceCtrl.text = lr.freight.advance.toStringAsFixed(0);
         _advancePctCtrl.text = pctText(lr.freight.advancePercent);
         _mathadiCtrl.text = lr.freight.mathadi.toStringAsFixed(0);
@@ -373,6 +396,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       _extraPointDeliveryCtrl,
       _extraPointDriverCtrl,
       _haltingChargeCtrl,
+      _detentionCtrl,
       _advanceCtrl,
       _advancePctCtrl,
       _mathadiCtrl,
@@ -522,7 +546,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       _toDouble(_mathadiCtrl) +
       _vistarMargin +
       _toDouble(_additionalFreightCtrl) +
-      _toDouble(_haltingChargeCtrl);
+      _toDouble(_haltingChargeCtrl) +
+      _toDouble(_detentionCtrl);
 
   // ---- Client incentive charges split (live preview) -----------------------
   double get _expressVistarMargin {
@@ -551,6 +576,11 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       ref.read(currentUserProvider)?.canViewTransporterRate ?? false;
   bool get _canViewVistarMargin =>
       ref.read(currentUserProvider)?.canViewVistarMargin ?? false;
+  // Migration 222: both granted by the super admin alone.
+  bool get _canTwoPointDelivery =>
+      ref.read(currentUserProvider)?.canTwoPointDelivery ?? false;
+  bool get _canAddExtraCharges =>
+      ref.read(currentUserProvider)?.canAddExtraCharges ?? false;
 
   // Master-manage permissions. They decide whether the Vehicle / Driver /
   // Transporter / Route pickers offer an "Add new …" entry, so an operator who
@@ -651,6 +681,11 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       if (_outDateTime != null) 'out_datetime': _isoWall(_outDateTime!),
       'consignor_id': _consignor!.id,
       'consignee_id': _consignee!.id,
+      'delivery_points': _deliveryPoints,
+      if (_deliveryPoints == 2 && _secondConsignee != null)
+        'second_consignee_id': _secondConsignee!.id,
+      if (_deliveryPoints == 2 && _secondConsignee != null)
+        'second_to_city': _secondConsignee!.city,
       if (_vehicle != null) 'vehicle_id': _vehicle!.id,
       if (_transporter != null) 'transporter_id': _transporter!.id,
       if (_driver != null) 'driver_id': _driver!.id,
@@ -670,6 +705,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       'extra_point_delivery': _toDouble(_extraPointDeliveryCtrl),
       'extra_point_delivery_driver_share': _toDouble(_extraPointDriverCtrl),
       'halting_charge': _toDouble(_haltingChargeCtrl),
+      'detention_charges': _toDouble(_detentionCtrl),
       'advance': _toDouble(_advanceCtrl),
       'advance_percent': _advancePercentValue,
       'mathadi': _toDouble(_mathadiCtrl),
@@ -1352,6 +1388,10 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     if (_consignee == null) {
       errors['consignee'] = 'Select a consignee / receiver.';
     }
+    if (_deliveryPoints == 2 && _secondConsignee == null) {
+      errors['secondConsignee'] =
+          'Select the consignee for the second delivery point.';
+    }
     if (_vehicle == null) {
       errors['vehicle'] = 'Select a vehicle.';
     }
@@ -1879,6 +1919,30 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                 ),
                               ),
                             ]),
+                            // Single point is the default; two-point only for
+                            // whom the super admin allowed it (migration 222).
+                            if (_canTwoPointDelivery ||
+                                _deliveryPoints == 2) ...[
+                              const SizedBox(height: 12),
+                              DeliveryPointsSection(
+                                points: _deliveryPoints,
+                                first: _consignee,
+                                second: _secondConsignee,
+                                options: consigneeParties,
+                                errorText: _fieldErrors['secondConsignee'],
+                                onPointsChanged: (v) => setState(() {
+                                  _deliveryPoints = v;
+                                  if (v == 1) _secondConsignee = null;
+                                  _fieldErrors.remove('secondConsignee');
+                                }),
+                                onSecondChanged: (v) => setState(() {
+                                  _secondConsignee = v;
+                                  if (v != null) {
+                                    _fieldErrors.remove('secondConsignee');
+                                  }
+                                }),
+                              ),
+                            ],
                             if (_consignor != null) ...[
                               const SizedBox(height: 8),
                               _autoFillStrip(
@@ -2154,6 +2218,21 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                     onChanged: (_) => setState(() {}),
                                   ),
                                 ),
+                              // Migration 222: for whom the super admin allowed
+                              // it; an amount already on the LR stays visible.
+                              if (canViewTransporterRate &&
+                                  (_canAddExtraCharges ||
+                                      _toDouble(_detentionCtrl) > 0))
+                                LabeledField(
+                                  label: 'Detention Charges',
+                                  child: TextFormField(
+                                    key: const ValueKey('detention-charges'),
+                                    controller: _detentionCtrl,
+                                    enabled: _canAddExtraCharges,
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (_) => setState(() {}),
+                                  ),
+                                ),
                               if (canViewTransporterRate)
                                 LabeledField(
                                   label: 'Mathadi',
@@ -2297,34 +2376,38 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                 ),
                               ),
                               _grid(3, [
-                                LabeledField(
-                                  label: 'Express Charges (Client)',
-                                  child: TextFormField(
-                                    controller: _expressChargesCtrl,
-                                    keyboardType: TextInputType.number,
-                                    onChanged: (_) => setState(() {
-                                      _fieldErrors.remove('expressDriver');
-                                    }),
-                                  ),
-                                ),
-                                LabeledField(
-                                  label: "Express — Driver's Share",
-                                  errorText: _fieldErrors['expressDriver'],
-                                  child: TextFormField(
-                                    controller: _expressDriverCtrl,
-                                    keyboardType: TextInputType.number,
-                                    onChanged: (_) => setState(() {
-                                      _fieldErrors.remove('expressDriver');
-                                    }),
-                                  ),
-                                ),
-                                if (canViewVistarMargin)
+                                // Express: for whom the super admin allowed
+                                // extra charges (migration 222).
+                                if (_canAddExtraCharges) ...[
                                   LabeledField(
-                                    label: 'Express — Vistar Margin',
-                                    child: _readonlyAmount(
-                                      _expressVistarMargin,
+                                    label: 'Express Charges (Client)',
+                                    child: TextFormField(
+                                      controller: _expressChargesCtrl,
+                                      keyboardType: TextInputType.number,
+                                      onChanged: (_) => setState(() {
+                                        _fieldErrors.remove('expressDriver');
+                                      }),
                                     ),
                                   ),
+                                  LabeledField(
+                                    label: "Express — Driver's Share",
+                                    errorText: _fieldErrors['expressDriver'],
+                                    child: TextFormField(
+                                      controller: _expressDriverCtrl,
+                                      keyboardType: TextInputType.number,
+                                      onChanged: (_) => setState(() {
+                                        _fieldErrors.remove('expressDriver');
+                                      }),
+                                    ),
+                                  ),
+                                  if (canViewVistarMargin)
+                                    LabeledField(
+                                      label: 'Express — Vistar Margin',
+                                      child: _readonlyAmount(
+                                        _expressVistarMargin,
+                                      ),
+                                    ),
+                                ],
                                 LabeledField(
                                   label: 'Extra Point Delivery (Client)',
                                   child: TextFormField(

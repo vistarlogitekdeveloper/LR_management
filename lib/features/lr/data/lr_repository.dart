@@ -229,6 +229,8 @@ class LrRepository {
     required String fileName,
     List<int>? bytes,
     String? filePath,
+    // Detention / express charges sent with the POD (migration 222).
+    Map<String, String> charges = const {},
   }) async {
     final contentType = _mediaTypeForName(fileName);
     final MultipartFile multipart;
@@ -249,7 +251,7 @@ class LrRepository {
     }
     await _api.dio.post(
       '/lrs/$id/request-balance',
-      data: FormData.fromMap({'file': multipart}),
+      data: FormData.fromMap({'file': multipart, ...charges}),
       options: _lockedWrite(version),
     );
     return getById(id);

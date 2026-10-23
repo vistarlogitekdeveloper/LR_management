@@ -8,8 +8,10 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/mime_types.dart';
 import '../../../shared/models/lr_models.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../reports/services/export_service.dart';
 import '../providers/lr_providers.dart';
+import 'balance_charges_fields.dart';
 import 'pod_picker.dart';
 
 export '../utils/pod_photo.dart' show podExtensions, podMaxBytes, podFileError;
@@ -95,6 +97,8 @@ class _BalanceRequestDialogState extends ConsumerState<_BalanceRequestDialog> {
   PodFile? _file;
   String? _error;
   bool _sending = false;
+  // Detention / express charges; null while one is not an amount.
+  Map<String, String>? _charges = const {};
 
   LorryReceipt get lr => widget.lr;
 
@@ -102,6 +106,11 @@ class _BalanceRequestDialogState extends ConsumerState<_BalanceRequestDialog> {
     final f = _file;
     if (f == null) {
       setState(() => _error = 'Upload the POD to request the balance.');
+      return;
+    }
+    final charges = _charges;
+    if (charges == null) {
+      setState(() => _error = 'Charges must be an amount of 0 or more.');
       return;
     }
     setState(() {
@@ -117,6 +126,7 @@ class _BalanceRequestDialogState extends ConsumerState<_BalanceRequestDialog> {
             fileName: f.name,
             bytes: f.bytes,
             filePath: f.bytes == null ? f.path : null,
+            charges: charges,
           );
       if (mounted) Navigator.of(context).pop(after);
     } catch (e) {
@@ -177,6 +187,14 @@ class _BalanceRequestDialogState extends ConsumerState<_BalanceRequestDialog> {
               onPicked: (p) => setState(() => _file = p),
               onError: (e) => setState(() => _error = e),
             ),
+            if (ref.watch(currentUserProvider)?.canAddExtraCharges ??
+                false) ...[
+              const SizedBox(height: 14),
+              BalanceChargesFields(
+                enabled: !_sending,
+                onChanged: (c) => _charges = c,
+              ),
+            ],
             if (_error != null) ...[
               const SizedBox(height: 10),
               Text(

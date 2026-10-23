@@ -204,7 +204,10 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
             small: true,
             onPressed: () {
               Navigator.of(ctx).pop();
-              context.go('/lrs/${widget.id}/edit');
+              // Only the super admin may edit an LR; others open it.
+              final edit =
+                  ref.read(currentUserProvider)?.canEditLrDetails ?? false;
+              context.go('/lrs/${widget.id}${edit ? '/edit' : ''}');
             },
           ),
         ],
@@ -1049,7 +1052,10 @@ class _DriverNote extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 8),
-          if (editLr && lrId != null && lrId.isNotEmpty)
+          if (editLr &&
+              lrId != null &&
+              lrId.isNotEmpty &&
+              (ref.watch(currentUserProvider)?.canEditLrDetails ?? false))
             AppButton(
               label: 'Assign a driver',
               icon: Icons.edit_outlined,
