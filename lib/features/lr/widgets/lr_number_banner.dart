@@ -23,12 +23,17 @@ class LrNumberBanner extends ConsumerStatefulWidget {
   /// Bump to check the manual number again (the save found it taken).
   final int recheck;
 
+  /// Whether this user may enter a manual number (AppUser.canEnterManualLrNumber).
+  /// Without it the banner is the automatic preview only.
+  final bool allowManual;
+
   const LrNumberBanner({
     super.key,
     required this.isEdit,
     required this.number,
     required this.onManualChanged,
     this.recheck = 0,
+    this.allowManual = false,
   });
 
   @override
@@ -153,7 +158,7 @@ class _LrNumberBannerState extends ConsumerState<LrNumberBanner> {
       child: LayoutBuilder(
         builder: (context, c) {
           final narrow = c.maxWidth < 440;
-          final showSwitch = !widget.isEdit;
+          final showSwitch = !widget.isEdit && widget.allowManual;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

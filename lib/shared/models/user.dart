@@ -154,6 +154,12 @@ class AppUser {
   bool get canStartTracking =>
       can('TRACKING_START') || can('ADMIN_ACCESS') || can('SUPERADMIN_ACCESS');
 
+  /// Create LR's "Enter manually" (migration 218). Mirrors the server gate on
+  /// POST /lrs and GET /lrs/number-check: LR_MANUAL_NUMBER, which only the
+  /// super admin grants, or being the super admin. ADMIN_ACCESS is NOT enough.
+  bool get canEnterManualLrNumber =>
+      can('LR_MANUAL_NUMBER') || can('SUPERADMIN_ACCESS');
+
   // ---- Visibility of sensitive money fields (migration 072) ----
   // Three server-side visibility perms gate WHICH money fields a user may see
   // on LRs and Routes. The backend redacts (null) the matching fields in every

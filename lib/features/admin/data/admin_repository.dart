@@ -50,12 +50,16 @@ class PermissionToggle {
   final String? override; // 'ALLOW' | 'DENY' | null
   final bool effective;
 
+  /// Only a super admin may change it (the server ignores it from anyone else).
+  final bool superAdminOnly;
+
   const PermissionToggle({
     required this.code,
     required this.label,
     required this.roleDefault,
     required this.override,
     required this.effective,
+    this.superAdminOnly = false,
   });
 
   factory PermissionToggle.fromJson(Map<String, dynamic> json) =>
@@ -65,6 +69,7 @@ class PermissionToggle {
         roleDefault: (json['role_default'] as bool?) ?? false,
         override: json['override'] as String?,
         effective: (json['effective'] as bool?) ?? false,
+        superAdminOnly: json['super_admin_only'] == true,
       );
 }
 

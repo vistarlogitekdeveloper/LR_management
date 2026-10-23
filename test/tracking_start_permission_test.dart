@@ -73,4 +73,24 @@ void main() {
       expect(viewer.canStartTracking, isFalse);
     });
   });
+
+  group('manual LR numbers follow the super admin grant (migration 218)', () {
+    test('granted by LR_MANUAL_NUMBER, or by being the super admin', () {
+      expect(_user(['LR_MANUAL_NUMBER']).canEnterManualLrNumber, isTrue);
+      expect(_user(['SUPERADMIN_ACCESS']).canEnterManualLrNumber, isTrue);
+    });
+
+    test('not by ADMIN_ACCESS, LR_CREATE or anything else', () {
+      expect(
+        _user(['ADMIN_ACCESS', 'LR_CREATE', 'LR_EDIT']).canEnterManualLrNumber,
+        isFalse,
+      );
+      expect(_user(const []).canEnterManualLrNumber, isFalse);
+      expect(
+        _user(const [], role: UserRole.superAdmin).canEnterManualLrNumber,
+        isFalse,
+        reason: 'permissions decide, not the role label',
+      );
+    });
+  });
 }

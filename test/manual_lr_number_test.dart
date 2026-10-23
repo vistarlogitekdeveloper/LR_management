@@ -229,6 +229,15 @@ void main() {
       expect(find.text('LR/PUN/26-27/00002'), findsOneWidget);
     });
 
+    testWidgets('without the permission: the automatic number only', (
+      tester,
+    ) async {
+      final h = await _pump(tester, _Repo(), allowManual: false);
+      expect(find.text('LR/PUN/26-27/00002'), findsOneWidget);
+      expect(find.text('Enter manually'), findsNothing);
+      expect(h.reports, isEmpty);
+    });
+
     testWidgets('editing an LR: its number, no way to change it', (
       tester,
     ) async {
@@ -257,6 +266,7 @@ Future<_Harness> _pump(
   bool isEdit = false,
   String number = 'LR/PUN/26-27/00002',
   Size size = const Size(1200, 800),
+  bool allowManual = true,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -273,6 +283,7 @@ Future<_Harness> _pump(
               isEdit: isEdit,
               number: number,
               onManualChanged: h.reports.add,
+              allowManual: allowManual,
             ),
           ),
         ),

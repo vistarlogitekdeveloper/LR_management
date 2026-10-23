@@ -1812,6 +1812,12 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                         isEdit: _isEdit,
                         number: previewNumber,
                         recheck: _numberRecheck,
+                        // Only for whom the super admin allowed it (migration 218).
+                        allowManual:
+                            ref
+                                .watch(currentUserProvider)
+                                ?.canEnterManualLrNumber ??
+                            false,
                         onManualChanged: (e) => _manualNumber = e,
                       ),
                       const SizedBox(height: 16),

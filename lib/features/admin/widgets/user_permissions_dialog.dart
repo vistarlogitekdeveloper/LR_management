@@ -6,6 +6,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/models/user.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../data/admin_repository.dart';
 import '../providers/users_provider.dart';
 
@@ -276,9 +277,14 @@ class _UserPermissionsDialogState extends ConsumerState<UserPermissionsDialog> {
 
   Widget _toggleTile(PermissionToggle t) {
     final value = _values[t.code] ?? t.effective;
+    // A super-admin-only toggle is shown to an admin but cannot be changed by
+    // them (the server would ignore it).
+    final locked =
+        t.superAdminOnly &&
+        !(ref.read(currentUserProvider)?.isSuperAdmin ?? false);
     return SwitchListTile(
       value: value,
-      onChanged: _saving ? null : (v) => _onToggle(t, v),
+      onChanged: _saving || locked ? null : (v) => _onToggle(t, v),
       title: Text(
         t.label,
         style: const TextStyle(
@@ -286,7 +292,12 @@ class _UserPermissionsDialogState extends ConsumerState<UserPermissionsDialog> {
           color: AppColors.ink,
         ),
       ),
-      subtitle: value != t.roleDefault
+      subtitle: locked
+          ? const Text(
+              'Only the super admin can change this.',
+              style: TextStyle(color: AppColors.slate, fontSize: 11.5),
+            )
+          : value != t.roleDefault
           ? Text(
               'Overrides role default (${t.roleDefault ? 'allowed' : 'denied'})',
               style: const TextStyle(color: AppColors.orange, fontSize: 11.5),
