@@ -31,8 +31,8 @@ class LrDetailScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final canEdit = user?.canEditLr ?? false;
     final canDelete = user?.canDeleteLr ?? false;
-    // Edit LR is the super admin's alone, at any stage: after creation the
-    // server answers LR_EDIT_LOCKED to everyone else (23 Oct 2026).
+    // Once sent to Accounts for payment, an LR is edited by the super admin
+    // alone; the server answers LR_EDIT_LOCKED to everyone else.
     final isSuperAdmin = user?.canEditLrDetails ?? false;
     // The ops user who creates/manages LRs is the one who sends it to Accounts.
     final canSend =
@@ -197,10 +197,11 @@ class LrDetailScreen extends ConsumerWidget {
                   icon: Icons.flag_outlined,
                   onPressed: () => _changeStatus(context, ref, lr),
                 ),
-              // Edit: the super admin alone, at any stage. Delete stops once
-              // the LR is sent to Accounts; status changes stay allowed so the
-              // LR can be progressed / delivered.
-              if (isSuperAdmin)
+              // Once an LR is sent to Accounts for payment it is locked — no
+              // more edits or deletes (status changes are still allowed so the
+              // LR can be progressed/delivered). Only the super admin may still
+              // edit it.
+              if (canEdit && (!lr.sentForPayment || isSuperAdmin))
                 AppButton(
                   label: 'Edit',
                   kind: BtnKind.soft,

@@ -1558,7 +1558,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
     // /edit deep-link) — EXCEPT for a super admin, who may edit an LR at any
     // stage. The backend allows the super-admin edit (no sent-for-payment block;
     // the delivered lock is bypassed for admins).
-    final isSuperAdmin = ref.read(currentUserProvider)?.isSuperAdmin ?? false;
+    final isSuperAdmin =
+        ref.read(currentUserProvider)?.canEditLrDetails ?? false;
     if (_isEdit && (_editing?.sentForPayment ?? false) && !isSuperAdmin) {
       MasterActions.showError(
         context,

@@ -152,10 +152,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         }
         // LR create/edit honour per-user permission overrides.
         if (loc == '/lrs/new' && !user.canCreateLr) return '/dashboard';
-        // Edit LR is the super admin's alone (the server locks it too).
-        if (loc.endsWith('/edit') && !user.canEditLrDetails) {
-          return '/dashboard';
-        }
+        if (loc.endsWith('/edit') && !user.canEditLr) return '/dashboard';
         // Accounts/payouts are for the accounts desk + super admins only
         // (matches nav gating) — operators and regional admins are redirected.
         if (loc == '/accounts' && !user.canViewAccounts) {

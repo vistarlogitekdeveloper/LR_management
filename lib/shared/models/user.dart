@@ -160,10 +160,10 @@ class AppUser {
   bool get canEnterManualLrNumber =>
       can('LR_MANUAL_NUMBER') || can('SUPERADMIN_ACCESS');
 
-  /// Edit LR. After creation an LR is changed by the super admin alone — the
-  /// server answers LR_EDIT_LOCKED to anyone else (Accounts still record the
-  /// advance and billing dates from the Accounts screen). Status changes,
-  /// change driver and the POD keep [canEditLr].
+  /// Edit an LR that was already sent to Accounts for payment: the super admin
+  /// alone — the server answers LR_EDIT_LOCKED to anyone else (Accounts still
+  /// record the advance and billing dates from the Accounts screen). Before it
+  /// is sent, [canEditLr] is enough.
   bool get canEditLrDetails => isSuperAdmin || can('SUPERADMIN_ACCESS');
 
   /// Two-point delivery on Create LR (migration 222), granted by the super
