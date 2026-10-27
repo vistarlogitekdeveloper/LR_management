@@ -625,6 +625,10 @@ class _TrailMap extends StatelessWidget {
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.vistar.lr_management',
+              // A tile that fails (dropped network, OSM throttling) shows as blank
+              // instead of throwing: one scrolled off-screen while still loading has no
+              // listener left, and its error reached telemetry as an app crash.
+              tileProvider: NetworkTileProvider(silenceExceptions: true),
             ),
             // Direct line only when no road route is available — dashed blue so
             // it reads clearly as an approximation, not an actual road.
