@@ -33,6 +33,36 @@ class TripHistoryFilters extends ConsumerWidget {
                 padding: EdgeInsets.symmetric(horizontal: gutter),
                 child: _FilterRow(compact: compact),
               ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(gutter, 8, gutter, 0),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    FilterChip(
+                      key: const ValueKey('history-special'),
+                      avatar: const Icon(Icons.star_rounded, size: 16),
+                      label: const Text('Special vehicles'),
+                      selected: filter.specialOnly,
+                      onSelected: (v) => ref
+                          .read(tripHistoryFilterProvider.notifier)
+                          .update((s) => s.copyWith(specialOnly: v)),
+                    ),
+                    FilterChip(
+                      key: const ValueKey('history-halts'),
+                      avatar: const Icon(
+                        Icons.pause_circle_outline_rounded,
+                        size: 16,
+                      ),
+                      label: const Text('Had halts'),
+                      selected: filter.hasHalts,
+                      onSelected: (v) => ref
+                          .read(tripHistoryFilterProvider.notifier)
+                          .update((s) => s.copyWith(hasHalts: v)),
+                    ),
+                  ],
+                ),
+              ),
               if (count != null)
                 Padding(
                   padding: EdgeInsets.fromLTRB(gutter, 10, gutter, 0),

@@ -6,11 +6,13 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../shared/models/lr_models.dart';
+import '../data/trip_record.dart';
 import '../../../shared/widgets/loading_shimmer.dart';
 import '../../../shared/widgets/pills.dart';
 import '../data/trip_history.dart';
 import '../providers/tracking_providers.dart';
 import 'trip_history_filters.dart';
+import 'trip_metrics.dart';
 import 'tracking_common.dart';
 
 /// Finished trips (delivered / cancelled), newest first. Tapping a row opens
@@ -33,7 +35,10 @@ class TripHistoryView extends ConsumerWidget {
             error: (e, _) => TrackingErrorBox(
               message:
                   'Could not load trip history.\n${friendlyErrorMessage(e)}',
-              onRetry: () => ref.invalidate(tripHistorySourceProvider),
+              onRetry: () {
+                ref.invalidate(tripServerHistoryProvider);
+                ref.invalidate(tripHistorySourceProvider);
+              },
             ),
             // Scrollable (never scrolled) so a short viewport clips the
             // skeleton instead of striping it — the cards have a fixed height.
@@ -51,7 +56,7 @@ class TripHistoryView extends ConsumerWidget {
 }
 
 class _TripList extends ConsumerWidget {
-  final List<LorryReceipt> trips;
+  final List<TripRecord> trips;
   const _TripList({required this.trips});
 
   @override
@@ -90,22 +95,21 @@ class _TripList extends ConsumerWidget {
         ),
         itemCount: trips.length,
         separatorBuilder: (_, _) => const SizedBox(height: 8),
-        itemBuilder: (_, i) => _TripTile(lr: trips[i]),
+        itemBuilder: (_, i) => _TripTile(t: trips[i]),
       ),
     );
   }
 }
 
 class _TripTile extends StatelessWidget {
-  final LorryReceipt lr;
-  const _TripTile({required this.lr});
+  final TripRecord t;
+  const _TripTile({required this.t});
 
   @override
   Widget build(BuildContext context) {
-    final vehicle = lr.vehicle;
     final who = [
-      if (vehicle.number.isNotEmpty) vehicle.number,
-      if (lr.tripDriverName.isNotEmpty) lr.tripDriverName,
+      if (t.truck.isNotEmpty) t.truck,
+      if (t.driver.isNotEmpty) t.driver,
     ].join(' · ');
 
     return Material(
@@ -115,13 +119,17 @@ class _TripTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         // Same destination as a live vehicle: the trail screen renders the
         // recorded fixes whether or not the trip is still running.
-        onTap: () => context.go('/tracking/lr/${lr.id}'),
+        onTap: () => context.go('/tracking/lr/${t.lrId}'),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _TripHeader(number: lr.number, status: lr.status),
+              _TripHeader(
+                number: t.number,
+                status: t.outcome,
+                special: t.isSpecial,
+              ),
               if (who.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 3),
@@ -135,12 +143,12 @@ class _TripTile extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (lr.fromCity.isNotEmpty || lr.toCity.isNotEmpty)
+              if (t.fromCity.isNotEmpty || t.toCity.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
                   child: Text(
-                    '${lr.fromCity.isEmpty ? '?' : lr.fromCity} → '
-                    '${lr.toCity.isEmpty ? '?' : lr.toCity}',
+                    '${t.fromCity.isEmpty ? '?' : t.fromCity} → '
+                    '${t.toCity.isEmpty ? '?' : t.toCity}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -149,8 +157,9 @@ class _TripTile extends StatelessWidget {
                     ),
                   ),
                 ),
+              if (t.hasMetrics) TripMetrics(t: t),
               const SizedBox(height: 6),
-              _TripFooter(date: lr.date),
+              _TripFooter(date: t.shownDate, ended: t.endedAt != null),
             ],
           ),
         ),
@@ -162,7 +171,12 @@ class _TripTile extends StatelessWidget {
 class _TripHeader extends StatelessWidget {
   final String number;
   final LrStatus status;
-  const _TripHeader({required this.number, required this.status});
+  final bool special;
+  const _TripHeader({
+    required this.number,
+    required this.status,
+    this.special = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -180,6 +194,10 @@ class _TripHeader extends StatelessWidget {
             ),
           ),
         ),
+        if (special) ...[
+          const SizedBox(width: 8),
+          const SpecialVehiclePill(compact: true),
+        ],
         const SizedBox(width: 8),
         StatusPill(status: status),
       ],
@@ -188,8 +206,11 @@ class _TripHeader extends StatelessWidget {
 }
 
 class _TripFooter extends StatelessWidget {
-  final DateTime date;
-  const _TripFooter({required this.date});
+  final DateTime? date;
+
+  /// [date] is when the trip ended (server history), else the LR date.
+  final bool ended;
+  const _TripFooter({required this.date, this.ended = false});
 
   @override
   Widget build(BuildContext context) {
@@ -199,7 +220,9 @@ class _TripFooter extends StatelessWidget {
         const SizedBox(width: 4),
         Expanded(
           child: Text(
-            formatDate(date),
+            date == null
+                ? '—'
+                : (ended ? 'Ended ${formatDate(date!)}' : formatDate(date!)),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 11.5, color: AppColors.slate),

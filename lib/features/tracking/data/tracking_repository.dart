@@ -234,6 +234,9 @@ class FleetVehicle {
   /// A special vehicle (migration 254).
   final bool isSpecial;
 
+  /// Estimated arrival + late flag (server: fleetEta.service, an estimate).
+  final TripEta? eta;
+
   const FleetVehicle({
     required this.lrId,
     required this.lrNumber,
@@ -251,6 +254,7 @@ class FleetVehicle {
     this.driverMobile,
     this.halt,
     this.isSpecial = false,
+    this.eta,
   });
 
   /// Halted long enough to have raised the alert (5 h+).
@@ -298,8 +302,12 @@ class FleetVehicle {
           ? TripHalt.fromJson((j['halt'] as Map).cast<String, dynamic>())
           : null,
       isSpecial: j['is_special_vehicle'] == true,
+      eta: TripEta.fromJson(j['eta']),
     );
   }
+
+  /// Running late against its plan (more than 1 h).
+  bool get late => eta?.late ?? false;
 
   /// The trip itself is over (an older server still lists these).
   bool get tripOver {

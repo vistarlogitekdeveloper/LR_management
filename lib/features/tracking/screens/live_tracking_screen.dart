@@ -203,6 +203,13 @@ class _ActivePanel extends ConsumerWidget {
             'or more (1 hour for a special vehicle). Trucks waiting at their '
             'destination are not counted.',
       ),
+      FleetScope.late => const TrackingEmptyState(
+        icon: Icons.check_circle_outline_rounded,
+        title: 'Nobody running late',
+        message:
+            'No running trip is expected more than an hour after its plan. '
+            'The estimate needs a recent location and the route\'s destination.',
+      ),
       FleetScope.special => const TrackingEmptyState(
         icon: Icons.star_border_rounded,
         title: 'No special vehicle running',

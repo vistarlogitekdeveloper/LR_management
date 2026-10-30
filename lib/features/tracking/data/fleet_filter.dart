@@ -13,6 +13,9 @@ enum FleetScope {
   /// Special vehicles (migration 254), live or not.
   special,
 
+  /// Expected to arrive more than 1 h after the plan.
+  late,
+
   /// Running trips with nothing for over a day — the ones to close.
   noSignal,
 
@@ -28,6 +31,7 @@ extension FleetScopeX on FleetScope {
     FleetScope.live => 'Live now',
     FleetScope.halted => 'Halted',
     FleetScope.special => 'Special vehicles',
+    FleetScope.late => 'Running late',
     FleetScope.noSignal => 'No signal 24h+',
     FleetScope.consentPending => 'Consent pending',
     FleetScope.all => 'All running',
@@ -72,6 +76,7 @@ bool _inScope(FleetVehicle v, FleetScope scope) => switch (scope) {
   FleetScope.live => _isLive(v),
   FleetScope.halted => v.haltAlert,
   FleetScope.special => v.isSpecial,
+  FleetScope.late => v.late,
   FleetScope.noSignal => v.signal == FleetSignal.noSignal,
   FleetScope.consentPending => _consentPending(v),
   FleetScope.all => true,

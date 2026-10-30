@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/formatters.dart';
 import '../../../shared/widgets/pills.dart';
 import '../data/tracking_repository.dart';
 import '../data/signal_freshness.dart';
+import '../data/trip_eta.dart';
 import 'halt_widgets.dart';
 import 'tracking_common.dart';
 
@@ -360,6 +362,20 @@ class _VehicleTile extends StatelessWidget {
                       fontSize: 11.5,
                       fontWeight: FontWeight.w700,
                       color: AppColors.danger,
+                    ),
+                  ),
+                ),
+              if (v.eta != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    v.late
+                        ? 'Late ~${minutesLabel(v.eta!.lateByMin)} · ETA ${formatDateTime(v.eta!.etaAt!)}'
+                        : 'ETA ~${formatDateTime(v.eta!.etaAt!)} · ${v.eta!.remainingKm?.round() ?? '?'} km to go',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: v.late ? AppColors.danger : AppColors.ok,
                     ),
                   ),
                 ),
