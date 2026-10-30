@@ -77,6 +77,22 @@ flutter pub get
 MAPS_KEY="${GOOGLE_MAPS_BROWSER_KEY:-}"
 DART_DEFINES=()
 
+# ---------------------------------------------------------------------------
+# Which API the build talks to (30 Oct 2026).
+#
+# main is production and keeps lib/core/network/api_config.dart's default
+# (api.vistarlogitek.com). Every OTHER branch Cloudflare builds is a preview
+# (<branch>.lr-management.pages.dev) and talks to UAT, where the backend's main
+# is deployed — so a feature is tried on UAT before it reaches production, and a
+# preview can never write to production data. UAT_API_BASE_URL overrides the
+# address. CF_PAGES_BRANCH is empty outside Cloudflare: local builds unchanged.
+# ---------------------------------------------------------------------------
+if [ -n "${CF_PAGES_BRANCH:-}" ] && [ "${CF_PAGES_BRANCH}" != "main" ]; then
+  UAT_API="${UAT_API_BASE_URL:-https://uat-api.vistarlogitek.com/api/v1/lr-management}"
+  DART_DEFINES+=(--dart-define=API_BASE_URL="${UAT_API}")
+  echo ">> Preview build (${CF_PAGES_BRANCH}): API = ${UAT_API}"
+fi
+
 if [ -n "$MAPS_KEY" ]; then
   echo ">> Google Maps browser key present — the picker will request a Google map"
   DART_DEFINES+=(--dart-define=GOOGLE_MAPS_BROWSER_KEY="$MAPS_KEY")
