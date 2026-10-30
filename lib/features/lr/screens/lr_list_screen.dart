@@ -250,6 +250,27 @@ class _FilterBar extends ConsumerWidget {
               ),
         );
 
+        final special = FilterChip(
+          key: const ValueKey('lr-filter-special'),
+          avatar: Icon(
+            Icons.star_rounded,
+            size: 16,
+            color: filter.specialOnly ? Colors.white : SpecialVehiclePill.color,
+          ),
+          label: const Text('Special'),
+          selected: filter.specialOnly,
+          selectedColor: SpecialVehiclePill.color,
+          labelStyle: TextStyle(
+            color: filter.specialOnly ? Colors.white : AppColors.ink,
+            fontWeight: FontWeight.w700,
+          ),
+          showCheckmark: false,
+          tooltip: 'Special vehicles only',
+          onSelected: (v) => ref
+              .read(lrFilterProvider.notifier)
+              .update((s) => s.copyWith(specialOnly: v)),
+        );
+
         if (mobile) {
           // Search + dropdown filters share one row; the date range gets its
           // own full-width row beneath so nothing is cramped on narrow screens.
@@ -271,7 +292,13 @@ class _FilterBar extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              dateRange,
+              Row(
+                children: [
+                  Expanded(child: dateRange),
+                  const SizedBox(width: 8),
+                  special,
+                ],
+              ),
             ],
           );
         }
@@ -293,6 +320,8 @@ class _FilterBar extends ConsumerWidget {
             ],
             const SizedBox(width: 12),
             Expanded(flex: 4, child: dateRange),
+            const SizedBox(width: 12),
+            special,
           ],
         );
       },
@@ -583,9 +612,20 @@ class _LrTableState extends State<_LrTable> {
                         ),
                       ),
                       DataCell(
-                        Text(
-                          lr.number,
-                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              lr.number,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            if (lr.isSpecialVehicle) ...[
+                              const SizedBox(width: 6),
+                              const SpecialVehiclePill(compact: true),
+                            ],
+                          ],
                         ),
                       ),
                       DataCell(Text(formatDate(lr.date))),
@@ -730,6 +770,7 @@ class _LrMobileCard extends StatelessWidget {
               children: [
                 StatusPill(status: lr.status),
                 PayPill(pay: lr.payType),
+                if (lr.isSpecialVehicle) const SpecialVehiclePill(),
               ],
             ),
             const SizedBox(height: 8),

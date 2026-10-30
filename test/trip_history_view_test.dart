@@ -67,6 +67,8 @@ Future<void> _pump(
     ProviderScope(
       overrides: [
         tripHistorySourceProvider.overrideWith((ref) => source()),
+        // An older server (no /tracking/history): the LR-list fallback.
+        tripServerHistoryProvider.overrideWith((ref) async => null),
         activeVehiclesProvider.overrideWith((ref) async => []),
       ],
       child: const MaterialApp(home: Scaffold(body: TripHistoryView())),

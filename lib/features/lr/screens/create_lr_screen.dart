@@ -44,6 +44,7 @@ import '../utils/manual_lr_entry.dart';
 import '../utils/manual_lr_number.dart';
 import '../widgets/delivery_points_section.dart';
 import '../widgets/lr_number_banner.dart';
+import '../widgets/special_vehicle_toggle.dart';
 import '../utils/lr_date_rules.dart';
 import '../utils/lr_driver_rules.dart';
 
@@ -119,6 +120,8 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
   Party? _consignee;
   // Two-point delivery (migration 222): 1 = single point, the default.
   int _deliveryPoints = 1;
+  // Special vehicle (migration 254): watched closely, halts alerted from 1 h.
+  bool _special = false;
   Party? _secondConsignee;
   Vehicle? _vehicle;
   Transporter? _transporter;
@@ -343,6 +346,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
         _advancePctCtrl.text = pctText(lr.freight.advancePercent);
         _mathadiCtrl.text = lr.freight.mathadi.toStringAsFixed(0);
         _remarksCtrl.text = lr.remarks ?? '';
+        _special = lr.isSpecialVehicle;
         _customerCtrl.text = lr.customerName;
         _customer = _customerCtrl.text.trim().isEmpty
             ? null
@@ -714,6 +718,7 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
       if (_tripLeadUser != null) 'trip_lead_user_id': _tripLeadUser!.id,
       if (_remarksCtrl.text.trim().isNotEmpty)
         'remarks': _remarksCtrl.text.trim(),
+      'is_special_vehicle': _special,
       'invoice_items': _buildInvoiceItems(date),
     };
   }
@@ -1860,6 +1865,11 @@ class _CreateLrScreenState extends ConsumerState<CreateLrScreen> {
                                 ?.canEnterManualLrNumber ??
                             false,
                         onManualChanged: (e) => _manualNumber = e,
+                      ),
+                      const SizedBox(height: 12),
+                      SpecialVehicleToggle(
+                        value: _special,
+                        onChanged: (v) => setState(() => _special = v),
                       ),
                       const SizedBox(height: 16),
                       _templateBar(),

@@ -6,6 +6,7 @@ import '../../lr/providers/lr_providers.dart';
 import '../data/fleet_filter.dart';
 import '../data/tracking_repository.dart';
 import '../data/trip_history.dart';
+import '../data/trip_record.dart';
 
 final trackingRepositoryProvider = Provider<TrackingRepository>(
   (ref) => TrackingRepository(ref.watch(apiClientProvider)),
@@ -66,21 +67,67 @@ final tripHistorySourceProvider =
       return const <LorryReceipt>[];
     });
 
+final tripHistoryRepositoryProvider = Provider<TripHistoryRepository>(
+  (ref) => TripHistoryRepository(ref.watch(apiClientProvider)),
+);
+
+/// Finished trips from the server (GET /tracking/history, 30 Oct 2026), with
+/// their halts / driver changes / fixes. Refetched when the period, outcome,
+/// special or halts filter changes — not on each keystroke of the search. Null
+/// from an older server without the endpoint: the LR list is used instead.
+final tripServerHistoryProvider = FutureProvider.autoDispose<List<TripRecord>?>(
+  (ref) {
+    // A record compares by value: typing in the search box changes none of
+    // these, so it does not refetch.
+    final (period, status, special, halts) = ref.watch(
+      tripHistoryFilterProvider.select(
+        (f) => (f.period, f.status, f.specialOnly, f.hasHalts),
+      ),
+    );
+    return ref
+        .watch(tripHistoryRepositoryProvider)
+        .history(
+          TripHistoryFilter(
+            period: period,
+            status: status,
+            specialOnly: special,
+            hasHalts: halts,
+          ),
+        );
+  },
+);
+
 /// Finished trips, filtered and newest first — what the History list renders.
-final tripHistoryProvider =
-    Provider.autoDispose<AsyncValue<List<LorryReceipt>>>((ref) {
-      final source = ref.watch(tripHistorySourceProvider);
-      final filter = ref.watch(tripHistoryFilterProvider);
-      // Anything still on the Active tab is excluded so no LR appears twice.
-      final activeIds =
-          ref
-              .watch(activeVehiclesProvider)
-              .valueOrNull
-              ?.map((v) => v.lrId)
-              .toSet() ??
-          const <String>{};
-      return source.whenData(
-        (all) =>
-            filterTripHistory(all, filter: filter, excludeLrIds: activeIds),
-      );
-    });
+final tripHistoryProvider = Provider.autoDispose<AsyncValue<List<TripRecord>>>((
+  ref,
+) {
+  final server = ref.watch(tripServerHistoryProvider);
+  final filter = ref.watch(tripHistoryFilterProvider);
+  // Anything still on the Active tab is excluded so no LR appears twice.
+  final activeIds =
+      ref
+          .watch(activeVehiclesProvider)
+          .valueOrNull
+          ?.map((v) => v.lrId)
+          .toSet() ??
+      const <String>{};
+  if (server.hasError) {
+    return AsyncValue.error(server.error!, server.stackTrace!);
+  }
+  final rows = server.valueOrNull;
+  if (rows != null) {
+    return AsyncValue.data(
+      filterTripRecords(rows, query: filter.query, excludeLrIds: activeIds),
+    );
+  }
+  if (server.isLoading) return const AsyncValue.loading();
+  // An older server: the finished end of the LR list, as before.
+  final source = ref.watch(tripHistorySourceProvider);
+  return source.whenData(
+    (all) => filterTripHistory(
+      all,
+      filter: filter,
+      excludeLrIds: activeIds,
+    ).map(TripRecord.fromLr).toList(),
+  );
+});

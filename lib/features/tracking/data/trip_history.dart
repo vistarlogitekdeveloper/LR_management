@@ -49,27 +49,41 @@ class TripHistoryFilter {
   /// null = both finished states (delivered + cancelled).
   final LrStatus? status;
 
+  /// Special vehicles only; trips that had a halt (server history only).
+  final bool specialOnly;
+  final bool hasHalts;
+
   const TripHistoryFilter({
     this.query = '',
     this.period = TripPeriod.all,
     this.status,
+    this.specialOnly = false,
+    this.hasHalts = false,
   });
 
   /// True while the list is showing everything it can — used to tell "nothing
   /// here yet" apart from "nothing matches what you typed".
   bool get isUnfiltered =>
-      query.trim().isEmpty && period == TripPeriod.all && status == null;
+      query.trim().isEmpty &&
+      period == TripPeriod.all &&
+      status == null &&
+      !specialOnly &&
+      !hasHalts;
 
   TripHistoryFilter copyWith({
     String? query,
     TripPeriod? period,
     LrStatus? status,
     bool clearStatus = false,
+    bool? specialOnly,
+    bool? hasHalts,
   }) {
     return TripHistoryFilter(
       query: query ?? this.query,
       period: period ?? this.period,
       status: clearStatus ? null : (status ?? this.status),
+      specialOnly: specialOnly ?? this.specialOnly,
+      hasHalts: hasHalts ?? this.hasHalts,
     );
   }
 }
@@ -100,6 +114,7 @@ List<LorryReceipt> filterTripHistory(
     if (excludeLrIds.contains(lr.id)) continue;
     if (!_finishedStates.contains(lr.status)) continue;
     if (filter.status != null && lr.status != filter.status) continue;
+    if (filter.specialOnly && !lr.isSpecialVehicle) continue;
     if (cutoff != null) {
       final day = DateTime(lr.date.year, lr.date.month, lr.date.day);
       if (day.isBefore(cutoff)) continue;

@@ -669,6 +669,10 @@ class _RightColumn extends StatelessWidget {
                   StatusPill(status: lr.status),
                   const SizedBox(width: 8),
                   PayPill(pay: lr.payType),
+                  if (lr.isSpecialVehicle) ...[
+                    const SizedBox(width: 8),
+                    const SpecialVehiclePill(),
+                  ],
                 ],
               ),
               const SizedBox(height: 10),

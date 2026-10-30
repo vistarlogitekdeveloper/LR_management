@@ -4,7 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/formatters.dart';
+import '../../../shared/widgets/pills.dart';
 import '../data/tracking_repository.dart';
+import '../data/signal_freshness.dart';
+import '../data/trip_eta.dart';
 import 'halt_widgets.dart';
 import 'tracking_common.dart';
 
@@ -98,12 +102,19 @@ class _FleetMap extends StatelessWidget {
                     child: GestureDetector(
                       onTap: () => context.go('/tracking/lr/${v.lrId}'),
                       child: Tooltip(
-                        message:
-                            '${v.lrNumber}${v.truckNumber != null ? ' · ${v.truckNumber}' : ''}',
+                        message: [
+                          '${v.isSpecial ? '★ SPECIAL · ' : ''}${v.lrNumber}${v.truckNumber != null ? ' · ${v.truckNumber}' : ''}',
+                          if (v.location?.city != null) v.location!.city!,
+                          if (v.location?.at != null)
+                            'Last fix ${relTime(v.location!.at)}',
+                          if (v.halt != null && v.halt!.ongoing)
+                            haltSummary(v.halt!),
+                        ].join('\n'),
                         child: _TruckPin(
                           consent: v.consentStatus,
-                          stale: v.signal == FleetSignal.noSignal,
+                          freshness: freshnessOf(v.location?.at),
                           halted: v.haltAlert,
+                          special: v.isSpecial,
                         ),
                       ),
                     ),
@@ -141,12 +152,21 @@ class _FleetMap extends StatelessWidget {
 class _TruckPin extends StatelessWidget {
   final String? consent;
 
-  /// A last-known position over a day old: drawn grey, not as a moving truck.
-  final bool stale;
+  /// How old the last fix is: live plum, delayed amber, lost orange, a day+
+  /// grey — not drawn as a moving truck.
+  final Freshness freshness;
 
-  /// Halted 5 h+: drawn red, so it stands out on a map of moving trucks.
+  /// Halted past its alert limit: drawn red, so it stands out.
   final bool halted;
-  const _TruckPin({this.consent, this.stale = false, this.halted = false});
+
+  /// A special vehicle: a star badge on the pin.
+  final bool special;
+  const _TruckPin({
+    this.consent,
+    this.freshness = Freshness.live,
+    this.halted = false,
+    this.special = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -158,14 +178,20 @@ class _TruckPin extends StatelessWidget {
       ConsentKind.refused => AppColors.danger,
       ConsentKind.pending || ConsentKind.unknown => AppColors.warn,
     };
-    return Container(
+    final fill = halted
+        ? AppColors.danger
+        : switch (freshness) {
+            Freshness.live || Freshness.awaiting => AppColors.plum,
+            Freshness.delayed => AppColors.warn,
+            Freshness.lost => AppColors.orange,
+            Freshness.noSignal => AppColors.slate,
+          };
+    final pin = Container(
       width: 40,
       height: 40,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: halted
-            ? AppColors.danger
-            : (stale ? AppColors.slate : AppColors.plum),
+        color: fill,
         shape: BoxShape.circle,
         border: Border.all(color: ring, width: 3),
         boxShadow: const [
@@ -181,6 +207,29 @@ class _TruckPin extends StatelessWidget {
         color: Colors.white,
         size: 22,
       ),
+    );
+    if (!special) return pin;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        pin,
+        Positioned(
+          right: -4,
+          top: -4,
+          child: Container(
+            padding: const EdgeInsets.all(1.5),
+            decoration: const BoxDecoration(
+              color: SpecialVehiclePill.color,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.star_rounded,
+              color: Colors.white,
+              size: 13,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -247,6 +296,10 @@ class _VehicleTile extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (v.isSpecial) ...[
+                    const SpecialVehiclePill(compact: true),
+                    const SizedBox(width: 6),
+                  ],
                   ConsentBadge(status: v.consentStatus),
                 ],
               ),
@@ -296,6 +349,7 @@ class _VehicleTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  if (loc != null) FreshnessTag(freshnessOf(loc.at)),
                 ],
               ),
               if (v.signal == FleetSignal.noSignal)
@@ -308,6 +362,20 @@ class _VehicleTile extends StatelessWidget {
                       fontSize: 11.5,
                       fontWeight: FontWeight.w700,
                       color: AppColors.danger,
+                    ),
+                  ),
+                ),
+              if (v.eta != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    v.late
+                        ? 'Late ~${minutesLabel(v.eta!.lateByMin)} · ETA ${formatDateTime(v.eta!.etaAt!)}'
+                        : 'ETA ~${formatDateTime(v.eta!.etaAt!)} · ${v.eta!.remainingKm?.round() ?? '?'} km to go',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: v.late ? AppColors.danger : AppColors.ok,
                     ),
                   ),
                 ),

@@ -524,6 +524,10 @@ class LorryReceipt {
   final String secondToCity;
   bool get isTwoPoint => deliveryPoints == 2 && secondConsignee != null;
 
+  /// A trip watched closely (migration 254): badged everywhere, halts alerted
+  /// from 1 h.
+  final bool isSpecialVehicle;
+
   /// Transporter freight still to pay — the same arithmetic as the Accounts
   /// screen's "Awaiting Balance".
   bool get _balanceOutstanding =>
@@ -598,6 +602,7 @@ class LorryReceipt {
     this.deliveryPoints = 1,
     this.secondConsignee,
     this.secondToCity = '',
+    this.isSpecialVehicle = false,
   });
 
   int get totalPackages => items.fold(0, (sum, item) => sum + item.packages);
@@ -755,6 +760,7 @@ class LorryReceipt {
           ? Consignee.fromJson(nested('secondConsignee')!)
           : null,
       secondToCity: (json['second_to_city'] as String?) ?? '',
+      isSpecialVehicle: json['is_special_vehicle'] == true,
     );
   }
 
@@ -830,6 +836,7 @@ class LorryReceipt {
       deliveryPoints: deliveryPoints,
       secondConsignee: secondConsignee,
       secondToCity: secondToCity,
+      isSpecialVehicle: isSpecialVehicle,
     );
   }
 }
