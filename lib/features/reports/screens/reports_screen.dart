@@ -17,6 +17,7 @@ import '../../shell/widgets/app_topbar.dart';
 import '../data/reports_repository.dart';
 import '../providers/reports_providers.dart';
 import '../services/export_service.dart';
+import '../widgets/halt_report_card.dart';
 
 // Optional date-range for the MIS download. The backend applies ?from&to
 // (verified); region / user-wise filtering still needs backend support.
@@ -29,6 +30,8 @@ final _misCreatorProvider = StateProvider<String?>((ref) => null);
 // MIS payment-stage filter (Accounts' "sent for advance"): null = all LRs,
 // true = only those sent for payment, false = only those not yet sent.
 final _misSentProvider = StateProvider<bool?>((ref) => null);
+// MIS: special vehicles only (migration 254).
+final _misSpecialProvider = StateProvider<bool>((ref) => false);
 
 // Profit & Loss filters: region, year, and an optional month. A null month means
 // the whole financial year (Apr year – Mar year+1); a month means that calendar
@@ -315,6 +318,8 @@ class _DailyTab extends StatelessWidget {
                 .map((e) => (e.key, '${e.value}'))
                 .toList(),
           ),
+          SizedBox(height: mobile ? 10 : 16),
+          HaltReportCard(lrs: lrs),
         ],
       ),
     );
@@ -452,6 +457,7 @@ class _AccountsTab extends ConsumerWidget {
     final misRegion = ref.watch(_misRegionProvider);
     final misCreator = ref.watch(_misCreatorProvider);
     final misSent = ref.watch(_misSentProvider);
+    final misSpecial = ref.watch(_misSpecialProvider);
     final plRegion = ref.watch(_plRegionProvider);
     final plMonth = ref.watch(_plMonthProvider);
     final plYear = ref.watch(_plYearProvider);
@@ -647,6 +653,13 @@ class _AccountsTab extends ConsumerWidget {
                                 ref.read(_misSentProvider.notifier).state = v,
                           ),
                         ),
+                        FilterChip(
+                          avatar: const Icon(Icons.star_rounded, size: 16),
+                          label: const Text('Special vehicles only'),
+                          selected: misSpecial,
+                          onSelected: (v) =>
+                              ref.read(_misSpecialProvider.notifier).state = v,
+                        ),
                         AppButton(
                           label: 'Download MIS (Excel)',
                           icon: Icons.download_outlined,
@@ -669,6 +682,7 @@ class _AccountsTab extends ConsumerWidget {
                                     regionId: ref.read(_misRegionProvider),
                                     createdBy: ref.read(_misCreatorProvider),
                                     sentForPayment: ref.read(_misSentProvider),
+                                    special: ref.read(_misSpecialProvider),
                                   );
                               await ExportService.shareBytes(
                                 bytes,

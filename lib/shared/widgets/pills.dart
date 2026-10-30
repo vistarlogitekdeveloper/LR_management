@@ -67,3 +67,45 @@ class _Pill extends StatelessWidget {
     );
   }
 }
+
+/// "★ Special vehicle" (migration 254): a trip watched closely — badged on
+/// every LR screen, the print and the tracking map.
+class SpecialVehiclePill extends StatelessWidget {
+  final bool compact;
+  const SpecialVehiclePill({super.key, this.compact = false});
+
+  static const color = Color(0xFFE65100);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 6 : 10,
+        vertical: compact ? 2 : 4,
+      ),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.star_rounded,
+            color: Colors.white,
+            size: compact ? 11 : 13,
+          ),
+          const SizedBox(width: 3),
+          Text(
+            compact ? 'SPECIAL' : 'Special vehicle',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: compact ? 10 : 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

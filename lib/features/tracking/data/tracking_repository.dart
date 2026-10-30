@@ -2,6 +2,7 @@ import '../../../core/network/api_client.dart';
 import '../../lr/utils/manual_lr_number.dart';
 import 'driver_change.dart';
 import 'route_planner.dart';
+import 'trip_eta.dart';
 
 /// Parse a lat/lng that may arrive as a number (from /tracking/active, where the
 /// backend casts it) or a string (raw DECIMAL rows from /lr/:id/route).
@@ -96,7 +97,8 @@ extension HaltReasonX on HaltReason {
 const haltAlertHours = 5;
 
 /// A stretch where the truck's fixes stayed within ~2 km of one spot (server:
-/// services/tripHalt.service.js). Recorded from 2 h; alerted at 5 h.
+/// services/tripHalt.service.js). Recorded from 2 h and alerted at 5 h — a
+/// special vehicle from 1 h (the server sends `alert_hours`).
 class TripHalt {
   final String id;
   final DateTime? startedAt;
@@ -112,6 +114,10 @@ class TripHalt {
   final HaltReason? ackReason;
   final String? ackNote;
 
+  /// When this halt is (was) alerted: 1 for a special vehicle, else 5.
+  final double alertHours;
+  final DateTime? alertedAt;
+
   const TripHalt({
     required this.id,
     this.startedAt,
@@ -126,6 +132,8 @@ class TripHalt {
     this.acknowledgedAt,
     this.ackReason,
     this.ackNote,
+    this.alertHours = haltAlertHours * 1.0,
+    this.alertedAt,
   });
 
   factory TripHalt.fromJson(Map<String, dynamic> j) => TripHalt(
@@ -142,16 +150,22 @@ class TripHalt {
     acknowledgedAt: _dt(j['acknowledged_at']),
     ackReason: HaltReasonX.fromCode(j['ack_reason'] as String?),
     ackNote: j['ack_note'] as String?,
+    alertHours: (j['alert_hours'] is num)
+        ? (j['alert_hours'] as num).toDouble()
+        : haltAlertHours * 1.0,
+    alertedAt: _dt(j['alerted_at']),
   );
 
   /// Long enough to have been alerted — what the Live Tracking chip counts.
-  bool get overAlertLimit => hours >= haltAlertHours;
+  bool get overAlertLimit => alerted || hours >= alertHours;
   bool get acknowledged => acknowledgedAt != null;
 
-  /// "10 h 20 m"
+  /// "10 h 20 m", "45 m"
   String get durationLabel {
-    final h = hours.floor();
-    final m = ((hours - h) * 60).round();
+    final total = (hours * 60).round();
+    final h = total ~/ 60;
+    final m = total % 60;
+    if (h == 0) return '$m m';
     return m == 0 ? '$h h' : '$h h $m m';
   }
 }
@@ -214,8 +228,11 @@ class FleetVehicle {
   final FleetSignal signal;
   final String? driverMobile;
 
-  /// The halt the truck is in right now (2 h+), or null.
+  /// The halt the truck is in right now (2 h+, special 1 h+), or null.
   final TripHalt? halt;
+
+  /// A special vehicle (migration 254).
+  final bool isSpecial;
 
   const FleetVehicle({
     required this.lrId,
@@ -233,6 +250,7 @@ class FleetVehicle {
     this.signal = FleetSignal.live,
     this.driverMobile,
     this.halt,
+    this.isSpecial = false,
   });
 
   /// Halted long enough to have raised the alert (5 h+).
@@ -279,6 +297,7 @@ class FleetVehicle {
       halt: (j['halt'] is Map)
           ? TripHalt.fromJson((j['halt'] as Map).cast<String, dynamic>())
           : null,
+      isSpecial: j['is_special_vehicle'] == true,
     );
   }
 
@@ -346,6 +365,11 @@ class LrTracking {
   /// The server tracks halts (sends `halts`, even empty). False from an older
   /// backend, so the screen does not claim "no halts" it never checked for.
   final bool haltsSupported;
+
+  /// A special vehicle (migration 254), and the expected arrival (null when the
+  /// server cannot tell: no destination, no fresh fix, trip over).
+  final bool isSpecial;
+  final TripEta? eta;
   const LrTracking({
     required this.lrId,
     this.lrNumber,
@@ -376,6 +400,8 @@ class LrTracking {
     this.publicLink,
     this.halts = const [],
     this.haltsSupported = false,
+    this.isSpecial = false,
+    this.eta,
   });
 
   /// The halt the truck is in right now, if any.
@@ -443,6 +469,8 @@ class LrTracking {
           .map((m) => TripHalt.fromJson(m.cast<String, dynamic>()))
           .toList(),
       haltsSupported: j['halts'] is List,
+      isSpecial: j['is_special_vehicle'] == true,
+      eta: TripEta.fromJson(j['eta']),
     );
   }
 }

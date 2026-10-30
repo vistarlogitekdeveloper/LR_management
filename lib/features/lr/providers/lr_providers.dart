@@ -15,6 +15,7 @@ class LrFilter {
   final String? region; // region_id; null = all regions
   final DateTime? fromDate; // inclusive lower bound (date-only); null = no min
   final DateTime? toDate; // inclusive upper bound (date-only); null = no max
+  final bool specialOnly; // special vehicles only (migration 254)
 
   const LrFilter({
     this.query = '',
@@ -23,6 +24,7 @@ class LrFilter {
     this.region,
     this.fromDate,
     this.toDate,
+    this.specialOnly = false,
   });
 
   LrFilter copyWith({
@@ -32,6 +34,7 @@ class LrFilter {
     String? region,
     DateTime? fromDate,
     DateTime? toDate,
+    bool? specialOnly,
     bool clearStatus = false,
     bool clearRoute = false,
     bool clearRegion = false,
@@ -44,6 +47,7 @@ class LrFilter {
       region: clearRegion ? null : (region ?? this.region),
       fromDate: clearDates ? null : (fromDate ?? this.fromDate),
       toDate: clearDates ? null : (toDate ?? this.toDate),
+      specialOnly: specialOnly ?? this.specialOnly,
     );
   }
 }
@@ -344,6 +348,7 @@ final filteredLrsProvider = Provider<List<LorryReceipt>>((ref) {
     if (filter.status != null && lr.status != filter.status) return false;
     if (filter.route != null && lr.route != filter.route) return false;
     if (filter.region != null && lr.regionId != filter.region) return false;
+    if (filter.specialOnly && !lr.isSpecialVehicle) return false;
     if (filter.fromDate != null || filter.toDate != null) {
       // Compare by calendar day so both endpoints are inclusive regardless of
       // any time component on lr.date / the picked bounds.

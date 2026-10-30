@@ -354,6 +354,25 @@ pw.Widget _copyBody(
               ),
             ],
           ),
+          // Special vehicle (migration 254): a full-width orange band.
+          if (lr.isSpecialVehicle)
+            pw.TableRow(
+              children: [
+                pw.Container(
+                  alignment: pw.Alignment.center,
+                  color: PdfColor.fromInt(0xFFE65100),
+                  padding: pw.EdgeInsets.symmetric(vertical: 4 * s),
+                  child: pw.Text(
+                    '*** SPECIAL VEHICLE - TRACK CLOSELY ***',
+                    style: pw.TextStyle(
+                      fontSize: 11 * s,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
       // 3. Vehicle / LR meta

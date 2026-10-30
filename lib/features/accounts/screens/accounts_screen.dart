@@ -898,6 +898,7 @@ class _LrPaymentCard extends ConsumerWidget {
               ),
             ),
             StatusPill(status: lr.status),
+            if (lr.isSpecialVehicle) const SpecialVehiclePill(compact: true),
             if (fullyPaid)
               const _BadgePill(text: 'Paid', fg: AppColors.ok)
             else if (!hasAdvance)

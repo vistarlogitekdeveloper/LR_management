@@ -12,16 +12,20 @@ import '../../../core/theme/app_colors.dart';
 import '../../shell/widgets/app_topbar.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/pills.dart';
 import '../../../shared/widgets/section_title.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../lr/providers/lr_providers.dart';
 import '../data/route_planner.dart';
 import '../data/tracking_action.dart';
 import '../data/tracking_repository.dart';
+import '../data/trip_eta.dart';
 import '../providers/tracking_providers.dart';
 import '../widgets/change_driver_dialog.dart';
 import '../widgets/driver_history.dart';
 import '../widgets/halt_widgets.dart';
+import '../widgets/halt_timeline.dart';
+import '../widgets/eta_line.dart';
 import '../widgets/tracking_common.dart'
     show ConsentBadge, consentLabel, relTime;
 
@@ -726,6 +730,20 @@ class _TrailMap extends StatelessWidget {
                         child: const _HandoverPin(),
                       ),
                     ),
+                // Every recorded halt, numbered like the Halts timeline.
+                for (final (i, h) in t.halts.indexed)
+                  if (_coord(h.lat, h.lng) case final at?)
+                    Marker(
+                      point: at,
+                      width: 30,
+                      height: 30,
+                      child: Tooltip(
+                        message:
+                            'H${i + 1} · ${haltSummary(h)}'
+                            '${h.acknowledged ? ' · ${h.ackReason?.label ?? 'acknowledged'}' : ''}',
+                        child: HaltPin(index: i + 1, halt: h),
+                      ),
+                    ),
                 if (cur != null)
                   Marker(
                     point: cur,
@@ -1405,6 +1423,11 @@ class _Panel extends ConsumerWidget {
                 title: 'Details',
               ),
               const SizedBox(height: 8),
+              if (t.isSpecial)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 6),
+                  child: SpecialVehiclePill(),
+                ),
               _kv('LR', t.lrNumber ?? '—'),
               _kv('Route', '${t.fromCity ?? '?'} → ${t.toCity ?? '?'}'),
               if ((t.truckNumber ?? '').isNotEmpty)
@@ -1435,8 +1458,9 @@ class _Panel extends ConsumerWidget {
               if (t.remainingRoute != null)
                 _kv(
                   'To destination',
-                  '${t.remainingRoute!.distanceKm.toStringAsFixed(0)} km · ~${t.remainingRoute!.durationMin} min',
+                  '${t.remainingRoute!.distanceKm.toStringAsFixed(0)} km · ~${minutesLabel(t.eta?.remainingMin ?? t.remainingRoute!.durationMin)}',
                 ),
+              if (t.eta != null) EtaLine(eta: t.eta!),
               if (cur?.source != null)
                 _kv('Source', cur!.source!.toUpperCase()),
               _kv('Fixes', '${t.history.length}'),
@@ -1498,7 +1522,10 @@ class _Panel extends ConsumerWidget {
                   title: 'Halts',
                 ),
                 const SizedBox(height: 8),
-                HaltHistory(halts: t.halts),
+                HaltTimeline(
+                  halts: t.halts,
+                  recordedFrom: t.isSpecial ? '1 h' : '2 h',
+                ),
               ],
             ),
           ),

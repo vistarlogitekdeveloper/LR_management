@@ -62,7 +62,7 @@ void main() {
     );
     // A halted truck is still on the road: it stays in "Live now" too.
     expect(fleetScopeCounts(all, null)[FleetScope.live], 3);
-    expect(FleetScope.halted.label, 'Halted 5h+');
+    expect(FleetScope.halted.label, 'Halted');
   });
 
   test(

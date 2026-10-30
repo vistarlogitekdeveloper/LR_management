@@ -238,6 +238,7 @@ class ReportsRepository {
     String? regionId,
     String? createdBy,
     bool? sentForPayment,
+    bool special = false,
   }) async {
     final res = await _api.dio.get(
       '/reports/mis.xlsx',
@@ -247,6 +248,28 @@ class ReportsRepository {
         if (regionId != null && regionId.isNotEmpty) 'region_id': regionId,
         if (createdBy != null && createdBy.isNotEmpty) 'created_by': createdBy,
         'sent_for_payment': ?sentForPayment,
+        if (special) 'special': true,
+      },
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return (res.data as List).cast<int>();
+  }
+
+  /// Every recorded trip halt (GET /reports/halts.xlsx), by halt start date,
+  /// region, and special vehicles only (migration 254).
+  Future<List<int>> haltsXlsx({
+    String? from,
+    String? to,
+    String? regionId,
+    bool special = false,
+  }) async {
+    final res = await _api.dio.get(
+      '/reports/halts.xlsx',
+      queryParameters: {
+        if (from != null && from.isNotEmpty) 'from': from,
+        if (to != null && to.isNotEmpty) 'to': to,
+        if (regionId != null && regionId.isNotEmpty) 'region_id': regionId,
+        if (special) 'special': true,
       },
       options: Options(responseType: ResponseType.bytes),
     );
