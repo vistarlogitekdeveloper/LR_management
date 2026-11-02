@@ -21,6 +21,8 @@ import '../../lr/utils/manual_lr_number.dart';
 import '../../lr/widgets/balance_request.dart';
 import '../../masters/providers/master_providers.dart';
 import '../../shell/widgets/app_topbar.dart';
+import '../data/bulk_payment.dart';
+import '../widgets/bulk_payment_bar.dart';
 
 enum _PayFilter {
   all,
@@ -481,6 +483,9 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
                           ],
                         ),
                         SizedBox(height: isMobile ? 12 : 16),
+                        // Tick several LRs and pay them at once.
+                        if (filtered.isNotEmpty)
+                          BulkPaymentBar(items: filtered, showAmounts: canT),
                         if (loading && lrs.isEmpty)
                           // First fetch still running → shimmer, not the empty
                           // message (which would read as "nothing to pay").
@@ -889,6 +894,24 @@ class _LrPaymentCard extends ConsumerWidget {
           runSpacing: 6,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
+            // Ticked for a bulk payment (BulkPaymentBar).
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: Checkbox(
+                key: ValueKey('bulk-${lr.id}'),
+                value: ref.watch(
+                  accountsSelectionProvider.select((s) => s.contains(lr.id)),
+                ),
+                activeColor: AppColors.plum,
+                onChanged: (v) {
+                  final n = ref.read(accountsSelectionProvider.notifier);
+                  n.state = v == true
+                      ? {...n.state, lr.id}
+                      : ({...n.state}..remove(lr.id));
+                },
+              ),
+            ),
             Text(
               lr.number,
               style: const TextStyle(
