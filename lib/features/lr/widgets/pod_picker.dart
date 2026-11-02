@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -78,7 +79,17 @@ class _PodPickerState extends State<PodPicker> {
     );
     if (picked == null || picked.files.isEmpty) return;
     final f = picked.files.first;
-    _accept(PodFile(name: f.name, size: f.size, bytes: f.bytes, path: f.path));
+    // On web PlatformFile.path THROWS (it does not just return null): reading
+    // it there broke the picker, so the dialog kept "No file chosen" and
+    // Request balance stayed disabled. The web upload uses the bytes.
+    _accept(
+      PodFile(
+        name: f.name,
+        size: f.size,
+        bytes: f.bytes,
+        path: kIsWeb ? null : f.path,
+      ),
+    );
   }
 
   Future<void> _takePhoto() async {
