@@ -50,6 +50,14 @@ class AdminScreen extends ConsumerWidget {
         path: '/admin/vehicle-capacity',
         tint: AppColors.ok,
       ),
+      if (user?.canManageRegions ?? false)
+        const _AdminTile(
+          title: 'WhatsApp Alerts',
+          subtitle: 'Halt & zero-margin alerts, test, delivery log',
+          icon: Icons.chat_outlined,
+          path: '/admin/whatsapp',
+          tint: AppColors.ok,
+        ),
       const _AdminTile(
         title: 'Audit Trail',
         subtitle: 'All system events with user & timestamp',

@@ -12,6 +12,7 @@ import '../../features/admin/screens/numbering_screen.dart';
 import '../../features/admin/screens/regions_screen.dart';
 import '../../features/admin/screens/settings_screen.dart';
 import '../../features/admin/screens/users_screen.dart';
+import '../../features/admin/screens/whatsapp_screen.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/auth/screens/change_password_screen.dart';
 import '../../features/auth/screens/forgot_password_screen.dart';
@@ -135,6 +136,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (user != null && role != null) {
         if (loc.startsWith('/admin') && !role.canAdmin) return '/dashboard';
         // Region maintenance is super-admin only.
+        // WhatsApp alerts: the super admin's, like regions.
+        if (loc.startsWith('/admin/whatsapp') && !role.canManageRegions) {
+          return '/admin';
+        }
         if (loc.startsWith('/admin/regions') && !role.canManageRegions) {
           return '/dashboard';
         }
@@ -593,6 +598,11 @@ final routerProvider = Provider<GoRouter>((ref) {
                     path: 'settings',
                     pageBuilder: (context, state) =>
                         _noAnim(state, const SettingsScreen()),
+                  ),
+                  GoRoute(
+                    path: 'whatsapp',
+                    pageBuilder: (context, state) =>
+                        _noAnim(state, const WhatsappScreen()),
                   ),
                 ],
               ),
