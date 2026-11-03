@@ -528,6 +528,21 @@ class LorryReceipt {
   /// from 1 h.
   final bool isSpecialVehicle;
 
+  /// POD upload and invoice (server GET /lrs, 2 Nov 2026): the latest POD
+  /// upload, whether the LR is on a live invoice, and its number (customer-side,
+  /// empty without VIEW_CUSTOMER_RATE). [podInvoiceKnown] is false from an
+  /// older server, so nothing is reported as "Pending" it never checked.
+  final DateTime? podUploadedAt;
+  final bool invoiceRaised;
+  final String invoiceNo;
+  final bool podInvoiceKnown;
+
+  /// The transporter balance is settled: paid, or the advance covers the
+  /// whole freight.
+  bool get balanceSettled =>
+      balancePaidAt != null ||
+      (freight.freight > 0 && freight.freight - freight.advance <= 0.01);
+
   /// Transporter freight still to pay — the same arithmetic as the Accounts
   /// screen's "Awaiting Balance".
   bool get _balanceOutstanding =>
@@ -603,6 +618,10 @@ class LorryReceipt {
     this.secondConsignee,
     this.secondToCity = '',
     this.isSpecialVehicle = false,
+    this.podUploadedAt,
+    this.invoiceRaised = false,
+    this.invoiceNo = '',
+    this.podInvoiceKnown = false,
   });
 
   int get totalPackages => items.fold(0, (sum, item) => sum + item.packages);
@@ -761,6 +780,12 @@ class LorryReceipt {
           : null,
       secondToCity: (json['second_to_city'] as String?) ?? '',
       isSpecialVehicle: json['is_special_vehicle'] == true,
+      podUploadedAt: DateTime.tryParse(
+        json['pod_uploaded_at']?.toString() ?? '',
+      )?.toLocal(),
+      invoiceRaised: json['invoice_raised'] == true,
+      invoiceNo: (json['invoice_no'] as String?) ?? '',
+      podInvoiceKnown: json.containsKey('invoice_raised'),
     );
   }
 
@@ -837,6 +862,10 @@ class LorryReceipt {
       secondConsignee: secondConsignee,
       secondToCity: secondToCity,
       isSpecialVehicle: isSpecialVehicle,
+      podUploadedAt: podUploadedAt,
+      invoiceRaised: invoiceRaised,
+      invoiceNo: invoiceNo,
+      podInvoiceKnown: podInvoiceKnown,
     );
   }
 }

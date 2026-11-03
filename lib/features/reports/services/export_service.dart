@@ -82,6 +82,9 @@ class ExportService {
       ],
       if (canViewVistarMargin) 'Vistar Margin',
       'Pay Type', 'Status', 'EWB',
+      // Same headings as the MIS sheet (2 Nov 2026).
+      'POD Upload', 'POD Upload Date', 'POD Payment Status', 'Invoice Status',
+      if (canViewCustomerRate) 'Invoice No',
     ];
     sheet.appendRow(headers.map<CellValue?>((h) => TextCellValue(h)).toList());
 
@@ -130,6 +133,20 @@ class ExportService {
         TextCellValue(lr.payType.label),
         TextCellValue(lr.status.label),
         TextCellValue(lr.ewb?.number ?? ''),
+        // Blank, not "Pending", when the server did not say (older backend).
+        TextCellValue(
+          !lr.podInvoiceKnown
+              ? ''
+              : (lr.podUploadedAt != null ? 'Done' : 'Pending'),
+        ),
+        TextCellValue(
+          lr.podUploadedAt != null ? formatDate(lr.podUploadedAt!) : '',
+        ),
+        TextCellValue(lr.balanceSettled ? 'Done' : 'Pending'),
+        TextCellValue(
+          !lr.podInvoiceKnown ? '' : (lr.invoiceRaised ? 'Raised' : 'Pending'),
+        ),
+        if (canViewCustomerRate) TextCellValue(lr.invoiceNo),
       ]);
     }
 
