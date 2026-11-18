@@ -37,9 +37,12 @@ android {
     }
 
     defaultConfig {
-        // Kept as is: changing the application id would make Android treat the
-        // app as a different one, installed side by side with the old.
-        applicationId = "com.example.lr_management"
+        // Permanent Play Store id (Play rejects com.example.*). NEVER change it
+        // again: Android and Play treat a new id as a different app. Phones with
+        // an old com.example.lr_management APK get this as a second app and
+        // should uninstall the old one. `namespace` above is only the Kotlin
+        // package of MainActivity and can stay as it is.
+        applicationId = "com.vistarlogitek.vtms"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         // From pubspec.yaml `version: <name>+<code>`. The code MUST go up for

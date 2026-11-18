@@ -43,3 +43,21 @@ the debug key, which is fine for a test build only.
 Phones that have a **debug-signed** copy (every APK handed out before this)
 must uninstall it **once** before installing the first release-signed APK.
 After that, every new APK installs over the old one.
+
+## Google Play (app id `com.vistarlogitek.vtms`)
+
+Play takes an **app bundle**, not an APK:
+
+1. Raise `version:` in `pubspec.yaml` (the `+` number must go up for every
+   upload, Play refuses a number it has seen).
+2. `flutter build appbundle --release` (the build must say it used the release
+   key; Play rejects a debug-signed bundle).
+3. Upload `build/app/outputs/bundle/release/app-release.aab` in Play Console.
+
+The keystore above is the **upload key**. On the first upload, accept *Play App
+Signing*: Google keeps the key that signs the app phones download. If the upload
+key is lost, Play support can reset it, but keep the backup anyway.
+
+APKs from Play are signed by Google's key, so a hand-built APK can't install
+over a Play install (or the other way round). Once VTMS is on Play, install it
+from Play only.
