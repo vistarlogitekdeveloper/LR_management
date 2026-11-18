@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/theme/app_colors.dart';
 
@@ -138,8 +139,24 @@ class _SearchPicker<T> extends StatefulWidget {
   State<_SearchPicker<T>> createState() => _SearchPickerState<T>();
 }
 
+/// One row of the picker: the "Add new …" entry, "— None —", or an option.
+enum _EntryKind { addNew, none, option }
+
+class _Entry<T> {
+  final _EntryKind kind;
+  final T? value;
+  const _Entry(this.kind, [this.value]);
+}
+
 class _SearchPickerState<T> extends State<_SearchPicker<T>> {
   String _q = '';
+
+  /// Row picked with the arrow keys; null = the default row ([_defaultIndex]).
+  /// Reset whenever the search text changes.
+  int? _highlight;
+
+  /// One key per row, so the highlighted row can be scrolled into view.
+  final List<GlobalKey> _rowKeys = [];
 
   /// The secondary line, or null when there is nothing to say.
   ///
@@ -158,8 +175,7 @@ class _SearchPickerState<T> extends State<_SearchPicker<T>> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
+  List<T> _filtered() {
     // Always present alphabetically (case-insensitive) by the primary label.
     final sorted = [...widget.options]
       ..sort(
@@ -169,15 +185,173 @@ class _SearchPickerState<T> extends State<_SearchPicker<T>> {
             .compareTo(widget.labelOf(b).toLowerCase()),
       );
     final q = _q.trim().toLowerCase();
-    final filtered = q.isEmpty
-        ? sorted
-        : sorted.where((o) {
-            final l = widget.labelOf(o).toLowerCase();
-            final s = widget.subtitleOf?.call(o).toLowerCase() ?? '';
-            return l.contains(q) || s.contains(q);
-          }).toList();
+    if (q.isEmpty) return sorted;
+    return sorted.where((o) {
+      final l = widget.labelOf(o).toLowerCase();
+      final s = widget.subtitleOf?.call(o).toLowerCase() ?? '';
+      return l.contains(q) || s.contains(q);
+    }).toList();
+  }
 
+  List<_Entry<T>> _entries(List<T> filtered) => [
+    if (widget.addNewLabel != null) _Entry<T>(_EntryKind.addNew),
+    if (widget.clearable) _Entry<T>(_EntryKind.none),
+    for (final o in filtered) _Entry<T>(_EntryKind.option, o),
+  ];
+
+  /// The row Enter picks before any arrow key is pressed: the current value
+  /// (with no search typed), else the first match, else "Add new" — so typing
+  /// a few letters and pressing Enter picks the top match, and Enter on a
+  /// search with no match opens the add form with that text.
+  int _defaultIndex(List<_Entry<T>> entries) {
+    if (entries.isEmpty) return -1;
+    if (_q.trim().isEmpty && widget.current != null) {
+      final i = entries.indexWhere(
+        (e) => e.kind == _EntryKind.option && e.value == widget.current,
+      );
+      if (i >= 0) return i;
+    }
+    final firstOption = entries.indexWhere((e) => e.kind == _EntryKind.option);
+    if (firstOption >= 0) return firstOption;
+    return 0;
+  }
+
+  int _active(List<_Entry<T>> entries) {
+    final h = _highlight;
+    if (h != null && h >= 0 && h < entries.length) return h;
+    return _defaultIndex(entries);
+  }
+
+  void _move(int delta) {
+    final entries = _entries(_filtered());
+    if (entries.isEmpty) return;
+    final next = (_active(entries) + delta).clamp(0, entries.length - 1);
+    setState(() => _highlight = next);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || next >= _rowKeys.length) return;
+      final ctx = _rowKeys[next].currentContext;
+      if (ctx == null) return;
+      Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 90),
+        alignmentPolicy: delta > 0
+            ? ScrollPositionAlignmentPolicy.keepVisibleAtEnd
+            : ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+      );
+    });
+  }
+
+  void _pick(_Entry<T> e) {
+    switch (e.kind) {
+      case _EntryKind.addNew:
+        Navigator.pop(context, _PickResult<T>.addNew(_q.trim()));
+      case _EntryKind.none:
+        Navigator.pop(context, _PickResult<T>(null));
+      case _EntryKind.option:
+        Navigator.pop(context, _PickResult<T>(e.value));
+    }
+  }
+
+  void _pickActive() {
+    final entries = _entries(_filtered());
+    final i = _active(entries);
+    if (i >= 0) _pick(entries[i]);
+  }
+
+  Widget _row(_Entry<T> e, {required bool active}) {
+    final highlight = AppColors.plum.withValues(alpha: 0.10);
+    switch (e.kind) {
+      case _EntryKind.addNew:
+        final addLabel = widget.addNewLabel!;
+        return ListTile(
+          dense: true,
+          tileColor: active ? highlight : null,
+          leading: const Icon(
+            Icons.add_circle_outline,
+            size: 20,
+            color: AppColors.plum,
+          ),
+          title: Text(
+            _q.trim().isEmpty ? addLabel : '$addLabel "${_q.trim()}"',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.plum,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          onTap: () => _pick(e),
+        );
+      case _EntryKind.none:
+        return ListTile(
+          dense: true,
+          tileColor: active ? highlight : null,
+          title: const Text(
+            '— None —',
+            style: TextStyle(
+              color: AppColors.slate,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+          onTap: () => _pick(e),
+        );
+      case _EntryKind.option:
+        final o = e.value as T;
+        return ListTile(
+          dense: true,
+          selected: o == widget.current,
+          tileColor: active ? highlight : null,
+          selectedTileColor: active
+              ? highlight
+              : AppColors.plum.withValues(alpha: 0.06),
+          title: Text(
+            widget.labelOf(o),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: _subtitle(o),
+          onTap: () => _pick(e),
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filtered();
+    final entries = _entries(filtered);
+    final active = _active(entries);
+    while (_rowKeys.length < entries.length) {
+      _rowKeys.add(GlobalKey());
+    }
     final addLabel = widget.addNewLabel;
+
+    final rows = <Widget>[];
+    for (var i = 0; i < entries.length; i++) {
+      final e = entries[i];
+      rows.add(
+        KeyedSubtree(
+          key: _rowKeys[i],
+          child: _row(e, active: i == active),
+        ),
+      );
+      // "Add new" sits above the options (and stays visible when nothing
+      // matches, which is exactly when it's needed) — the typed text rides
+      // along to the form.
+      if (e.kind == _EntryKind.addNew) {
+        rows.add(const Divider(height: 1, color: AppColors.line));
+        if (filtered.isEmpty) {
+          rows.add(
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+              child: Text(
+                'No matches',
+                style: TextStyle(color: AppColors.slate),
+              ),
+            ),
+          );
+        }
+      }
+    }
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
@@ -200,14 +374,34 @@ class _SearchPickerState<T> extends State<_SearchPicker<T>> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  TextField(
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      hintText: 'Search…',
-                      prefixIcon: Icon(Icons.search, color: AppColors.slate),
+                  // Keyboard: type to filter, Up / Down to move, Enter to
+                  // pick, Esc to close (the dialog's own). Focus stays in the
+                  // search box the whole time.
+                  CallbackShortcuts(
+                    bindings: {
+                      const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
+                          _move(1),
+                      const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
+                          _move(-1),
+                      const SingleActivator(LogicalKeyboardKey.pageDown): () =>
+                          _move(8),
+                      const SingleActivator(LogicalKeyboardKey.pageUp): () =>
+                          _move(-8),
+                    },
+                    child: TextField(
+                      autofocus: true,
+                      textInputAction: TextInputAction.done,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        hintText: 'Search…',
+                        prefixIcon: Icon(Icons.search, color: AppColors.slate),
+                      ),
+                      onChanged: (v) => setState(() {
+                        _q = v;
+                        _highlight = null;
+                      }),
+                      onSubmitted: (_) => _pickActive(),
                     ),
-                    onChanged: (v) => setState(() => _q = v),
                   ),
                 ],
               ),
@@ -227,77 +421,7 @@ class _SearchPickerState<T> extends State<_SearchPicker<T>> {
                   : ListView(
                       padding: EdgeInsets.zero,
                       shrinkWrap: true,
-                      children: [
-                        // "Add new" sits above the options (and stays visible
-                        // when nothing matches, which is exactly when it's
-                        // needed) — the typed text rides along to the form.
-                        if (addLabel != null) ...[
-                          ListTile(
-                            dense: true,
-                            leading: const Icon(
-                              Icons.add_circle_outline,
-                              size: 20,
-                              color: AppColors.plum,
-                            ),
-                            title: Text(
-                              _q.trim().isEmpty
-                                  ? addLabel
-                                  : '$addLabel "${_q.trim()}"',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: AppColors.plum,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            onTap: () => Navigator.pop(
-                              context,
-                              _PickResult<T>.addNew(_q.trim()),
-                            ),
-                          ),
-                          const Divider(height: 1, color: AppColors.line),
-                        ],
-                        if (filtered.isEmpty && addLabel != null)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 18,
-                            ),
-                            child: Text(
-                              'No matches',
-                              style: TextStyle(color: AppColors.slate),
-                            ),
-                          ),
-                        if (widget.clearable)
-                          ListTile(
-                            dense: true,
-                            title: const Text(
-                              '— None —',
-                              style: TextStyle(
-                                color: AppColors.slate,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                            onTap: () =>
-                                Navigator.pop(context, _PickResult<T>(null)),
-                          ),
-                        for (final o in filtered)
-                          ListTile(
-                            dense: true,
-                            selected: o == widget.current,
-                            selectedTileColor: AppColors.plum.withValues(
-                              alpha: 0.06,
-                            ),
-                            title: Text(
-                              widget.labelOf(o),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: _subtitle(o),
-                            onTap: () =>
-                                Navigator.pop(context, _PickResult<T>(o)),
-                          ),
-                      ],
+                      children: rows,
                     ),
             ),
           ],
