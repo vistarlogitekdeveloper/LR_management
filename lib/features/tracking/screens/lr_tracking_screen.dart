@@ -48,6 +48,7 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
   bool _rechecking = false;
   bool _starting = false;
   bool _sharing = false;
+  bool _stopping = false;
   Timer? _autoRefresh;
 
   @override
@@ -309,6 +310,65 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
     if (r.simBusy) await _start();
   }
 
+  /// "Stop tracking": asks first, because it ends the trip (and frees the
+  /// driver's SIM). It can be restarted from the same panel afterwards.
+  Future<void> _stop() async {
+    final agreed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Stop tracking?'),
+        content: const Text(
+          'Location updates and halt alerts for this LR will stop. '
+          'You can restart tracking later from this screen.',
+        ),
+        actions: [
+          AppButton(
+            label: 'Cancel',
+            kind: BtnKind.ghost,
+            small: true,
+            onPressed: () => Navigator.of(ctx).pop(false),
+          ),
+          AppButton(
+            label: 'Stop tracking',
+            icon: Icons.stop_rounded,
+            kind: BtnKind.danger,
+            small: true,
+            onPressed: () => Navigator.of(ctx).pop(true),
+          ),
+        ],
+      ),
+    );
+    if (agreed != true || !mounted) return;
+    setState(() => _stopping = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final others = await ref
+          .read(trackingRepositoryProvider)
+          .stopTracking(widget.id);
+      if (!mounted) return;
+      ref.invalidate(lrTrackingProvider(widget.id));
+      ref.invalidate(activeVehiclesProvider);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            others > 0
+                ? 'Tracking stopped for this LR. The truck is still tracked '
+                      'for $others other LR${others == 1 ? '' : 's'} on it.'
+                : 'Tracking stopped.',
+          ),
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Could not stop tracking: ${friendlyErrorMessage(e)}'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _stopping = false);
+    }
+  }
+
   Future<void> _share() async {
     setState(() => _sharing = true);
     final messenger = ScaffoldMessenger.of(context);
@@ -460,6 +520,8 @@ class _LrTrackingScreenState extends ConsumerState<LrTrackingScreen> {
                 onStart: _start,
                 sharing: _sharing,
                 onShare: _share,
+                stopping: _stopping,
+                onStop: _stop,
                 onChangeDriver: _changeDriver,
               ),
             ),
@@ -478,6 +540,8 @@ class _Body extends StatelessWidget {
   final VoidCallback onStart;
   final bool sharing;
   final VoidCallback onShare;
+  final bool stopping;
+  final VoidCallback onStop;
   final VoidCallback onChangeDriver;
   const _Body({
     required this.t,
@@ -487,6 +551,8 @@ class _Body extends StatelessWidget {
     required this.onStart,
     required this.sharing,
     required this.onShare,
+    required this.stopping,
+    required this.onStop,
     required this.onChangeDriver,
   });
 
@@ -501,6 +567,8 @@ class _Body extends StatelessWidget {
       onStart: onStart,
       sharing: sharing,
       onShare: onShare,
+      stopping: stopping,
+      onStop: onStop,
       onChangeDriver: onChangeDriver,
     );
 
@@ -1221,6 +1289,8 @@ class _Panel extends ConsumerWidget {
   final VoidCallback onStart;
   final bool sharing;
   final VoidCallback onShare;
+  final bool stopping;
+  final VoidCallback onStop;
   final VoidCallback onChangeDriver;
   const _Panel({
     required this.t,
@@ -1230,6 +1300,8 @@ class _Panel extends ConsumerWidget {
     required this.onStart,
     required this.sharing,
     required this.onShare,
+    required this.stopping,
+    required this.onStop,
     required this.onChangeDriver,
   });
 
@@ -1406,6 +1478,18 @@ class _Panel extends ConsumerWidget {
                   small: true,
                   loading: sharing,
                   onPressed: sharing ? null : onShare,
+                ),
+              ],
+              // Stop a running trip by hand (same gate as Start).
+              if (tripLive && canStart) ...[
+                const SizedBox(height: 8),
+                AppButton(
+                  label: 'Stop tracking',
+                  icon: Icons.stop_rounded,
+                  kind: BtnKind.danger,
+                  small: true,
+                  loading: stopping,
+                  onPressed: stopping ? null : onStop,
                 ),
               ],
             ],
