@@ -537,6 +537,16 @@ class TrackingRepository {
     );
   }
 
+  /// Stop SIM tracking for an LR by hand. Ends the provider trip (freeing the
+  /// driver's SIM) unless another open LR on the same truck still shares it;
+  /// then only this LR stops following it. Returns how many other LRs keep
+  /// the trip running (0 when the trip itself ended).
+  Future<int> stopTracking(String lrId) async {
+    final res = await _api.dio.post('/tracking/lr/$lrId/stop');
+    final data = (res.data['data'] as Map?) ?? const {};
+    return (data['other_lrs_on_trip'] as num?)?.toInt() ?? 0;
+  }
+
   /// Generate (or fetch the cached) public shareable tracking link so a
   /// customer/consignee can watch the truck live without an app login.
   /// Acknowledge a halt alert with the reason — stops the 24 h reminder.
