@@ -34,7 +34,7 @@ Developer account: personal (decided 2026-11-18). App id: `com.vistarlogitek.vtm
 
 ## App content answers
 
-- **Privacy policy URL:** host `privacy-policy.html` publicly, e.g. `https://vistarlogitek.com/vtms/privacy`. Fill in the address and contact email first.
+- **Privacy policy URL:** `https://lr-management.pages.dev/privacy-policy.html` (file: `web/privacy-policy.html`, live once this PR is merged to main).
 - **App access:** "All functionality is behind a login. Use username `<reviewer login>` / password `<given in this field>`. The account is a demo with sample data." *You create this account. Type its password into Play Console yourself.*
 - **Ads:** No ads.
 - **Content rating (IARC):** Category "Utility, productivity, communication or other". Answer No to violence, sexual content, language, controlled substances and gambling. Users don't interact publicly and the app doesn't share location. Expected result: rated for everyone (3+).
