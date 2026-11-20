@@ -111,6 +111,24 @@ void main() {
       expect(text, contains('Balance:'));
     });
 
+    test('Total and Balance leave the Vistar margin out', () {
+      // freight 24,000 + margin 3,170; 90% advance paid = 21,600.
+      final text = copy(
+        sample(
+          freight: const FreightDetails(
+            freight: 24000,
+            advance: 21600,
+            vistarMargin: 3170,
+            total: 27170,
+            balance: 5570,
+          ),
+        ),
+      );
+      expect(text, contains('Total: ₹24,000'));
+      expect(text, contains('Balance: ₹2,400'));
+      expect(text, isNot(contains('5,570')));
+    });
+
     test('a user who may NOT see rates gets no figures at all', () {
       final text = copy(withMoney, rate: false, margin: false);
       expect(text, isNot(contains('FREIGHT')));

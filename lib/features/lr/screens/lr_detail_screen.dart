@@ -740,7 +740,7 @@ class _RightColumn extends StatelessWidget {
               const Divider(),
               _FreightRow(
                 label: 'Total',
-                value: lr.freight.total,
+                value: lr.freight.transporterTotal,
                 emphasis: true,
                 hidden: !canViewTransporterRate,
               ),
@@ -750,8 +750,8 @@ class _RightColumn extends StatelessWidget {
                 hidden: !canViewTransporterRate,
               ),
               _FreightRow(
-                label: 'Balance',
-                value: lr.freight.balance,
+                label: 'Balance (after POD)',
+                value: lr.freight.transporterBalance,
                 emphasis: true,
                 color: AppColors.red,
                 hidden: !canViewTransporterRate,
