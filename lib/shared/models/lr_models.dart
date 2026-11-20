@@ -261,6 +261,22 @@ class FreightDetails {
           detentionCharges);
   double get balance => _balance ?? (total - advance);
 
+  /// What the transporter is still owed: transporter freight minus the advance
+  /// paid, never below zero. The same figure Accounts pays against POD
+  /// (accounts screen, lrController.markBalancePaid) and the MIS report prints.
+  /// [balance] is NOT this: the backend's generated column is [total] - advance,
+  /// and [total] includes Vistar's margin.
+  double get transporterBalance {
+    final b = freight - advance;
+    return b > 0 ? b : 0;
+  }
+
+  /// [total] without Vistar's margin: the transporter-side charges. The
+  /// Freight card lists those rows, so its Total must not fold the margin in
+  /// (which also showed the margin, by subtraction, to users who may see
+  /// transporter rates but not the margin).
+  double get transporterTotal => total - vistarMargin;
+
   // ---- Client incentive charges (express + extra-point delivery) -----------
   // Each is an extra amount the client pays; a per-LR portion is paid out to
   // the driver (together with the transporter balance, after POD) and the

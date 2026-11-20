@@ -78,12 +78,12 @@ String buildLrSummaryText(
       ('Insurance', _money(lr.freight.insurance)),
       ('Additional Freight Charges', _money(lr.freight.additionalFreight)),
       ('Halting Charge', _money(lr.freight.haltingCharge)),
-      ('Total', inr(lr.freight.total)),
+      ('Total', inr(lr.freight.transporterTotal)),
       (
         'Advance (${pctText(lr.freight.advancePercent)}%)',
         _money(lr.freight.advance),
       ),
-      ('Balance', inr(lr.freight.balance)),
+      ('Balance', inr(lr.freight.transporterBalance)),
       ('Mathadi', _money(lr.freight.mathadi)),
     ]);
   }
